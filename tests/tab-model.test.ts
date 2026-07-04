@@ -129,3 +129,178 @@ describe('TabModel', () => {
     expect(solo.activeId).toBe('x')
   })
 })
+
+describe('TabModel pins', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    m.add('a')
+    m.add('b')
+    m.add('c') // order [a, b, c], mru [c, b, a], active c
+  })
+
+  it('pin moves a tab from order to the pinned tail and keeps it awake', () => {
+    m.pin('b')
+    expect(m.order).toEqual(['a', 'c'])
+    expect(m.pinned).toEqual(['b'])
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+    expect(m.isPinned('b')).toBe(true)
+    expect(m.isAwake('b')).toBe(true)
+  })
+
+  it('pin appends in pinning order', () => {
+    m.pin('b')
+    m.pin('a')
+    expect(m.pinned).toEqual(['b', 'a'])
+    expect(m.order).toEqual(['c'])
+  })
+
+  it('pin ignores unknown or already-pinned ids', () => {
+    m.pin('b')
+    m.pin('b')
+    m.pin('nope')
+    expect(m.pinned).toEqual(['b'])
+    expect(m.order).toEqual(['a', 'c'])
+  })
+
+  it('unpin returns the pin to the top of the tab list', () => {
+    m.pin('b')
+    m.unpin('b')
+    expect(m.pinned).toEqual([])
+    expect(m.order).toEqual(['b', 'a', 'c'])
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+  })
+
+  it('restored pins start asleep: listed in pinned, absent from mru', () => {
+    m.addPin('p1')
+    expect(m.pinned).toEqual(['p1'])
+    expect(m.mru).not.toContain('p1')
+    expect(m.isAwake('p1')).toBe(false)
+    expect(m.activeId).toBe('c')
+  })
+
+  it('wake activates and promotes to the MRU front', () => {
+    m.addPin('p1')
+    m.wake('p1')
+    expect(m.activeId).toBe('p1')
+    expect(m.mru).toEqual(['p1', 'c', 'b', 'a'])
+    expect(m.isAwake('p1')).toBe(true)
+  })
+
+  it('wake without activation joins the MRU tail', () => {
+    m.addPin('p1')
+    m.wake('p1', false)
+    expect(m.activeId).toBe('c')
+    expect(m.mru).toEqual(['c', 'b', 'a', 'p1'])
+  })
+
+  it('wake is a no-op on already-awake or unpinned ids', () => {
+    m.pin('b')
+    m.wake('b')
+    m.wake('a')
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+    expect(m.activeId).toBe('c')
+  })
+
+  it('sleeping the active pin hands off to the MRU front, slot intact', () => {
+    m.pin('c') // active pin
+    m.sleep('c')
+    expect(m.pinned).toEqual(['c'])
+    expect(m.mru).toEqual(['b', 'a'])
+    expect(m.activeId).toBe('b')
+    expect(m.isAwake('c')).toBe(false)
+  })
+
+  it('sleeping a background pin keeps the active tab', () => {
+    m.pin('a')
+    m.sleep('a')
+    expect(m.activeId).toBe('c')
+    expect(m.mru).toEqual(['c', 'b'])
+  })
+
+  it('sleeping the only awake tab leaves no active id', () => {
+    const solo = new TabModel()
+    solo.add('x')
+    solo.pin('x')
+    solo.sleep('x')
+    expect(solo.activeId).toBeNull()
+    expect(solo.pinned).toEqual(['x'])
+  })
+
+  it('sleep is a no-op on regular tabs and asleep pins', () => {
+    m.addPin('p1')
+    m.sleep('p1')
+    m.sleep('a')
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+  })
+
+  it('close is a no-op on pinned ids', () => {
+    m.pin('b')
+    m.close('b')
+    expect(m.pinned).toEqual(['b'])
+    expect(m.mru).toContain('b')
+  })
+
+  it('activate promotes an awake pin', () => {
+    m.pin('a')
+    m.activate('a')
+    expect(m.activeId).toBe('a')
+    expect(m.mru).toEqual(['a', 'c', 'b'])
+  })
+
+  it('unpinning a woken pin lands it awake at the top of the list', () => {
+    m.addPin('p1')
+    m.wake('p1')
+    m.unpin('p1')
+    expect(m.order).toEqual(['p1', 'a', 'b', 'c'])
+    expect(m.activeId).toBe('p1')
+  })
+
+  it('at() addresses pins first, then tabs; negative from the end', () => {
+    m.pin('b') // pinned [b], order [a, c]
+    expect(m.at(0)).toBe('b')
+    expect(m.at(1)).toBe('a')
+    expect(m.at(2)).toBe('c')
+    expect(m.at(-1)).toBe('c')
+    expect(m.at(5)).toBeNull()
+  })
+
+  it('at(-1) falls back to the last pin when no regular tabs exist', () => {
+    const solo = new TabModel()
+    solo.add('x')
+    solo.add('y')
+    solo.pin('x')
+    solo.pin('y')
+    expect(solo.at(-1)).toBe('y')
+  })
+
+  it('order cycling walks awake pins then tabs, skipping asleep pins', () => {
+    m.pin('a') // pinned [a] awake, order [b, c], active c
+    m.addPin('p1') // asleep — must be skipped
+    expect(m.cycleStep('order', 'forward')).toBe('a') // c wraps to the first awake entry
+    expect(m.cycleStep('order', 'forward')).toBe('b')
+    m.cycleCommit()
+    expect(m.activeId).toBe('b')
+  })
+
+  it('MRU cycling includes awake pins and never asleep pins', () => {
+    m.pin('b')
+    m.addPin('p1')
+    expect(m.cycleStep('mru', 'forward')).toBe('b')
+    m.cycleCommit()
+    expect(m.mru).toEqual(['b', 'c', 'a'])
+  })
+
+  it('wake and sleep commit an in-flight cycle first', () => {
+    m.addPin('p1')
+    m.cycleStep('mru', 'forward') // preview b
+    m.wake('p1')
+    expect(m.isCycling()).toBe(false)
+    expect(m.mru).toEqual(['p1', 'b', 'c', 'a']) // preview b was committed as a visit
+    m.cycleStep('mru', 'forward') // preview b
+    m.sleep('p1')
+    expect(m.isCycling()).toBe(false)
+    expect(m.activeId).toBe('b')
+  })
+})
