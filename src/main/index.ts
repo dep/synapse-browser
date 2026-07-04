@@ -4,13 +4,14 @@ import { appendFileSync, copyFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
+import { ExtensionManager } from './extensions'
 import { HistoryStore } from './history'
 import { PinsStore } from './pins-store'
 import { TabManager } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { buildMenu } from './menu'
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // in dev the Dock shows the stock Electron icon; a packaged app gets icon.icns
   const dockIcon = join(app.getAppPath(), 'resources/icon.png')
   if (existsSync(dockIcon)) app.dock?.setIcon(dockIcon)
@@ -82,8 +83,15 @@ app.whenReady().then(() => {
         })),
       )
     },
-    onTabCreated: (wc) => attachCycleHooks(wc),
+    // `extensions` is declared below; safe because tabs are only created
+    // after it exists (restoreTabs runs at the end of startup)
+    onTabCreated: (wc) => {
+      attachCycleHooks(wc)
+      extensions.addTab(wc)
+    },
+    onTabActivated: (wc) => extensions.selectTab(wc),
   })
+  const extensions = new ExtensionManager(win, tabs)
   attachCycleHooks(win.webContents)
   // losing window focus mid-cycle means the modifier keyUp will never arrive
   win.on('blur', () => tabs.cycleCommit())
@@ -146,6 +154,11 @@ app.whenReady().then(() => {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  try {
+    await extensions.init()
+  } catch (err) {
+    console.error('extensions: startup failed, continuing without extensions', err)
+  }
   tabs.restorePins(pinsStore.load())
   const saved = tabsStore.load()
   tabs.restoreTabs(saved.urls, saved.active)
