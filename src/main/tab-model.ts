@@ -10,9 +10,9 @@ export class TabModel {
   add(id: string, activate = true): void {
     this.order.push(id)
     if (activate) {
+      if (this.cycling) this.cycleCommit()
       this.mru.unshift(id)
       this.activeId = id
-      this.cycling = false
     } else {
       this.mru.push(id)
     }
@@ -20,9 +20,10 @@ export class TabModel {
 
   activate(id: string): void {
     if (!this.order.includes(id)) return
+    // an uncommitted cycle preview still counts as a visit
+    if (this.cycling) this.cycleCommit()
     this.promote(id)
     this.activeId = id
-    this.cycling = false
   }
 
   close(id: string): void {

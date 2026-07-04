@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import type { WebContents } from 'electron'
+import { appendFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
@@ -14,11 +15,28 @@ app.whenReady().then(() => {
 
   function attachCycleHooks(wc: WebContents): void {
     wc.on('before-input-event', (event, input) => {
-      if (input.type === 'keyDown' && input.key === 'Tab' && (input.control || input.alt)) {
+      if (input.key === 'Tab' && (input.control || input.alt)) {
+        // Swallow every event type of the chord: Blink moves focus on the
+        // '\t' char (keypress) event, not the keyDown, so preventing only
+        // keyDown lets Ctrl/Option+Tab walk focus through the chrome UI.
         event.preventDefault()
-        tabs.cycleStep(input.control ? 'mru' : 'order', input.shift ? 'back' : 'forward')
-      } else if (input.type === 'keyUp' && (input.key === 'Control' || input.key === 'Alt')) {
+        if (input.type === 'keyDown') {
+          tabs.cycleStep(input.control ? 'mru' : 'order', input.shift ? 'back' : 'forward')
+        }
+      } else if (input.key === 'Control' || input.key === 'Alt') {
+        // macOS never delivers the modifier keyUp once the Tab chord is
+        // consumed (verified via before-input-event capture), so a cycle is
+        // committed by the NEXT modifier keyDown instead of its own release.
+        // The keyUp case stays for platforms/paths where it does arrive;
+        // commit is idempotent. Held modifiers don't autorepeat, so a
+        // hold-and-walk never sees a second keyDown.
         tabs.cycleCommit()
+      }
+      if (process.env['CYCLE_DEBUG']) {
+        appendFileSync(
+          process.env['CYCLE_DEBUG'],
+          `wc=${wc.id} ${input.type} key=${input.key} ctrl=${input.control} alt=${input.alt} -> active=${tabs.activeId}\n`,
+        )
       }
     })
   }
@@ -39,6 +57,8 @@ app.whenReady().then(() => {
     onTabCreated: (wc) => attachCycleHooks(wc),
   })
   attachCycleHooks(win.webContents)
+  // losing window focus mid-cycle means the modifier keyUp will never arrive
+  win.on('blur', () => tabs.cycleCommit())
 
   const downloads = new DownloadManager((list) => win.webContents.send('downloads:updated', list))
   downloads.attach(session.defaultSession)

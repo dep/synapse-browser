@@ -47,8 +47,8 @@ export class TabManager {
       if (/^https?:\/\//.test(popupUrl)) this.createTab(popupUrl)
       return { action: 'deny' }
     })
-    if (url) view.webContents.loadURL(url)
-    else this.win.webContents.send('ui:focus-urlbar')
+    if (url) view.webContents.loadURL(classifyInput(url))
+    else this.focusUrlBar()
     this.syncViews()
     return id
   }
@@ -78,6 +78,19 @@ export class TabManager {
     this.attached?.webContents.focus()
   }
 
+  // index into sidebar order; negative counts from the end (-1 = last tab)
+  activateAt(index: number): void {
+    const id = this.model.order.at(index)
+    if (id) this.activateTab(id)
+  }
+
+  focusUrlBar(): void {
+    // DOM focus() in the chrome renderer is not enough while a page view
+    // holds native focus — the window must focus its own webContents first.
+    this.win.webContents.focus()
+    this.win.webContents.send('ui:focus-urlbar')
+  }
+
   navigate(id: string, input: string): void {
     this.views.get(id)?.webContents.loadURL(classifyInput(input))
   }
@@ -97,12 +110,19 @@ export class TabManager {
   }
 
   cycleStep(list: CycleList, dir: Direction): void {
-    if (this.model.cycleStep(list, dir)) this.syncViews()
+    if (!this.model.cycleStep(list, dir)) return
+    this.syncViews()
+    // keep native focus on the newly attached view: the modifier keyUp that
+    // commits the cycle must land on a webContents with the cycle hooks, and
+    // detaching the previously focused view would otherwise leave none focused
+    this.attached?.webContents.focus()
   }
 
   cycleCommit(): void {
     if (!this.model.isCycling()) return
     this.model.cycleCommit()
+    // cycling swaps views without focusing them; return focus to the page
+    this.attached?.webContents.focus()
     this.refresh()
   }
 

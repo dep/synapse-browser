@@ -118,7 +118,11 @@ export function initTopbar(): Topbar {
     } else if (e.key === 'Escape') {
       hideSuggestions()
     } else if (e.key === 'Enter' && activeId && urlbar.value.trim()) {
-      if (selected >= 0) {
+      if (e.altKey) {
+        window.synapse.tabs.create(selected >= 0 ? suggestions[selected].url : urlbar.value)
+        urlbar.blur()
+        hideSuggestions()
+      } else if (selected >= 0) {
         pick(selected)
       } else {
         window.synapse.tabs.navigate(activeId, urlbar.value)

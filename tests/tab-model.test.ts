@@ -77,12 +77,32 @@ describe('TabModel', () => {
     expect(m.cycleStep('order', 'back')).toBe('b')
   })
 
-  it('explicit activate cancels an in-flight cycle', () => {
-    m.cycleStep('mru', 'forward')
+  it('explicit activate commits an in-flight cycle before promoting', () => {
+    m.cycleStep('mru', 'forward') // preview b — it was shown, so it counts as a visit
     m.activate('a')
     expect(m.isCycling()).toBe(false)
     m.cycleCommit() // must be a no-op
-    expect(m.mru).toEqual(['a', 'c', 'b'])
+    expect(m.mru).toEqual(['a', 'b', 'c'])
+  })
+
+  // regression: on macOS the modifier keyUp never arrives after a consumed
+  // Tab chord, so each new chord begins with a commit of the previous cycle
+  it('separate chords toggle MRU when commit is deferred to the next chord', () => {
+    const t = new TabModel()
+    for (const id of ['1', '2', '3', '4']) t.add(id)
+    t.activate('1')
+    t.activate('2')
+    t.activate('4')
+    t.activate('2') // mru [2, 4, 1, 3]
+    t.cycleCommit() // chord 1 modifier keyDown: no-op
+    expect(t.cycleStep('mru', 'forward')).toBe('4')
+    t.cycleCommit() // chord 2 commits chord 1
+    expect(t.cycleStep('mru', 'forward')).toBe('2')
+    t.cycleCommit() // chord 3
+    expect(t.cycleStep('mru', 'forward')).toBe('4')
+    t.cycleCommit() // chord 4: hold and walk two steps
+    expect(t.cycleStep('mru', 'forward')).toBe('2')
+    expect(t.cycleStep('mru', 'forward')).toBe('1')
   })
 
   it('close during a cycle commits the preview first', () => {

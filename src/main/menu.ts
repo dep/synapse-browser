@@ -48,12 +48,20 @@ export function buildMenu(win: BrowserWindow, tabs: TabManager, toggleBookmark: 
       ],
     },
     {
+      label: 'Tabs',
+      submenu: Array.from({ length: 9 }, (_, i): MenuItemConstructorOptions => ({
+        label: i === 8 ? 'Last Tab' : `Tab ${i + 1}`,
+        accelerator: `CmdOrCtrl+${i + 1}`,
+        click: () => tabs.activateAt(i === 8 ? -1 : i),
+      })),
+    },
+    {
       label: 'Tools',
       submenu: [
         {
           label: 'Focus Address Bar',
           accelerator: 'CmdOrCtrl+L',
-          click: () => win.webContents.send('ui:focus-urlbar'),
+          click: () => tabs.focusUrlBar(),
         },
         { label: 'Bookmark This Page', accelerator: 'CmdOrCtrl+D', click: () => toggleBookmark() },
         {
