@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src https: http: data:"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src https: http: data: crx:"
     />
     <title>Synapse Browser</title>
   </head>
@@ -19,6 +19,7 @@
           <div id="suggestions" hidden></div>
         </div>
         <button id="star" title="Bookmark this page">☆</button>
+        <browser-action-list id="actions"></browser-action-list>
         <button id="download-pill" hidden></button>
       </header>
       <aside id="sidebar">

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { SynapseApi } from '../shared/ipc'
+import { injectBrowserAction } from 'electron-chrome-extensions/browser-action'
 
 const api: SynapseApi = {
   tabs: {
@@ -44,3 +45,7 @@ const api: SynapseApi = {
 }
 
 contextBridge.exposeInMainWorld('synapse', api)
+
+// registers <browser-action-list>; this preload only ever runs in the chrome
+// UI window, never in web page tabs
+injectBrowserAction()

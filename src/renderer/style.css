@@ -251,3 +251,9 @@ body {
 #star.starred {
   color: #f7c67a;
 }
+/* extension toolbar buttons (electron-chrome-extensions custom element) */
+browser-action-list {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
