@@ -83,10 +83,10 @@ page), Cmd+Y (toggle history panel).
   ends. Committing on release promotes the chosen tab in `mru` as a normal activation.
 
 Implementation: menu accelerators cannot observe modifier key-up, so cycling is captured
-in the main process via `before-input-event` on every tab's `webContents` (intercepting
-Tab-with-modifier keydowns and Ctrl/Option keyups). The chrome UI registers an equivalent
-`keydown`/`keyup` handler forwarded over IPC for when focus is in the sidebar or URL bar.
-The MRU walk state (cursor + pending commit) lives in `TabManager` and is unit tested.
+in the main process via `before-input-event` on every tab's `webContents` **and** on the
+chrome window's own `webContents` (intercepting Tab-with-modifier keydowns and
+Ctrl/Option keyups) — one uniform hook, no renderer-side key forwarding. The MRU walk
+state (cursor + pending commit) lives in the pure `TabModel` and is unit tested.
 
 ## Persistence
 
