@@ -103,9 +103,10 @@ Corrupt/unparseable files are renamed to `<name>.bad` and recreated empty — ne
 
 ## Downloads
 
-`session.on('will-download')` → save to `~/Downloads` (auto-resolve name collisions via
-Electron default behavior). Progress streams to a pill in the top bar; clicking a
-completed item reveals it in Finder. No downloads manager page.
+`session.on('will-download')` → save to `~/Downloads`, resolving name collisions with a
+custom `uniquePath` helper (appends ` (1)`, ` (2)`, …; unit tested — `setSavePath`
+disables Electron's built-in resolution). Progress streams to a pill in the top bar;
+clicking a completed item reveals it in Finder. No downloads manager page.
 
 ## Error handling
 
