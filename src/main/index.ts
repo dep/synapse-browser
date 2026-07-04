@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, session } from 'electron'
 import { join } from 'node:path'
 import { BookmarksStore } from './bookmarks'
+import { DownloadManager } from './downloads'
 import { HistoryStore } from './history'
 import { TabManager } from './tab-manager'
 
@@ -23,6 +24,10 @@ app.whenReady().then(() => {
     onNavigated: (url, title) => history.add(url, title, Date.now()),
     onSnapshot: (snap) => win.webContents.send('tabs:updated', snap),
   })
+
+  const downloads = new DownloadManager((list) => win.webContents.send('downloads:updated', list))
+  downloads.attach(session.defaultSession)
+  ipcMain.on('downloads:reveal', (_e, id: string) => downloads.reveal(id))
 
   ipcMain.on('tabs:create', (_e, url?: string) => {
     tabs.createTab(typeof url === 'string' ? url : undefined)

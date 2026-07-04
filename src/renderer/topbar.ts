@@ -9,6 +9,37 @@ export function initTopbar(): Topbar {
   const forward = document.getElementById('nav-forward') as HTMLButtonElement
   const reload = document.getElementById('nav-reload') as HTMLButtonElement
   const star = document.getElementById('star') as HTMLButtonElement
+  const pill = document.getElementById('download-pill') as HTMLButtonElement
+  let latestDownload: import('../shared/ipc').DownloadInfo | null = null
+
+  window.synapse.downloads.onUpdated((list) => {
+    latestDownload = list[list.length - 1] ?? null
+    renderPill()
+  })
+
+  pill.addEventListener('click', () => {
+    if (latestDownload?.state === 'completed') window.synapse.downloads.reveal(latestDownload.id)
+  })
+
+  function renderPill(): void {
+    if (!latestDownload) {
+      pill.hidden = true
+      return
+    }
+    pill.hidden = false
+    const d = latestDownload
+    if (d.state === 'progressing') {
+      const pct = d.totalBytes > 0 ? Math.round((d.receivedBytes / d.totalBytes) * 100) : 0
+      pill.textContent = `↓ ${d.filename} ${pct}%`
+    } else if (d.state === 'completed') {
+      pill.textContent = `✓ ${d.filename}`
+      pill.title = 'Show in Finder'
+    } else {
+      pill.textContent = `✕ ${d.filename}`
+      pill.title = 'Download failed'
+    }
+  }
+
   const urlbar = document.getElementById('urlbar') as HTMLInputElement
   const suggestionsEl = document.getElementById('suggestions') as HTMLDivElement
   let activeId: string | null = null
