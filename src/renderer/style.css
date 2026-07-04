@@ -118,3 +118,49 @@ body {
   width: auto !important;
   padding: 0 10px;
 }
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+.tab:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.tab.active {
+  background: var(--bg-raised);
+}
+.favicon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+.tab-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tab-close {
+  flex: none;
+  background: none;
+  border: none;
+  color: var(--fg-dim);
+  font-size: 14px;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  visibility: hidden;
+}
+.tab:hover .tab-close {
+  visibility: visible;
+}
+.tab-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--fg);
+}

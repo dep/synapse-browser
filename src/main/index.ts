@@ -55,7 +55,7 @@ app.whenReady().then(() => {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  tabs.createTab('https://example.com') // TEMP: Task 8 changes this to tabs.createTab()
+  tabs.createTab()
 
   app.on('before-quit', () => {
     history.flush()
