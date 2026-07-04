@@ -1,8 +1,14 @@
 import { BrowserWindow, Menu } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
+import type { ExtensionManager } from './extensions'
 import type { TabManager } from './tab-manager'
 
-export function buildMenu(win: BrowserWindow, tabs: TabManager, toggleBookmark: () => void): void {
+export function buildMenu(
+  win: BrowserWindow,
+  tabs: TabManager,
+  toggleBookmark: () => void,
+  extensions: ExtensionManager,
+): void {
   const template: MenuItemConstructorOptions[] = [
     { role: 'appMenu' },
     {
@@ -86,6 +92,11 @@ export function buildMenu(win: BrowserWindow, tabs: TabManager, toggleBookmark: 
           label: 'Bookmarks',
           accelerator: 'CmdOrCtrl+Shift+B',
           click: () => win.webContents.send('ui:toggle-bookmarks'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Load Unpacked Extension…',
+          click: () => void extensions.loadUnpacked(),
         },
       ],
     },

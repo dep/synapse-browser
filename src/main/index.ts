@@ -142,7 +142,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('bookmarks:toggle-active', () => toggleBookmark())
   ipcMain.handle('bookmarks:list', () => bookmarks.list())
 
-  buildMenu(win, tabs, toggleBookmark)
+  buildMenu(win, tabs, toggleBookmark, extensions)
 
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
 
