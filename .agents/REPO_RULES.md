@@ -29,7 +29,11 @@ Electron + electron-vite + TypeScript. No native build steps.
 
 ## Conventions
 
-- TypeScript strict; no runtime npm dependencies; no UI framework in the renderer.
+- TypeScript strict; no UI framework in the renderer. No runtime npm dependencies,
+  with one deliberate exception: `electron-chrome-extensions` + `electron-chrome-web-store`
+  (exact-pinned) — Electron ships no browser-action UI, full `chrome.tabs`, or web-store
+  install flow, and reimplementing those is a multi-month project. See
+  `docs/superpowers/specs/2026-07-04-extension-support-design.md`.
 - Pure logic goes in Electron-free modules (`src/shared/`, `tab-model.ts`) with Vitest
   coverage; Electron-coupled code is verified by manual smoke (see README).
 - Short conventional commits (`feat:`, `fix:`, `chore:`).

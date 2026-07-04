@@ -75,12 +75,12 @@ Wiring in `src/main/index.ts`:
 
 ## Security
 
-Web page tabs keep `sandbox: true`, `contextIsolation: true`, and **no preload**.
-electron-chrome-extensions v4 injects extension plumbing natively (no tab preload
-required), and content scripts are injected by Chromium itself. If implementation
-discovers a tab preload is unavoidable, that is a stop-and-re-plan checkpoint — not a
-silent rule change. The chrome UI preload gains only the browser-action element
-registration; `window.synapse` (`SynapseApi`) is unchanged.
+Web page tabs keep `sandbox: true`, `contextIsolation: true`, and **no app preload**.
+electron-chrome-extensions registers its own session-level preload (extension API
+plumbing for content scripts and MV3 service workers) — that preload is
+library-managed, sandbox-compatible, and exposes no app IPC; `window.synapse` never
+reaches web pages. Content scripts themselves are injected by Chromium. The chrome UI
+preload gains only the browser-action element registration; `SynapseApi` is unchanged.
 
 ## Error handling
 
