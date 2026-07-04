@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron'
 import type { WebContents } from 'electron'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, copyFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
@@ -9,7 +9,18 @@ import { TabManager } from './tab-manager'
 import { buildMenu } from './menu'
 
 app.whenReady().then(() => {
+  // in dev the Dock shows the stock Electron icon; a packaged app gets icon.icns
+  const dockIcon = join(app.getAppPath(), 'resources/icon.png')
+  if (existsSync(dockIcon)) app.dock?.setIcon(dockIcon)
+
   const userData = app.getPath('userData')
+  // productName renamed the userData dir; pull stores from the pre-rename one
+  const legacyDir = join(app.getPath('appData'), 'synapse-browser')
+  for (const f of ['history.json', 'bookmarks.json']) {
+    const src = join(legacyDir, f)
+    const dst = join(userData, f)
+    if (src !== dst && existsSync(src) && !existsSync(dst)) copyFileSync(src, dst)
+  }
   const history = new HistoryStore(userData)
   const bookmarks = new BookmarksStore(userData)
 
