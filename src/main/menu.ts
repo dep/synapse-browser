@@ -49,11 +49,24 @@ export function buildMenu(win: BrowserWindow, tabs: TabManager, toggleBookmark: 
     },
     {
       label: 'Tabs',
-      submenu: Array.from({ length: 9 }, (_, i): MenuItemConstructorOptions => ({
-        label: i === 8 ? 'Last Tab' : `Tab ${i + 1}`,
-        accelerator: `CmdOrCtrl+${i + 1}`,
-        click: () => tabs.activateAt(i === 8 ? -1 : i),
-      })),
+      submenu: [
+        ...Array.from({ length: 9 }, (_, i): MenuItemConstructorOptions => ({
+          label: i === 8 ? 'Last Tab' : `Tab ${i + 1}`,
+          accelerator: `CmdOrCtrl+${i + 1}`,
+          click: () => tabs.activateAt(i === 8 ? -1 : i),
+        })),
+        { type: 'separator' },
+        {
+          label: 'Pin/Unpin Tab',
+          accelerator: 'CmdOrCtrl+P',
+          click: () => tabs.togglePin(tabs.activeId),
+        },
+        {
+          label: 'Restore Pinned URL',
+          accelerator: 'Control+CmdOrCtrl+H',
+          click: () => tabs.restorePinnedUrl(),
+        },
+      ],
     },
     {
       label: 'Tools',

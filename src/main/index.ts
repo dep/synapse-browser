@@ -1,10 +1,11 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, session } from 'electron'
 import type { WebContents } from 'electron'
 import { appendFileSync, copyFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
 import { HistoryStore } from './history'
+import { PinsStore } from './pins-store'
 import { TabManager } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { buildMenu } from './menu'
@@ -25,6 +26,7 @@ app.whenReady().then(() => {
   const history = new HistoryStore(userData)
   const bookmarks = new BookmarksStore(userData)
   const tabsStore = new TabsStore(userData)
+  const pinsStore = new PinsStore(userData)
 
   function attachCycleHooks(wc: WebContents): void {
     wc.on('before-input-event', (event, input) => {
@@ -72,6 +74,13 @@ app.whenReady().then(() => {
         snap.order.map((id) => snap.tabs[id]!.url),
         snap.activeId ? snap.order.indexOf(snap.activeId) : -1,
       )
+      pinsStore.save(
+        snap.pinned.map((id) => ({
+          url: snap.tabs[id]!.pinnedUrl ?? snap.tabs[id]!.url,
+          title: snap.tabs[id]!.title,
+          favicon: snap.tabs[id]!.favicon,
+        })),
+      )
     },
     onTabCreated: (wc) => attachCycleHooks(wc),
   })
@@ -92,6 +101,26 @@ app.whenReady().then(() => {
   ipcMain.on('tabs:back', (_e, id: string) => tabs.back(id))
   ipcMain.on('tabs:forward', (_e, id: string) => tabs.forward(id))
   ipcMain.on('tabs:reload', (_e, id: string) => tabs.reload(id))
+
+  ipcMain.on('tabs:context-menu', (_e, id: string) => {
+    if (typeof id !== 'string') return
+    const pinned = tabs.isPinned(id)
+    const template: Electron.MenuItemConstructorOptions[] = [
+      {
+        label: pinned ? 'Unpin Tab' : 'Pin Tab',
+        click: () => tabs.togglePin(id),
+      },
+    ]
+    if (pinned && tabs.isAwake(id)) {
+      template.push({ label: 'Restore Pinned URL', click: () => tabs.restorePinnedUrl(id) })
+    }
+    template.push(
+      { type: 'separator' },
+      // closing a pin puts it to sleep; the slot stays in the row
+      { label: pinned ? 'Close' : 'Close Tab', click: () => tabs.closeTab(id) },
+    )
+    Menu.buildFromTemplate(template).popup({ window: win })
+  })
 
   ipcMain.handle('history:search', (_e, q: string) => history.search(String(q)))
   ipcMain.handle('history:list', () => history.list())
@@ -117,6 +146,7 @@ app.whenReady().then(() => {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
+  tabs.restorePins(pinsStore.load())
   const saved = tabsStore.load()
   tabs.restoreTabs(saved.urls, saved.active)
 
@@ -124,6 +154,7 @@ app.whenReady().then(() => {
     history.flush()
     bookmarks.flush()
     tabsStore.flush()
+    pinsStore.flush()
   })
 })
 
