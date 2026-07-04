@@ -4,6 +4,7 @@ import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
 import { HistoryStore } from './history'
 import { TabManager } from './tab-manager'
+import { buildMenu } from './menu'
 
 app.whenReady().then(() => {
   const userData = app.getPath('userData')
@@ -42,13 +43,16 @@ app.whenReady().then(() => {
   ipcMain.handle('history:search', (_e, q: string) => history.search(String(q)))
   ipcMain.handle('history:list', () => history.list())
 
-  ipcMain.handle('bookmarks:toggle-active', () => {
+  const toggleBookmark = (): void => {
     const info = tabs.activeInfo()
     if (!info || !/^https?:\/\//.test(info.url)) return
     bookmarks.toggle(info.url, info.title, Date.now())
     tabs.refresh()
-  })
+  }
+  ipcMain.handle('bookmarks:toggle-active', () => toggleBookmark())
   ipcMain.handle('bookmarks:list', () => bookmarks.list())
+
+  buildMenu(win, tabs, toggleBookmark)
 
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
 

@@ -1,0 +1,74 @@
+import { BrowserWindow, Menu } from 'electron'
+import type { MenuItemConstructorOptions } from 'electron'
+import type { TabManager } from './tab-manager'
+
+export function buildMenu(win: BrowserWindow, tabs: TabManager, toggleBookmark: () => void): void {
+  const template: MenuItemConstructorOptions[] = [
+    { role: 'appMenu' },
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: () => tabs.createTab() },
+        {
+          label: 'Close Tab',
+          accelerator: 'CmdOrCtrl+W',
+          click: () => {
+            if (tabs.activeId) tabs.closeTab(tabs.activeId)
+          },
+        },
+      ],
+    },
+    { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [
+        {
+          label: 'Reload Page',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => {
+            if (tabs.activeId) tabs.reload(tabs.activeId)
+          },
+        },
+        {
+          label: 'Back',
+          accelerator: 'CmdOrCtrl+[',
+          click: () => {
+            if (tabs.activeId) tabs.back(tabs.activeId)
+          },
+        },
+        {
+          label: 'Forward',
+          accelerator: 'CmdOrCtrl+]',
+          click: () => {
+            if (tabs.activeId) tabs.forward(tabs.activeId)
+          },
+        },
+        { type: 'separator' },
+        { role: 'toggleDevTools' },
+      ],
+    },
+    {
+      label: 'Tools',
+      submenu: [
+        {
+          label: 'Focus Address Bar',
+          accelerator: 'CmdOrCtrl+L',
+          click: () => win.webContents.send('ui:focus-urlbar'),
+        },
+        { label: 'Bookmark This Page', accelerator: 'CmdOrCtrl+D', click: () => toggleBookmark() },
+        {
+          label: 'History',
+          accelerator: 'CmdOrCtrl+Y',
+          click: () => win.webContents.send('ui:toggle-history'),
+        },
+        {
+          label: 'Bookmarks',
+          accelerator: 'CmdOrCtrl+Shift+B',
+          click: () => win.webContents.send('ui:toggle-bookmarks'),
+        },
+      ],
+    },
+    { role: 'windowMenu' },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
