@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, session } from 'electron'
+import type { WebContents } from 'electron'
 import { join } from 'node:path'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
@@ -10,6 +11,17 @@ app.whenReady().then(() => {
   const userData = app.getPath('userData')
   const history = new HistoryStore(userData)
   const bookmarks = new BookmarksStore(userData)
+
+  function attachCycleHooks(wc: WebContents): void {
+    wc.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown' && input.key === 'Tab' && (input.control || input.alt)) {
+        event.preventDefault()
+        tabs.cycleStep(input.control ? 'mru' : 'order', input.shift ? 'back' : 'forward')
+      } else if (input.type === 'keyUp' && (input.key === 'Control' || input.key === 'Alt')) {
+        tabs.cycleCommit()
+      }
+    })
+  }
 
   const win = new BrowserWindow({
     width: 1280,
@@ -24,7 +36,9 @@ app.whenReady().then(() => {
     isBookmarked: (url) => bookmarks.isBookmarked(url),
     onNavigated: (url, title) => history.add(url, title, Date.now()),
     onSnapshot: (snap) => win.webContents.send('tabs:updated', snap),
+    onTabCreated: (wc) => attachCycleHooks(wc),
   })
+  attachCycleHooks(win.webContents)
 
   const downloads = new DownloadManager((list) => win.webContents.send('downloads:updated', list))
   downloads.attach(session.defaultSession)
