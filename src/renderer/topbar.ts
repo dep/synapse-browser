@@ -64,7 +64,9 @@ export function initTopbar(): Topbar {
       hideSuggestions()
       return
     }
-    suggestions = await window.synapse.history.search(q)
+    const results = await window.synapse.history.search(q)
+    if (urlbar.value.trim() !== q) return // stale response; a newer input state owns the UI
+    suggestions = results
     selected = -1
     renderSuggestions()
   })
