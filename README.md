@@ -28,6 +28,13 @@ Chrome extensions are supported via `electron-chrome-extensions` +
 - MV2 installs are allowed (`minimumManifestVersion: 2`) so classic uBlock Origin works;
   uBlock Origin Lite (MV3) is the fallback if an MV2 API gap appears.
 
+**Known platform gap:** Electron does not expose `chrome.webRequest` (and some other
+APIs) inside MV3 background service workers
+([electron#34178](https://github.com/electron/electron/issues/34178)). Extensions whose
+MV3 worker requires them crash at startup — e.g. NordPass, whose toolbar button is
+driven entirely by that worker, so clicking it does nothing. Extensions with a
+`default_popup` are unaffected.
+
 ### Extension smoke checklist
 
 1. Install Dark Reader from the web store → pages darken.
