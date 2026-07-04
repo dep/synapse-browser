@@ -12,6 +12,7 @@ export interface TabManagerOptions {
   onNavigated(url: string, title: string): void
   onSnapshot(snap: TabsSnapshot): void
   onTabCreated?(wc: WebContents): void
+  onTabActivated?(wc: WebContents): void
 }
 
 export class TabManager {
@@ -180,6 +181,15 @@ export class TabManager {
     return this.model.isAwake(id)
   }
 
+  webContentsFor(id: string): WebContents | null {
+    return this.views.get(id)?.webContents ?? null
+  }
+
+  idFor(wc: WebContents): string | null {
+    for (const [id, view] of this.views) if (view.webContents === wc) return id
+    return null
+  }
+
   // index into pins-then-tabs; negative counts from the end (-1 = last)
   activateAt(index: number): void {
     const id = this.model.at(index)
@@ -294,6 +304,7 @@ export class TabManager {
       if (this.attached) this.win.contentView.removeChildView(this.attached)
       if (active) this.win.contentView.addChildView(active)
       this.attached = active
+      if (active) this.opts.onTabActivated?.(active.webContents)
     }
     this.layout()
     this.refresh()
