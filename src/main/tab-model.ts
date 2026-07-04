@@ -21,6 +21,7 @@ export class TabModel {
 
   activate(id: string): void {
     if (!this.order.includes(id) && !this.pinned.includes(id)) return
+    if (this.pinned.includes(id) && !this.mru.includes(id)) return // asleep pins wake via wake()
     // an uncommitted cycle preview still counts as a visit
     if (this.cycling) this.cycleCommit()
     this.promote(id)
@@ -58,8 +59,8 @@ export class TabModel {
 
   wake(id: string, activate = true): void {
     if (!this.pinned.includes(id) || this.mru.includes(id)) return
+    if (this.cycling) this.cycleCommit()
     if (activate) {
-      if (this.cycling) this.cycleCommit()
       this.mru.unshift(id)
       this.activeId = id
     } else {

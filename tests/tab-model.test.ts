@@ -303,4 +303,30 @@ describe('TabModel pins', () => {
     expect(m.isCycling()).toBe(false)
     expect(m.activeId).toBe('b')
   })
+
+  it('activating an asleep pin is a no-op — asleep pins wake via wake()', () => {
+    m.addPin('p1')
+    m.activate('p1')
+    expect(m.activeId).toBe('c')
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+    expect(m.isAwake('p1')).toBe(false)
+  })
+
+  it('wake without activation still commits an in-flight cycle', () => {
+    m.addPin('p1')
+    m.cycleStep('mru', 'forward') // preview b
+    m.wake('p1', false)
+    expect(m.isCycling()).toBe(false)
+    expect(m.mru).toEqual(['b', 'c', 'a', 'p1']) // preview b committed, p1 joins the tail
+    expect(m.activeId).toBe('b')
+  })
+
+  it('unpinning an asleep pin lands it at the top of the list, MRU tail', () => {
+    m.addPin('p1')
+    m.unpin('p1')
+    expect(m.pinned).toEqual([])
+    expect(m.order).toEqual(['p1', 'a', 'b', 'c'])
+    expect(m.mru).toEqual(['c', 'b', 'a', 'p1'])
+    expect(m.activeId).toBe('c')
+  })
 })
