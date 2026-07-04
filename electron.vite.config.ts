@@ -1,10 +1,14 @@
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
+import { defineConfig } from 'electron-vite'
 
+// electron-vite externalizes package.json `dependencies` by default in BOTH the
+// main and preload builds. Main needs that (the extension libs resolve their own
+// preload files at runtime via require.resolve), but the chrome preload is
+// sandboxed and cannot require() node_modules at runtime — its extension import
+// must be bundled in, hence the exclude.
 export default defineConfig({
-  // main runs from node_modules so the extension libs can resolve their own
-  // preload files at runtime; the chrome preload bundles its imports because
-  // sandboxed preloads can't require() external modules
-  main: { plugins: [externalizeDepsPlugin()] },
-  preload: {},
+  main: {},
+  preload: {
+    build: { externalizeDeps: { exclude: ['electron-chrome-extensions'] } },
+  },
   renderer: {},
 })
