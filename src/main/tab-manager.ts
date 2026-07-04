@@ -2,6 +2,7 @@ import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput } from '../shared/url-classifier'
 import type { TabInfo, TabsSnapshot } from '../shared/ipc'
 import { CycleList, Direction, TabModel } from './tab-model'
+import { errorPageDataUrl } from './error-page'
 
 export const SIDEBAR_WIDTH = 240
 export const TOPBAR_HEIGHT = 52
@@ -42,6 +43,10 @@ export class TabManager {
     this.model.add(id, activate)
     this.wireEvents(id, view.webContents)
     this.opts.onTabCreated?.(view.webContents)
+    view.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
+      this.createTab(popupUrl)
+      return { action: 'deny' }
+    })
     if (url) view.webContents.loadURL(url)
     else this.win.webContents.send('ui:focus-urlbar')
     this.syncViews()
@@ -179,6 +184,13 @@ export class TabManager {
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (isMainFrame) this.opts.onNavigated(url, wc.getTitle() || url)
       this.refresh()
+    })
+    wc.on('did-fail-load', (_e, code, desc, validatedUrl, isMainFrame) => {
+      if (!isMainFrame || code === -3) return // -3 = user/redirect abort, not an error
+      wc.loadURL(errorPageDataUrl(desc || `Error ${code}`, validatedUrl))
+    })
+    wc.on('render-process-gone', (_e, details) => {
+      wc.loadURL(errorPageDataUrl(`Page crashed (${details.reason})`, wc.getURL()))
     })
   }
 }
