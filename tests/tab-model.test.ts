@@ -93,6 +93,15 @@ describe('TabModel', () => {
     expect(m.mru).toEqual(['b', 'c'])
   })
 
+  it('closing the previewed tab mid-cycle commits then removes it', () => {
+    m.cycleStep('mru', 'forward') // preview b
+    m.close('b')
+    expect(m.isCycling()).toBe(false)
+    expect(m.order).toEqual(['a', 'c'])
+    expect(m.activeId).toBe('c')
+    expect(m.mru).toEqual(['c', 'a'])
+  })
+
   it('cycleStep is a no-op with fewer than two tabs', () => {
     const solo = new TabModel()
     solo.add('x')

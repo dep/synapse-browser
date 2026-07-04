@@ -93,7 +93,9 @@ state (cursor + pending commit) lives in the pure `TabModel` and is unit tested.
 JSON files in `app.getPath('userData')`, written by main with a debounce (~500ms):
 
 - `history.json` — `{v: 1, entries: [{url, title, visitedAt}]}`, most recent first,
-  capped at 5,000 entries. Every committed navigation to an `http(s)` URL appends.
+  capped at 5,000 entries. Completed loads (`did-finish-load`) and in-page navigations to `http(s)` URLs
+  append; navigations that commit but never finish loading are not recorded — a v1
+  trade-off so entries carry real page titles.
 - `bookmarks.json` — `{v: 1, bookmarks: [{url, title, createdAt}]}`. Star button and
   Cmd+D toggle the current page.
 

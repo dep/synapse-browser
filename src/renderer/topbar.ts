@@ -98,7 +98,7 @@ export function initTopbar(): Topbar {
       return
     }
     const results = await window.synapse.history.search(q)
-    if (urlbar.value.trim() !== q) return // stale response; a newer input state owns the UI
+    if (urlbar.value.trim() !== q || document.activeElement !== urlbar) return // stale response
     suggestions = results
     selected = -1
     renderSuggestions()
@@ -135,6 +135,7 @@ export function initTopbar(): Topbar {
 
   return {
     update(snap) {
+      if (snap.activeId !== activeId) hideSuggestions()
       activeId = snap.activeId
       const tab = activeId ? snap.tabs[activeId] : null
       back.disabled = !tab?.canGoBack

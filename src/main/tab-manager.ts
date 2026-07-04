@@ -44,7 +44,7 @@ export class TabManager {
     this.wireEvents(id, view.webContents)
     this.opts.onTabCreated?.(view.webContents)
     view.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
-      this.createTab(popupUrl)
+      if (/^https?:\/\//.test(popupUrl)) this.createTab(popupUrl)
       return { action: 'deny' }
     })
     if (url) view.webContents.loadURL(url)

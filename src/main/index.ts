@@ -49,7 +49,7 @@ app.whenReady().then(() => {
   })
   ipcMain.on('tabs:close', (_e, id: string) => tabs.closeTab(id))
   ipcMain.on('tabs:activate', (_e, id: string) => tabs.activateTab(id))
-  ipcMain.on('tabs:navigate', (_e, id: string, input: string) => tabs.navigate(id, input))
+  ipcMain.on('tabs:navigate', (_e, id: string, input: string) => tabs.navigate(id, String(input)))
   ipcMain.on('tabs:back', (_e, id: string) => tabs.back(id))
   ipcMain.on('tabs:forward', (_e, id: string) => tabs.forward(id))
   ipcMain.on('tabs:reload', (_e, id: string) => tabs.reload(id))

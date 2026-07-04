@@ -52,4 +52,10 @@ describe('HistoryStore', () => {
     const reloaded = new HistoryStore(dir)
     expect(reloaded.list()).toHaveLength(1)
   })
+
+  it('search respects the limit parameter and defaults to 5', () => {
+    for (let i = 0; i < 8; i++) store.add(`https://site${i}.com`, `Site ${i}`, i)
+    expect(store.search('site', 3)).toHaveLength(3)
+    expect(store.search('site')).toHaveLength(5)
+  })
 })

@@ -24,6 +24,7 @@ window.synapse.ui.onToggleBookmarks(() => setPanel('bookmarks'))
 
 function setPanel(mode: PanelMode): void {
   panelMode = panelMode === mode ? 'none' : mode
+  void renderPanel(panelEl, panelMode)
   render()
 }
 
@@ -32,5 +33,4 @@ function render(): void {
   topbar.update(snap)
   tabListEl.hidden = panelMode !== 'none'
   panelEl.hidden = panelMode === 'none'
-  void renderPanel(panelEl, panelMode)
 }
