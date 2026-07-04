@@ -253,9 +253,9 @@ export class TabManager {
         const url = wc.getURL()
         tabs[id] = {
           id,
-          title: wc.getTitle() || 'New Tab',
+          title: wc.getTitle() || slot?.title || 'New Tab',
           url,
-          favicon: this.favicons.get(id) ?? null,
+          favicon: this.favicons.get(id) ?? slot?.favicon ?? null,
           isLoading: wc.isLoading(),
           canGoBack: wc.navigationHistory.canGoBack(),
           canGoForward: wc.navigationHistory.canGoForward(),
