@@ -6,6 +6,7 @@ import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
 import { HistoryStore } from './history'
 import { TabManager } from './tab-manager'
+import { TabsStore } from './tabs-store'
 import { buildMenu } from './menu'
 
 app.whenReady().then(() => {
@@ -23,6 +24,7 @@ app.whenReady().then(() => {
   }
   const history = new HistoryStore(userData)
   const bookmarks = new BookmarksStore(userData)
+  const tabsStore = new TabsStore(userData)
 
   function attachCycleHooks(wc: WebContents): void {
     wc.on('before-input-event', (event, input) => {
@@ -64,7 +66,13 @@ app.whenReady().then(() => {
   const tabs = new TabManager(win, {
     isBookmarked: (url) => bookmarks.isBookmarked(url),
     onNavigated: (url, title) => history.add(url, title, Date.now()),
-    onSnapshot: (snap) => win.webContents.send('tabs:updated', snap),
+    onSnapshot: (snap) => {
+      win.webContents.send('tabs:updated', snap)
+      tabsStore.save(
+        snap.order.map((id) => snap.tabs[id]!.url),
+        snap.activeId ? snap.order.indexOf(snap.activeId) : -1,
+      )
+    },
     onTabCreated: (wc) => attachCycleHooks(wc),
   })
   attachCycleHooks(win.webContents)
@@ -109,11 +117,13 @@ app.whenReady().then(() => {
     win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 
-  tabs.createTab()
+  const saved = tabsStore.load()
+  tabs.restoreTabs(saved.urls, saved.active)
 
   app.on('before-quit', () => {
     history.flush()
     bookmarks.flush()
+    tabsStore.flush()
   })
 })
 

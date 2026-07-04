@@ -48,7 +48,7 @@ export class TabManager {
       return { action: 'deny' }
     })
     if (url) view.webContents.loadURL(classifyInput(url))
-    else this.focusUrlBar()
+    else if (activate) this.focusUrlBar()
     this.syncViews()
     return id
   }
@@ -56,10 +56,11 @@ export class TabManager {
   closeTab(id: string): void {
     const view = this.views.get(id)
     if (!view) return
+    const wasAttached = this.attached === view
     this.model.close(id)
     this.views.delete(id)
     this.favicons.delete(id)
-    if (this.attached === view) {
+    if (wasAttached) {
       this.win.contentView.removeChildView(view)
       this.attached = null
     }
@@ -69,6 +70,9 @@ export class TabManager {
       return
     }
     this.syncViews()
+    // destroying the focused view leaves no first responder, and Blink then
+    // parks keyboard focus on the chrome toolbar's first enabled button
+    if (wasAttached) this.attached?.webContents.focus()
   }
 
   activateTab(id: string): void {
@@ -76,6 +80,16 @@ export class TabManager {
     this.model.activate(id)
     this.syncViews()
     this.attached?.webContents.focus()
+  }
+
+  // recreate a saved session: tabs in sidebar order, then the active one
+  restoreTabs(urls: string[], active: number): void {
+    if (urls.length === 0) {
+      this.createTab()
+      return
+    }
+    const ids = urls.map((url) => this.createTab(url || undefined, false))
+    this.activateTab(ids[Math.min(Math.max(active, 0), ids.length - 1)]!)
   }
 
   // index into sidebar order; negative counts from the end (-1 = last tab)
