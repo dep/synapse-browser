@@ -164,7 +164,10 @@ export class TabManager {
     wc.on('page-title-updated', refresh)
     wc.on('did-start-loading', refresh)
     wc.on('did-stop-loading', refresh)
-    wc.on('did-navigate', refresh)
+    wc.on('did-navigate', () => {
+      this.favicons.set(id, null)
+      this.refresh()
+    })
     wc.on('page-favicon-updated', (_e, favicons) => {
       this.favicons.set(id, favicons[0] ?? null)
       this.refresh()
