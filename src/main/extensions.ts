@@ -23,8 +23,10 @@ export class ExtensionManager {
         return [tabs.webContentsFor(id)!, this.win]
       },
       selectTab: (wc) => {
+        // the library echoes our own selectTab notifications back here; re-activating
+        // the already-active tab would commit an in-progress Ctrl+Tab cycle preview
         const id = tabs.idFor(wc)
-        if (id) tabs.activateTab(id)
+        if (id && id !== tabs.activeId) tabs.activateTab(id)
       },
       removeTab: (wc) => {
         const id = tabs.idFor(wc)
@@ -62,25 +64,6 @@ export class ExtensionManager {
         return { action: response === 1 ? 'allow' : 'deny' }
       },
     })
-    await this.startMV3ServiceWorkers()
-  }
-
-  // Electron loads MV3 extensions but does not spin up their background
-  // service workers on its own (mirrors the reference shell browser)
-  private async startMV3ServiceWorkers(): Promise<void> {
-    const ses = session.defaultSession
-    for (const ext of ses.extensions.getAllExtensions()) {
-      const manifest = ext.manifest as {
-        manifest_version?: number
-        background?: { service_worker?: string }
-      }
-      if (manifest.manifest_version !== 3 || !manifest.background?.service_worker) continue
-      try {
-        await ses.serviceWorkers.startWorkerForScope(ext.url)
-      } catch (err) {
-        console.warn(`extensions: failed to start worker for ${ext.name}:`, err)
-      }
-    }
   }
 
   // dev escape hatch; loaded for this run only, not persisted
@@ -91,7 +74,15 @@ export class ExtensionManager {
     })
     if (canceled || !filePaths[0]) return
     try {
-      await session.defaultSession.extensions.loadExtension(filePaths[0])
+      const ext = await session.defaultSession.extensions.loadExtension(filePaths[0])
+      // web-store loads start MV3 workers themselves; unpacked loads must do it here
+      const manifest = ext.manifest as {
+        manifest_version?: number
+        background?: { service_worker?: string }
+      }
+      if (manifest.manifest_version === 3 && manifest.background?.service_worker) {
+        await session.defaultSession.serviceWorkers.startWorkerForScope(ext.url)
+      }
     } catch (err) {
       dialog.showErrorBox('Failed to load extension', err instanceof Error ? err.message : String(err))
     }

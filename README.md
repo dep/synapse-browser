@@ -36,6 +36,8 @@ Chrome extensions are supported via `electron-chrome-extensions` +
 4. A toolbar button popup opens anchored under its button, above the page.
 5. Right-click a toolbar button → Remove extension → button and extension gone.
 6. Restart Synapse → installed extensions reload and still work.
+7. Ctrl+Tab hold-and-walk cycling still works: hold Ctrl, press Tab repeatedly to walk
+   the MRU list, release to commit — the walk must not commit on each step.
 
 ## Development
 

@@ -120,7 +120,7 @@ checklist added to the README:
 | `src/main/index.ts` | instantiate + wire ExtensionManager; unpacked-load menu hook |
 | `src/main/menu.ts` | "Load Unpacked Extension…" item |
 | `src/preload/index.ts` | import browser-action element |
-| `src/renderer/topbar.ts` | `<browser-action-list>` in topbar |
+| `src/renderer/index.html` | `<browser-action-list>` in topbar markup + `crx:` in CSP |
 | `package.json` | add pinned `electron-chrome-extensions`, `electron-chrome-web-store` |
 | `.agents/REPO_RULES.md` | dependency carve-out note |
 | `README.md` | extensions section + smoke checklist |
