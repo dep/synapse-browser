@@ -187,9 +187,11 @@ export class TabManager {
     })
     wc.on('did-fail-load', (_e, code, desc, validatedUrl, isMainFrame) => {
       if (!isMainFrame || code === -3) return // -3 = user/redirect abort, not an error
+      if (validatedUrl.startsWith('data:')) return // the error page itself failed; don't loop
       wc.loadURL(errorPageDataUrl(desc || `Error ${code}`, validatedUrl))
     })
     wc.on('render-process-gone', (_e, details) => {
+      if (wc.getURL().startsWith('data:')) return // error page crashed; don't loop
       wc.loadURL(errorPageDataUrl(`Page crashed (${details.reason})`, wc.getURL()))
     })
   }

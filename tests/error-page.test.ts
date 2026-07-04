@@ -13,6 +13,9 @@ describe('error page', () => {
     expect(html).not.toContain('<script>alert(1)</script>')
     expect(html).toContain('&lt;script&gt;')
     expect(html).not.toContain('"><img>')
+    const single = errorPageHtml("it's ' broken", "https://x.com/?q='onmouseover='alert(1)")
+    expect(single).not.toContain("'onmouseover='")
+    expect(single).toContain('&#39;')
   })
 
   it('produces an encoded data: url', () => {
