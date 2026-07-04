@@ -13,11 +13,15 @@ export interface TabInfo {
   canGoBack: boolean
   canGoForward: boolean
   isBookmarked: boolean
+  isPinned: boolean
+  isAsleep: boolean
+  pinnedUrl: string | null
 }
 
 export interface TabsSnapshot {
   tabs: Record<string, TabInfo>
   order: string[]
+  pinned: string[]
   activeId: string | null
 }
 
@@ -50,6 +54,7 @@ export interface SynapseApi {
     back(id: string): void
     forward(id: string): void
     reload(id: string): void
+    showContextMenu(id: string): void
   }
   onTabsUpdated(cb: (snap: TabsSnapshot) => void): void
   history: {

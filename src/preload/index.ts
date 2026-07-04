@@ -10,6 +10,7 @@ const api: SynapseApi = {
     back: (id) => ipcRenderer.send('tabs:back', id),
     forward: (id) => ipcRenderer.send('tabs:forward', id),
     reload: (id) => ipcRenderer.send('tabs:reload', id),
+    showContextMenu: (id) => ipcRenderer.send('tabs:context-menu', id),
   },
   onTabsUpdated: (cb) => {
     ipcRenderer.on('tabs:updated', (_e, snap) => cb(snap))

@@ -1,6 +1,6 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput } from '../shared/url-classifier'
-import type { TabInfo, TabsSnapshot } from '../shared/ipc'
+import type { PinSlot, TabInfo, TabsSnapshot } from '../shared/ipc'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 
@@ -18,6 +18,7 @@ export class TabManager {
   private model = new TabModel()
   private views = new Map<string, WebContentsView>()
   private favicons = new Map<string, string | null>()
+  private pins = new Map<string, PinSlot>()
   private attached: WebContentsView | null = null
   private overlayHeight = 0
   private counter = 0
@@ -35,37 +36,40 @@ export class TabManager {
 
   createTab(url?: string, activate = true): string {
     const id = `tab-${++this.counter}`
-    const view = new WebContentsView({
-      webPreferences: { sandbox: true, contextIsolation: true },
-    })
-    this.views.set(id, view)
-    this.favicons.set(id, null)
+    const view = this.createView(id)
     this.model.add(id, activate)
-    this.wireEvents(id, view.webContents)
-    this.opts.onTabCreated?.(view.webContents)
-    view.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
-      if (/^https?:\/\//.test(popupUrl)) this.createTab(popupUrl)
-      return { action: 'deny' }
-    })
     if (url) view.webContents.loadURL(classifyInput(url))
     else if (activate) this.focusUrlBar()
     this.syncViews()
     return id
   }
 
+  private createView(id: string): WebContentsView {
+    const view = new WebContentsView({
+      webPreferences: { sandbox: true, contextIsolation: true },
+    })
+    this.views.set(id, view)
+    this.favicons.set(id, null)
+    this.wireEvents(id, view.webContents)
+    this.opts.onTabCreated?.(view.webContents)
+    view.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
+      if (/^https?:\/\//.test(popupUrl)) this.createTab(popupUrl)
+      return { action: 'deny' }
+    })
+    return view
+  }
+
   closeTab(id: string): void {
+    if (this.model.isPinned(id)) {
+      this.sleepPin(id)
+      return
+    }
     const view = this.views.get(id)
     if (!view) return
     const wasAttached = this.attached === view
     this.model.close(id)
-    this.views.delete(id)
-    this.favicons.delete(id)
-    if (wasAttached) {
-      this.win.contentView.removeChildView(view)
-      this.attached = null
-    }
-    view.webContents.close()
-    if (this.model.order.length === 0) {
+    this.destroyView(id, view, wasAttached)
+    if (!this.model.activeId) {
       this.createTab()
       return
     }
@@ -75,9 +79,53 @@ export class TabManager {
     if (wasAttached) this.attached?.webContents.focus()
   }
 
+  private destroyView(id: string, view: WebContentsView, wasAttached: boolean): void {
+    this.views.delete(id)
+    this.favicons.delete(id)
+    if (wasAttached) {
+      this.win.contentView.removeChildView(view)
+      this.attached = null
+    }
+    view.webContents.close()
+  }
+
+  private sleepPin(id: string): void {
+    const view = this.views.get(id)
+    if (!view) return // already asleep
+    const slot = this.pins.get(id)
+    if (slot) {
+      // keep the freshest title/icon for the sleeping button
+      slot.title = view.webContents.getTitle() || slot.title
+      slot.favicon = this.favicons.get(id) ?? slot.favicon
+    }
+    const wasAttached = this.attached === view
+    this.model.sleep(id)
+    this.destroyView(id, view, wasAttached)
+    if (!this.model.activeId) {
+      this.createTab()
+      return
+    }
+    this.syncViews()
+    if (wasAttached) this.attached?.webContents.focus()
+  }
+
   activateTab(id: string): void {
+    if (this.model.isPinned(id) && !this.views.has(id)) {
+      this.wakePin(id)
+      return
+    }
     if (!this.views.has(id)) return
     this.model.activate(id)
+    this.syncViews()
+    this.attached?.webContents.focus()
+  }
+
+  private wakePin(id: string): void {
+    const slot = this.pins.get(id)
+    if (!slot) return
+    const view = this.createView(id)
+    this.model.wake(id)
+    view.webContents.loadURL(slot.url)
     this.syncViews()
     this.attached?.webContents.focus()
   }
@@ -92,9 +140,49 @@ export class TabManager {
     this.activateTab(ids[Math.min(Math.max(active, 0), ids.length - 1)]!)
   }
 
-  // index into sidebar order; negative counts from the end (-1 = last tab)
+  // register saved pins as asleep slots; called once at startup before restoreTabs
+  restorePins(slots: PinSlot[]): void {
+    for (const slot of slots) {
+      const id = `tab-${++this.counter}`
+      this.pins.set(id, { ...slot })
+      this.model.addPin(id)
+    }
+  }
+
+  togglePin(id: string | null): void {
+    if (!id) return
+    if (this.model.isPinned(id)) {
+      if (!this.views.has(id)) this.wakePin(id) // a sleeping pin re-enters as a live tab
+      this.pins.delete(id)
+      this.model.unpin(id)
+    } else {
+      const wc = this.views.get(id)?.webContents
+      if (!wc) return
+      const url = wc.getURL()
+      if (!/^https?:\/\//.test(url)) return // blank/error tabs have no url to pin
+      this.pins.set(id, { url, title: wc.getTitle() || url, favicon: this.favicons.get(id) ?? null })
+      this.model.pin(id)
+    }
+    this.syncViews()
+  }
+
+  restorePinnedUrl(id: string | null = this.model.activeId): void {
+    if (!id || !this.model.isPinned(id)) return
+    const slot = this.pins.get(id)
+    if (slot) this.views.get(id)?.webContents.loadURL(slot.url)
+  }
+
+  isPinned(id: string): boolean {
+    return this.model.isPinned(id)
+  }
+
+  isAwake(id: string): boolean {
+    return this.model.isAwake(id)
+  }
+
+  // index into pins-then-tabs; negative counts from the end (-1 = last)
   activateAt(index: number): void {
-    const id = this.model.order.at(index)
+    const id = this.model.at(index)
     if (id) this.activateTab(id)
   }
 
@@ -158,21 +246,46 @@ export class TabManager {
 
   private snapshot(): TabsSnapshot {
     const tabs: Record<string, TabInfo> = {}
-    for (const id of this.model.order) {
-      const wc = this.views.get(id)!.webContents
-      const url = wc.getURL()
-      tabs[id] = {
-        id,
-        title: wc.getTitle() || 'New Tab',
-        url,
-        favicon: this.favicons.get(id) ?? null,
-        isLoading: wc.isLoading(),
-        canGoBack: wc.navigationHistory.canGoBack(),
-        canGoForward: wc.navigationHistory.canGoForward(),
-        isBookmarked: this.opts.isBookmarked(url),
+    for (const id of [...this.model.pinned, ...this.model.order]) {
+      const slot = this.pins.get(id)
+      const wc = this.views.get(id)?.webContents
+      if (wc) {
+        const url = wc.getURL()
+        tabs[id] = {
+          id,
+          title: wc.getTitle() || 'New Tab',
+          url,
+          favicon: this.favicons.get(id) ?? null,
+          isLoading: wc.isLoading(),
+          canGoBack: wc.navigationHistory.canGoBack(),
+          canGoForward: wc.navigationHistory.canGoForward(),
+          isBookmarked: this.opts.isBookmarked(url),
+          isPinned: !!slot,
+          isAsleep: false,
+          pinnedUrl: slot?.url ?? null,
+        }
+      } else if (slot) {
+        tabs[id] = {
+          id,
+          title: slot.title,
+          url: slot.url,
+          favicon: slot.favicon,
+          isLoading: false,
+          canGoBack: false,
+          canGoForward: false,
+          isBookmarked: this.opts.isBookmarked(slot.url),
+          isPinned: true,
+          isAsleep: true,
+          pinnedUrl: slot.url,
+        }
       }
     }
-    return { tabs, order: [...this.model.order], activeId: this.model.activeId }
+    return {
+      tabs,
+      order: [...this.model.order],
+      pinned: [...this.model.pinned],
+      activeId: this.model.activeId,
+    }
   }
 
   private syncViews(): void {
