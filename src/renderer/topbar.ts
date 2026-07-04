@@ -8,6 +8,7 @@ export function initTopbar(): Topbar {
   const back = document.getElementById('nav-back') as HTMLButtonElement
   const forward = document.getElementById('nav-forward') as HTMLButtonElement
   const reload = document.getElementById('nav-reload') as HTMLButtonElement
+  const star = document.getElementById('star') as HTMLButtonElement
   const urlbar = document.getElementById('urlbar') as HTMLInputElement
   const suggestionsEl = document.getElementById('suggestions') as HTMLDivElement
   let activeId: string | null = null
@@ -17,6 +18,7 @@ export function initTopbar(): Topbar {
   back.addEventListener('click', () => activeId && window.synapse.tabs.back(activeId))
   forward.addEventListener('click', () => activeId && window.synapse.tabs.forward(activeId))
   reload.addEventListener('click', () => activeId && window.synapse.tabs.reload(activeId))
+  star.addEventListener('click', () => void window.synapse.bookmarks.toggleActive())
 
   function hideSuggestions(): void {
     suggestions = []
@@ -108,6 +110,10 @@ export function initTopbar(): Topbar {
       forward.disabled = !tab?.canGoForward
       reload.disabled = !tab
       if (document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
+      const canBookmark = !!tab && /^https?:\/\//.test(tab.url)
+      star.disabled = !canBookmark
+      star.textContent = tab?.isBookmarked ? '★' : '☆'
+      star.classList.toggle('starred', !!tab?.isBookmarked)
     },
   }
 }

@@ -220,3 +220,6 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+#star.starred {
+  color: #f7c67a;
+}
