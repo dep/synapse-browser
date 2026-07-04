@@ -1,3 +1,9 @@
+export interface PinSlot {
+  url: string
+  title: string
+  favicon: string | null
+}
+
 export interface TabInfo {
   id: string
   title: string
