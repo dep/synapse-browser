@@ -164,3 +164,59 @@ body {
   background: rgba(255, 255, 255, 0.12);
   color: var(--fg);
 }
+.suggestion {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.suggestion:hover,
+.suggestion.selected {
+  background: rgba(255, 255, 255, 0.08);
+}
+.suggestion-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggestion-url {
+  color: var(--fg-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-heading {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  padding: 6px 8px;
+}
+.panel-empty {
+  color: var(--fg-dim);
+  padding: 8px;
+}
+.panel-item {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.panel-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.panel-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-item-url {
+  color: var(--fg-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
