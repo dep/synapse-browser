@@ -105,6 +105,34 @@ body {
   background: rgba(255, 255, 255, 0.08);
   color: var(--fg);
 }
+#pin-grid {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+  flex: none;
+}
+#pin-grid[hidden] {
+  display: none;
+}
+.pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+.pin:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.pin.active {
+  background: var(--bg-raised);
+}
+.pin.asleep .favicon {
+  opacity: 0.45;
+}
 #new-tab {
   flex: 1;
   text-align: left;

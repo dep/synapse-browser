@@ -1,9 +1,10 @@
 import './style.css'
 import type { TabsSnapshot } from '../shared/ipc'
 import { PanelMode, renderPanel } from './panel'
-import { renderTabList } from './sidebar'
+import { renderPins, renderTabList } from './sidebar'
 import { initTopbar } from './topbar'
 
+const pinGridEl = document.getElementById('pin-grid')!
 const tabListEl = document.getElementById('tab-list')!
 const panelEl = document.getElementById('panel')!
 const topbar = initTopbar()
@@ -29,8 +30,10 @@ function setPanel(mode: PanelMode): void {
 }
 
 function render(): void {
+  renderPins(pinGridEl, snap)
   renderTabList(tabListEl, snap)
   topbar.update(snap)
+  pinGridEl.hidden = panelMode !== 'none' || snap.pinned.length === 0
   tabListEl.hidden = panelMode !== 'none'
   panelEl.hidden = panelMode === 'none'
 }
