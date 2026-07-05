@@ -95,6 +95,13 @@ export function buildMenu(
         },
         { type: 'separator' },
         {
+          label: 'Extensions',
+          submenu: extensions.list().map(({ id, name }) => ({
+            label: name,
+            submenu: [{ label: 'Remove…', click: () => void extensions.remove(id) }],
+          })),
+        },
+        {
           label: 'Load Unpacked Extension…',
           click: () => void extensions.loadUnpacked(),
         },

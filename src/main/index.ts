@@ -143,6 +143,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('bookmarks:list', () => bookmarks.list())
 
   buildMenu(win, tabs, toggleBookmark, extensions)
+  // the Tools → Extensions submenu lists installed extensions; rebuild it as they change
+  session.defaultSession.on('extension-loaded', () => buildMenu(win, tabs, toggleBookmark, extensions))
+  session.defaultSession.on('extension-unloaded', () => buildMenu(win, tabs, toggleBookmark, extensions))
 
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
 

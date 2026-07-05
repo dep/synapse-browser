@@ -1,20 +1,25 @@
 import { app, dialog, session } from 'electron'
 import type { BrowserWindow, WebContents } from 'electron'
-import { join } from 'node:path'
+import { cpSync, mkdirSync, rmSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { ElectronChromeExtensions } from 'electron-chrome-extensions'
-import { installChromeWebStore } from 'electron-chrome-web-store'
+import { installChromeWebStore, loadAllExtensions, uninstallExtension } from 'electron-chrome-web-store'
 import type { TabManager } from './tab-manager'
 
 // Binds electron-chrome-extensions + the web-store install flow to the default
-// session (the one all tabs use). Extension files persist under
-// <userData>/Extensions, managed entirely by electron-chrome-web-store.
+// session (the one all tabs use). Web-store extension files persist under
+// <userData>/Extensions (managed by electron-chrome-web-store); unpacked
+// extensions are copied into <userData>/UnpackedExtensions and reload at boot.
 export class ExtensionManager {
   private extensions: ElectronChromeExtensions
+  private webStorePath = join(app.getPath('userData'), 'Extensions')
+  private unpackedPath = join(app.getPath('userData'), 'UnpackedExtensions')
 
   constructor(
     private win: BrowserWindow,
     tabs: TabManager,
   ) {
+    mkdirSync(this.unpackedPath, { recursive: true })
     this.extensions = new ElectronChromeExtensions({
       license: 'GPL-3.0',
       session: session.defaultSession,
@@ -47,11 +52,11 @@ export class ExtensionManager {
   }
 
   // installs the chromewebstore.google.com "Add to Chrome" hook and loads
-  // previously installed extensions from disk
+  // previously installed extensions from disk (web-store, then unpacked)
   async init(): Promise<void> {
     await installChromeWebStore({
       session: session.defaultSession,
-      extensionsPath: join(app.getPath('userData'), 'Extensions'),
+      extensionsPath: this.webStorePath,
       minimumManifestVersion: 2, // default 3 would block MV2 installs like uBlock Origin classic
       beforeInstall: async (details) => {
         const { response } = await dialog.showMessageBox(this.win, {
@@ -64,18 +69,56 @@ export class ExtensionManager {
         return { action: response === 1 ? 'allow' : 'deny' }
       },
     })
+    // per-extension failures are caught and logged by the library; boot never blocks
+    await loadAllExtensions(session.defaultSession, this.unpackedPath, { allowUnpacked: true })
   }
 
-  // dev escape hatch; loaded for this run only, not persisted
+  // installed extensions, for the app menu's Extensions submenu
+  list(): { id: string; name: string }[] {
+    return session.defaultSession.extensions
+      .getAllExtensions()
+      .map((ext) => ({ id: ext.id, name: ext.name }))
+  }
+
+  // web-store installs uninstall via the library (removes from disk);
+  // unpacked extensions unload from the session and their copy is deleted
+  async remove(id: string): Promise<void> {
+    const ext = session.defaultSession.extensions.getExtension(id)
+    if (!ext) return
+    const { response } = await dialog.showMessageBox(this.win, {
+      type: 'warning',
+      buttons: ['Cancel', 'Remove'],
+      defaultId: 1,
+      cancelId: 0,
+      message: `Remove "${ext.name}"?`,
+    })
+    if (response !== 1) return
+    if (ext.path.startsWith(this.unpackedPath)) {
+      session.defaultSession.extensions.removeExtension(id)
+      rmSync(ext.path, { recursive: true, force: true })
+    } else {
+      await uninstallExtension(id, {
+        session: session.defaultSession,
+        extensionsPath: this.webStorePath,
+      })
+    }
+  }
+
+  // copies the picked folder into UnpackedExtensions so it reloads at boot
   async loadUnpacked(): Promise<void> {
     const { canceled, filePaths } = await dialog.showOpenDialog(this.win, {
       title: 'Load Unpacked Extension',
       properties: ['openDirectory'],
     })
     if (canceled || !filePaths[0]) return
+    const src = filePaths[0]
+    const alreadyInside = src.startsWith(this.unpackedPath)
+    const dest = alreadyInside ? src : join(this.unpackedPath, basename(src))
     try {
-      const ext = await session.defaultSession.extensions.loadExtension(filePaths[0])
-      // web-store loads start MV3 workers themselves; unpacked loads must do it here
+      if (!alreadyInside) cpSync(src, dest, { recursive: true })
+      const ext = await session.defaultSession.extensions.loadExtension(dest)
+      // boot-time loads start MV3 workers via loadAllExtensions; mid-session
+      // loads must do it here
       const manifest = ext.manifest as {
         manifest_version?: number
         background?: { service_worker?: string }
@@ -84,6 +127,7 @@ export class ExtensionManager {
         await session.defaultSession.serviceWorkers.startWorkerForScope(ext.url)
       }
     } catch (err) {
+      if (!alreadyInside) rmSync(dest, { recursive: true, force: true })
       dialog.showErrorBox('Failed to load extension', err instanceof Error ? err.message : String(err))
     }
   }
