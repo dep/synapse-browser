@@ -42,8 +42,12 @@ repo; full analysis in
    MV2 uBlock's network-level blocking is also affected (its ad hiding today is likely
    cosmetic content-script filtering only).
 2. Even with that fixed, MV3 service workers receive no webRequest events (dispatch
-   unwired upstream; MV2 background pages work). The planned fix is an observational
-   webRequest backend for `electron-chrome-extensions` — see the scoping doc.
+   unwired upstream; MV2 background pages work). **Mitigated:** Synapse ships a
+   vendored `electron-chrome-extensions` build (`vendor/*.tgz`) adding an
+   observational webRequest backend — MV3 workers now receive
+   `chrome.webRequest` events (verified end-to-end on Electron 43); blocking
+   variants remain unsupported, matching Chrome's own MV3 rules. Upstream PR
+   pending; revert to the registry pin when it ships.
 
 `chrome.declarativeNetRequest` dynamic rules work and enforce; static `rule_resources`
 never load. Never register `session.webRequest` (or `protocol.intercept*`) handlers on

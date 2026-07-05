@@ -38,6 +38,9 @@ Electron + electron-vite + TypeScript. No native build steps.
   (exact-pinned) — Electron ships no browser-action UI, full `chrome.tabs`, or web-store
   install flow, and reimplementing those is a multi-month project. See
   `docs/superpowers/specs/2026-07-04-extension-support-design.md`.
+  `electron-chrome-extensions` is temporarily a vendored tarball (`vendor/`) carrying
+  our observational-webRequest patch; switch back to the registry pin once the
+  upstream PR is released (see `docs/superpowers/specs/2026-07-05-mv3-webrequest-gap-scoping.md`).
 - Pure logic goes in Electron-free modules (`src/shared/`, `tab-model.ts`) with Vitest
   coverage; Electron-coupled code is verified by manual smoke (see README).
 - Short conventional commits (`feat:`, `fix:`, `chore:`).

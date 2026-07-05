@@ -1,7 +1,9 @@
 # MV3 webRequest Gap — Root Cause & Options
 
 **Date:** 2026-07-05
-**Status:** Scoping (decision pending)
+**Status:** Option 2 implemented — vendored tarball in `vendor/`, verified end-to-end
+on Electron 43 (MV3 worker receives `onBeforeRequest`); upstream PR pending.
+Option 1 (backport) still tracked in electron#52265.
 **Upstream:** [electron#52265](https://github.com/electron/electron/issues/52265) (filed from this repo, root cause posted)
 
 ## What we found

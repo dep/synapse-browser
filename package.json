@@ -28,7 +28,7 @@
     "esbuild@0.28.1": true
   },
   "dependencies": {
-    "electron-chrome-extensions": "4.9.0",
+    "electron-chrome-extensions": "file:vendor/electron-chrome-extensions-4.9.0-webrequest.1.tgz",
     "electron-chrome-web-store": "0.13.0"
   }
 }
