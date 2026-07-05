@@ -46,8 +46,13 @@ repo; full analysis in
    vendored `electron-chrome-extensions` build (`vendor/*.tgz`) adding an
    observational webRequest backend — MV3 workers now receive
    `chrome.webRequest` events (verified end-to-end on Electron 43); blocking
-   variants remain unsupported, matching Chrome's own MV3 rules. Upstream PR
-   pending; revert to the registry pin when it ships.
+   variants remain unsupported, matching Chrome's own MV3 rules. The vendored
+   build also injects the polyfills into the native `browser` namespace alias
+   (cross-browser extensions prefer it over `chrome`) and gives
+   `chrome.privacy` ChromeSetting stubs real return values — both were
+   additional NordPass startup blockers. Upstream PR pending
+   ([electron-browser-shell#183](https://github.com/samuelmaddock/electron-browser-shell/pull/183));
+   revert to the registry pin when it ships.
 
 `chrome.declarativeNetRequest` dynamic rules work and enforce; static `rule_resources`
 never load. Never register `session.webRequest` (or `protocol.intercept*`) handlers on
