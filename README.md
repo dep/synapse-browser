@@ -28,12 +28,15 @@ Chrome extensions are supported via `electron-chrome-extensions` +
 - MV2 installs are allowed (`minimumManifestVersion: 2`) so classic uBlock Origin works;
   uBlock Origin Lite (MV3) is the fallback if an MV2 API gap appears.
 
-**Known platform gap:** Electron does not expose `chrome.webRequest` (and some other
-APIs) inside MV3 background service workers
-([electron#34178](https://github.com/electron/electron/issues/34178)). Extensions whose
-MV3 worker requires them crash at startup — e.g. NordPass, whose toolbar button is
-driven entirely by that worker, so clicking it does nothing. Extensions with a
-`default_popup` are unaffected.
+**Known platform gap:** Electron registers the `chrome.webRequest` API schema in MV3
+background service workers but ships no bindings for it — the `webRequest` /
+`webRequestEvent` bindings resources are missing from its resource bundle, so
+`chrome.webRequest` is an empty object and e.g. `.onBeforeRequest` is `undefined`
+([electron#52265](https://github.com/electron/electron/issues/52265), filed from this
+repo with a minimal repro). A worker that touches it at startup throws, which fails MV3
+service worker registration outright ("Status code: 15") — e.g. NordPass, whose toolbar
+button is driven entirely by that worker, so clicking it does nothing. Extensions with a
+`default_popup` are unaffected. `chrome.declarativeNetRequest` is likewise absent.
 
 ### Extension smoke checklist
 
