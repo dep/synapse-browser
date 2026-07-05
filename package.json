@@ -12,11 +12,13 @@
     "start": "electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dist:mac": "electron-vite build && electron-builder --mac --publish never"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "typescript": "^6.0.3",
     "vite": "^7.3.6",
