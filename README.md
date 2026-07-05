@@ -28,15 +28,27 @@ Chrome extensions are supported via `electron-chrome-extensions` +
 - MV2 installs are allowed (`minimumManifestVersion: 2`) so classic uBlock Origin works;
   uBlock Origin Lite (MV3) is the fallback if an MV2 API gap appears.
 
-**Known platform gap:** Electron registers the `chrome.webRequest` API schema in MV3
-background service workers but ships no bindings for it — the `webRequest` /
-`webRequestEvent` bindings resources are missing from its resource bundle, so
-`chrome.webRequest` is an empty object and e.g. `.onBeforeRequest` is `undefined`
-([electron#52265](https://github.com/electron/electron/issues/52265), filed from this
-repo with a minimal repro). A worker that touches it at startup throws, which fails MV3
-service worker registration outright ("Status code: 15") — e.g. NordPass, whose toolbar
-button is driven entirely by that worker, so clicking it does nothing. Extensions with a
-`default_popup` are unaffected. `chrome.declarativeNetRequest` is likewise absent.
+**Known platform gaps** (tracked in
+[electron#52265](https://github.com/electron/electron/issues/52265), filed from this
+repo; full analysis in
+`docs/superpowers/specs/2026-07-05-mv3-webrequest-gap-scoping.md`):
+
+1. Electron 43 ships without the extensions renderer bindings pak (Chromium 150
+   packaging regression, fixed on Electron main by
+   [#51804](https://github.com/electron/electron/pull/51804), backport pending), so
+   `chrome.webRequest` is memberless in **all** extension contexts — MV2 and MV3. An
+   MV3 worker that touches it throws and fails registration outright ("Status code:
+   15") — e.g. NordPass, whose toolbar button is driven entirely by that worker.
+   MV2 uBlock's network-level blocking is also affected (its ad hiding today is likely
+   cosmetic content-script filtering only).
+2. Even with that fixed, MV3 service workers receive no webRequest events (dispatch
+   unwired upstream; MV2 background pages work). The planned fix is an observational
+   webRequest backend for `electron-chrome-extensions` — see the scoping doc.
+
+`chrome.declarativeNetRequest` dynamic rules work and enforce; static `rule_resources`
+never load. Never register `session.webRequest` (or `protocol.intercept*`) handlers on
+the extensions session — one listener disables all extension webRequest and dNR
+enforcement.
 
 ### Extension smoke checklist
 

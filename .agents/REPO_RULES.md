@@ -26,6 +26,10 @@ Electron + electron-vite + TypeScript. No native build steps.
   UI gets `window.synapse` (typed as `SynapseApi` in `src/shared/ipc.ts`).
 - Stores are debounced JSON (`history.json`, `bookmarks.json`) in `userData`; corrupt
   files become `<name>.bad` and are recreated. Schema carries `v: 1`.
+- Never register `session.webRequest` or `protocol.intercept*` handlers on the session
+  hosting extensions — a single listener silently disables all extension webRequest
+  events and declarativeNetRequest enforcement for those loader factories
+  (see `docs/superpowers/specs/2026-07-05-mv3-webrequest-gap-scoping.md`).
 
 ## Conventions
 
