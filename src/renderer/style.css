@@ -193,6 +193,18 @@ body {
   background: rgba(255, 255, 255, 0.12);
   color: var(--fg);
 }
+.tab.drop-before {
+  box-shadow: 0 -2px 0 0 var(--accent);
+}
+.tab.drop-after {
+  box-shadow: 0 2px 0 0 var(--accent);
+}
+.pin.drop-before {
+  box-shadow: -2px 0 0 0 var(--accent);
+}
+.pin.drop-after {
+  box-shadow: 2px 0 0 0 var(--accent);
+}
 .profile-dot {
   flex: none;
   width: 8px;

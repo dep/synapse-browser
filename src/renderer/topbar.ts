@@ -106,6 +106,20 @@ export function initTopbar(): Topbar {
 
   urlbar.addEventListener('blur', () => hideSuggestions())
 
+  // first click selects the whole url; once focused, clicks place the cursor.
+  // select() must run on mouseup (with default prevented) because the
+  // browser's default mouseup collapses the selection made on focus.
+  let selectOnMouseUp = false
+  urlbar.addEventListener('mousedown', () => {
+    selectOnMouseUp = document.activeElement !== urlbar
+  })
+  urlbar.addEventListener('mouseup', (e) => {
+    if (!selectOnMouseUp) return
+    selectOnMouseUp = false
+    e.preventDefault()
+    urlbar.select()
+  })
+
   urlbar.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown' && suggestions.length > 0) {
       e.preventDefault()

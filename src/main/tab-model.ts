@@ -57,6 +57,16 @@ export class TabModel {
     this.pinned.push(id)
   }
 
+  // move a tab within its own list (sidebar order or pin row); not a visit,
+  // so MRU and activeId are untouched. toIndex is the insertion index after
+  // removal; out-of-range clamps, unknown ids no-op.
+  reorder(id: string, toIndex: number): void {
+    const list = this.order.includes(id) ? this.order : this.pinned.includes(id) ? this.pinned : null
+    if (!list) return
+    list.splice(list.indexOf(id), 1)
+    list.splice(Math.min(Math.max(toIndex, 0), list.length), 0, id)
+  }
+
   wake(id: string, activate = true): void {
     if (!this.pinned.includes(id) || this.mru.includes(id)) return
     if (this.cycling) this.cycleCommit()
