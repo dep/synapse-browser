@@ -7,7 +7,11 @@ export function renderPins(el: HTMLElement, snap: TabsSnapshot): void {
   for (const id of snap.pinned) {
     const tab = snap.tabs[id]
     const btn = document.createElement('button')
-    btn.className = 'pin' + (id === snap.activeId ? ' active' : '') + (tab.isAsleep ? ' asleep' : '')
+    btn.className =
+      'pin' +
+      (id === snap.activeId ? ' active' : '') +
+      (tab.isAsleep ? ' asleep' : '') +
+      (tab.profile === 'work' ? ' work' : '')
     btn.title = tab.title
 
     const icon = document.createElement('img')
@@ -51,7 +55,14 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
       window.synapse.tabs.close(id)
     })
 
-    item.append(icon, title, close)
+    if (tab.profile === 'work') {
+      const dot = document.createElement('span')
+      dot.className = 'profile-dot'
+      dot.title = 'Work profile'
+      item.append(icon, title, dot, close)
+    } else {
+      item.append(icon, title, close)
+    }
     item.addEventListener('click', () => window.synapse.tabs.activate(id))
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault()
