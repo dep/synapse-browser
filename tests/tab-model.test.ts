@@ -329,4 +329,43 @@ describe('TabModel pins', () => {
     expect(m.mru).toEqual(['c', 'b', 'a', 'p1'])
     expect(m.activeId).toBe('c')
   })
+
+  describe('reorder', () => {
+    it('moves a tab toward the end', () => {
+      m.reorder('a', 2)
+      expect(m.order).toEqual(['b', 'c', 'a'])
+    })
+
+    it('moves a tab toward the front', () => {
+      m.reorder('c', 0)
+      expect(m.order).toEqual(['c', 'a', 'b'])
+    })
+
+    it('clamps out-of-range indices', () => {
+      m.reorder('a', 99)
+      expect(m.order).toEqual(['b', 'c', 'a'])
+      m.reorder('a', -5)
+      expect(m.order).toEqual(['a', 'b', 'c'])
+    })
+
+    it('reorders pins within the pinned list only', () => {
+      m.pin('a')
+      m.pin('b') // pinned [a, b], order [c]
+      m.reorder('b', 0)
+      expect(m.pinned).toEqual(['b', 'a'])
+      expect(m.order).toEqual(['c'])
+    })
+
+    it('does not touch mru or activeId', () => {
+      m.reorder('a', 2)
+      expect(m.mru).toEqual(['c', 'b', 'a'])
+      expect(m.activeId).toBe('c')
+    })
+
+    it('ignores unknown ids', () => {
+      m.reorder('nope', 1)
+      expect(m.order).toEqual(['a', 'b', 'c'])
+      expect(m.pinned).toEqual([])
+    })
+  })
 })
