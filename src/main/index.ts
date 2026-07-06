@@ -120,6 +120,9 @@ app.whenReady().then(async () => {
   ipcMain.on('tabs:back', (_e, id: string) => tabs.back(id))
   ipcMain.on('tabs:forward', (_e, id: string) => tabs.forward(id))
   ipcMain.on('tabs:reload', (_e, id: string) => tabs.reload(id))
+  ipcMain.on('tabs:reorder', (_e, id: string, toIndex: number) => {
+    if (typeof id === 'string') tabs.reorderTab(id, Number(toIndex))
+  })
 
   ipcMain.on('tabs:context-menu', (_e, id: string) => {
     if (typeof id !== 'string') return

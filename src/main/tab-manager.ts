@@ -264,6 +264,12 @@ export class TabManager {
     this.views.get(id)?.webContents.reload()
   }
 
+  reorderTab(id: string, toIndex: number): void {
+    if (!Number.isFinite(toIndex)) return
+    this.model.reorder(id, Math.round(toIndex))
+    this.refresh()
+  }
+
   cycleStep(list: CycleList, dir: Direction): void {
     if (!this.model.cycleStep(list, dir)) return
     this.syncViews()
