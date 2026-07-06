@@ -22,12 +22,22 @@ describe('PinsStore', () => {
   it('round-trips pin slots across instances', () => {
     const store = new PinsStore(dir)
     const pins = [
-      { url: 'https://a.test/', title: 'A', favicon: 'https://a.test/icon.png' },
-      { url: 'https://b.test/', title: 'B', favicon: null },
+      { url: 'https://a.test/', title: 'A', favicon: 'https://a.test/icon.png', profile: 'default' as const },
+      { url: 'https://b.test/', title: 'B', favicon: null, profile: 'work' as const },
     ]
     store.save(pins)
     store.flush()
     expect(new PinsStore(dir).load()).toEqual(pins)
+  })
+
+  it('loads pins missing a profile as default', () => {
+    fs.writeFileSync(
+      path.join(dir, 'pins.json'),
+      JSON.stringify({ v: 1, pins: [{ url: 'https://a.test/', title: 'A', favicon: null }] }),
+    )
+    expect(new PinsStore(dir).load()).toEqual([
+      { url: 'https://a.test/', title: 'A', favicon: null, profile: 'default' },
+    ])
   })
 
   it('drops non-web urls on save', () => {
@@ -37,7 +47,7 @@ describe('PinsStore', () => {
       { url: 'https://ok.test/', title: 'ok', favicon: null },
       { url: 'data:text/html,hi', title: 'y', favicon: null },
     ])
-    expect(store.load()).toEqual([{ url: 'https://ok.test/', title: 'ok', favicon: null }])
+    expect(store.load()).toEqual([{ url: 'https://ok.test/', title: 'ok', favicon: null, profile: 'default' }])
   })
 
   it('ignores malformed entries from a hand-edited file', () => {
@@ -54,7 +64,7 @@ describe('PinsStore', () => {
       }),
     )
     expect(new PinsStore(dir).load()).toEqual([
-      { url: 'https://ok.test/', title: 'https://ok.test/', favicon: null },
+      { url: 'https://ok.test/', title: 'https://ok.test/', favicon: null, profile: 'default' },
     ])
   })
 

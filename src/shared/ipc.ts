@@ -4,6 +4,7 @@ export interface PinSlot {
   url: string
   title: string
   favicon: string | null
+  profile?: ProfileId
 }
 
 export interface TabInfo {

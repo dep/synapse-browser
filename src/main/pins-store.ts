@@ -30,6 +30,7 @@ export class PinsStore {
         url: p.url,
         title: typeof p.title === 'string' ? p.title : p.url,
         favicon: typeof p.favicon === 'string' ? p.favicon : null,
+        profile: p.profile === 'work' ? ('work' as const) : ('default' as const),
       }))
   }
 
