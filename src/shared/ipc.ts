@@ -1,3 +1,5 @@
+export type ProfileId = 'default' | 'work'
+
 export interface PinSlot {
   url: string
   title: string
