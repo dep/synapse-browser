@@ -1,18 +1,19 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput } from '../shared/url-classifier'
-import type { PinSlot, TabInfo, TabsSnapshot } from '../shared/ipc'
+import type { PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 
 export const SIDEBAR_WIDTH = 240
 export const TOPBAR_HEIGHT = 52
+export const WORK_PARTITION = 'persist:profile-work'
 
 export interface TabManagerOptions {
   isBookmarked(url: string): boolean
   onNavigated(url: string, title: string): void
   onSnapshot(snap: TabsSnapshot): void
-  onTabCreated?(wc: WebContents): void
-  onTabActivated?(wc: WebContents): void
+  onTabCreated?(wc: WebContents, profile: ProfileId): void
+  onTabActivated?(wc: WebContents, profile: ProfileId): void
 }
 
 export class TabManager {
@@ -20,6 +21,7 @@ export class TabManager {
   private views = new Map<string, WebContentsView>()
   private favicons = new Map<string, string | null>()
   private pins = new Map<string, PinSlot>()
+  private profiles = new Map<string, ProfileId>()
   private attached: WebContentsView | null = null
   private overlayHeight = 0
   private counter = 0
@@ -35,8 +37,9 @@ export class TabManager {
     return this.model.activeId
   }
 
-  createTab(url?: string, activate = true): string {
+  createTab(url?: string, activate = true, profile: ProfileId = 'default'): string {
     const id = `tab-${++this.counter}`
+    this.profiles.set(id, profile)
     const view = this.createView(id)
     this.model.add(id, activate)
     if (url) view.webContents.loadURL(classifyInput(url))
@@ -46,15 +49,21 @@ export class TabManager {
   }
 
   private createView(id: string): WebContentsView {
+    const profile = this.profileOf(id)
     const view = new WebContentsView({
-      webPreferences: { sandbox: true, contextIsolation: true },
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        ...(profile === 'work' ? { partition: WORK_PARTITION } : {}),
+      },
     })
     this.views.set(id, view)
     this.favicons.set(id, null)
     this.wireEvents(id, view.webContents)
-    this.opts.onTabCreated?.(view.webContents)
+    this.opts.onTabCreated?.(view.webContents, profile)
     view.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
-      if (/^https?:\/\//.test(popupUrl)) this.createTab(popupUrl)
+      // popups (OAuth windows etc.) must land in the opener's container
+      if (/^https?:\/\//.test(popupUrl)) this.createTab(popupUrl, true, this.profileOf(id))
       return { action: 'deny' }
     })
     return view
@@ -70,6 +79,7 @@ export class TabManager {
     const wasAttached = this.attached === view
     this.model.close(id)
     this.destroyView(id, view, wasAttached)
+    this.profiles.delete(id)
     if (!this.model.activeId) {
       this.createTab()
       return
@@ -132,12 +142,12 @@ export class TabManager {
   }
 
   // recreate a saved session: tabs in sidebar order, then the active one
-  restoreTabs(urls: string[], active: number): void {
-    if (urls.length === 0) {
+  restoreTabs(tabs: { url: string; profile: ProfileId }[], active: number): void {
+    if (tabs.length === 0) {
       this.createTab()
       return
     }
-    const ids = urls.map((url) => this.createTab(url || undefined, false))
+    const ids = tabs.map((t) => this.createTab(t.url || undefined, false, t.profile))
     this.activateTab(ids[Math.min(Math.max(active, 0), ids.length - 1)]!)
   }
 
@@ -146,6 +156,7 @@ export class TabManager {
     for (const slot of slots) {
       const id = `tab-${++this.counter}`
       this.pins.set(id, { ...slot })
+      this.profiles.set(id, slot.profile ?? 'default')
       this.model.addPin(id)
     }
   }
@@ -161,10 +172,42 @@ export class TabManager {
       if (!wc) return
       const url = wc.getURL()
       if (!/^https?:\/\//.test(url)) return // blank/error tabs have no url to pin
-      this.pins.set(id, { url, title: wc.getTitle() || url, favicon: this.favicons.get(id) ?? null })
+      this.pins.set(id, {
+        url,
+        title: wc.getTitle() || url,
+        favicon: this.favicons.get(id) ?? null,
+        profile: this.profileOf(id),
+      })
       this.model.pin(id)
     }
     this.syncViews()
+  }
+
+  profileOf(id: string): ProfileId {
+    return this.profiles.get(id) ?? 'default'
+  }
+
+  // a WebContents' session is fixed at creation, so switching profile
+  // recreates the view in the new partition; the tab keeps its id and
+  // sidebar/MRU position, but navigation history resets
+  setProfile(id: string, profile: ProfileId): void {
+    if (this.profileOf(id) === profile) return
+    this.profiles.set(id, profile)
+    const slot = this.pins.get(id)
+    if (slot) slot.profile = profile
+    const view = this.views.get(id)
+    if (!view) {
+      this.refresh() // asleep pin: the new partition applies on wake
+      return
+    }
+    const url = view.webContents.getURL()
+    const wasAttached = this.attached === view
+    this.destroyView(id, view, wasAttached)
+    const next = this.createView(id)
+    if (/^https?:\/\//.test(url)) next.webContents.loadURL(url)
+    else if (id === this.model.activeId) this.focusUrlBar()
+    this.syncViews()
+    if (wasAttached) this.attached?.webContents.focus()
   }
 
   restorePinnedUrl(id: string | null = this.model.activeId): void {
@@ -273,6 +316,7 @@ export class TabManager {
           isPinned: !!slot,
           isAsleep: false,
           pinnedUrl: slot?.url ?? null,
+          profile: this.profileOf(id),
         }
       } else if (slot) {
         tabs[id] = {
@@ -287,6 +331,7 @@ export class TabManager {
           isPinned: true,
           isAsleep: true,
           pinnedUrl: slot.url,
+          profile: this.profileOf(id),
         }
       }
     }
@@ -304,7 +349,7 @@ export class TabManager {
       if (this.attached) this.win.contentView.removeChildView(this.attached)
       if (active) this.win.contentView.addChildView(active)
       this.attached = active
-      if (active) this.opts.onTabActivated?.(active.webContents)
+      if (active) this.opts.onTabActivated?.(active.webContents, this.profileOf(this.model.activeId!))
     }
     this.layout()
     this.refresh()

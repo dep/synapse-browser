@@ -19,6 +19,7 @@ export interface TabInfo {
   isPinned: boolean
   isAsleep: boolean
   pinnedUrl: string | null
+  profile: ProfileId
 }
 
 export interface TabsSnapshot {
