@@ -16,38 +16,74 @@ describe('TabsStore', () => {
   })
 
   it('starts empty with no saved file', () => {
-    expect(new TabsStore(dir).load()).toEqual({ urls: [], active: -1 })
+    expect(new TabsStore(dir).load()).toEqual({ tabs: [], active: -1 })
   })
 
-  it('round-trips urls and active index across instances', () => {
+  it('round-trips urls, profiles, and active index across instances', () => {
     const store = new TabsStore(dir)
-    store.save(['https://a.test/', 'https://b.test/'], 1)
+    const tabs = [
+      { url: 'https://a.test/', profile: 'default' as const },
+      { url: 'https://b.test/', profile: 'work' as const },
+    ]
+    store.save(tabs, 1)
     store.flush()
-    expect(new TabsStore(dir).load()).toEqual({ urls: ['https://a.test/', 'https://b.test/'], active: 1 })
+    expect(new TabsStore(dir).load()).toEqual({ tabs, active: 1 })
   })
 
   it('keeps non-web urls as blank-tab placeholders', () => {
     const store = new TabsStore(dir)
-    store.save(['', 'data:text/html,error', 'https://ok.test/', 'about:blank'], 2)
-    expect(store.load().urls).toEqual(['', '', 'https://ok.test/', ''])
+    store.save(
+      [
+        { url: '', profile: 'default' },
+        { url: 'data:text/html,error', profile: 'work' },
+        { url: 'https://ok.test/', profile: 'default' },
+        { url: 'about:blank', profile: 'default' },
+      ],
+      2,
+    )
+    expect(store.load().tabs.map((t) => t.url)).toEqual(['', '', 'https://ok.test/', ''])
   })
 
   it('clamps a stale active index into range', () => {
     const store = new TabsStore(dir)
-    store.save(['https://a.test/'], 5)
+    store.save([{ url: 'https://a.test/', profile: 'default' }], 5)
     expect(store.load().active).toBe(0)
-    store.save(['https://a.test/'], -1)
+    store.save([{ url: 'https://a.test/', profile: 'default' }], -1)
     expect(store.load().active).toBe(0)
   })
 
+  it('loads a v1 file (urls array) as default-profile tabs', () => {
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({ v: 1, urls: ['https://a.test/', 'https://b.test/'], active: 1 }),
+    )
+    expect(new TabsStore(dir).load()).toEqual({
+      tabs: [
+        { url: 'https://a.test/', profile: 'default' },
+        { url: 'https://b.test/', profile: 'default' },
+      ],
+      active: 1,
+    })
+  })
+
   it('ignores malformed contents from a hand-edited file', () => {
-    fs.writeFileSync(path.join(dir, 'tabs.json'), JSON.stringify({ v: 1, urls: ['https://a.test/', 42], active: 'x' }))
-    expect(new TabsStore(dir).load()).toEqual({ urls: ['https://a.test/'], active: 0 })
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({
+        v: 2,
+        tabs: [{ url: 'https://a.test/', profile: 'nonsense' }, { url: 42 }, 'junk', null],
+        active: 'x',
+      }),
+    )
+    expect(new TabsStore(dir).load()).toEqual({
+      tabs: [{ url: 'https://a.test/', profile: 'default' }],
+      active: 0,
+    })
   })
 
   it('recovers from a corrupt file', () => {
     fs.writeFileSync(path.join(dir, 'tabs.json'), '{nope')
-    expect(new TabsStore(dir).load()).toEqual({ urls: [], active: -1 })
+    expect(new TabsStore(dir).load()).toEqual({ tabs: [], active: -1 })
     expect(fs.existsSync(path.join(dir, 'tabs.json.bad'))).toBe(true)
   })
 })

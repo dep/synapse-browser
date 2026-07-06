@@ -7,7 +7,7 @@ import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
 import { HistoryStore } from './history'
 import { PinsStore } from './pins-store'
-import { TabManager } from './tab-manager'
+import { TabManager, WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { buildMenu } from './menu'
 
@@ -72,7 +72,7 @@ app.whenReady().then(async () => {
     onSnapshot: (snap) => {
       win.webContents.send('tabs:updated', snap)
       tabsStore.save(
-        snap.order.map((id) => snap.tabs[id]!.url),
+        snap.order.map((id) => ({ url: snap.tabs[id]!.url, profile: snap.tabs[id]!.profile })),
         snap.activeId ? snap.order.indexOf(snap.activeId) : -1,
       )
       pinsStore.save(
@@ -80,16 +80,22 @@ app.whenReady().then(async () => {
           url: snap.tabs[id]!.pinnedUrl ?? snap.tabs[id]!.url,
           title: snap.tabs[id]!.title,
           favicon: snap.tabs[id]!.favicon,
+          profile: snap.tabs[id]!.profile,
         })),
       )
     },
     // `extensions` is declared below; safe because tabs are only created
     // after it exists (restoreTabs runs at the end of startup)
-    onTabCreated: (wc) => {
+    // Work tabs are deliberately invisible to ElectronChromeExtensions —
+    // registering them would expose Work-container URLs to default-session
+    // extensions through chrome.tabs
+    onTabCreated: (wc, profile) => {
       attachCycleHooks(wc)
-      extensions.addTab(wc)
+      if (profile === 'default') extensions.addTab(wc)
     },
-    onTabActivated: (wc) => extensions.selectTab(wc),
+    onTabActivated: (wc, profile) => {
+      if (profile === 'default') extensions.selectTab(wc)
+    },
   })
   const extensions = new ExtensionManager(win, tabs)
   attachCycleHooks(win.webContents)
@@ -98,6 +104,11 @@ app.whenReady().then(async () => {
 
   const downloads = new DownloadManager((list) => win.webContents.send('downloads:updated', list))
   downloads.attach(session.defaultSession)
+  // the Work container: isolated cookies/storage/cache, persisted across runs.
+  // No extensions are loaded into it and no webRequest handlers are registered
+  // (repo rule). Created eagerly so downloads work before any Work tab exists.
+  const workSession = session.fromPartition(WORK_PARTITION)
+  downloads.attach(workSession)
   ipcMain.on('downloads:reveal', (_e, id: string) => downloads.reveal(id))
 
   ipcMain.on('tabs:create', (_e, url?: string) => {
@@ -113,6 +124,7 @@ app.whenReady().then(async () => {
   ipcMain.on('tabs:context-menu', (_e, id: string) => {
     if (typeof id !== 'string') return
     const pinned = tabs.isPinned(id)
+    const profile = tabs.profileOf(id)
     const template: Electron.MenuItemConstructorOptions[] = [
       {
         label: pinned ? 'Unpin Tab' : 'Pin Tab',
@@ -123,6 +135,24 @@ app.whenReady().then(async () => {
       template.push({ label: 'Restore Pinned URL', click: () => tabs.restorePinnedUrl(id) })
     }
     template.push(
+      { type: 'separator' },
+      {
+        label: 'Profile',
+        submenu: [
+          {
+            label: 'Default',
+            type: 'radio',
+            checked: profile === 'default',
+            click: () => tabs.setProfile(id, 'default'),
+          },
+          {
+            label: 'Work',
+            type: 'radio',
+            checked: profile === 'work',
+            click: () => tabs.setProfile(id, 'work'),
+          },
+        ],
+      },
       { type: 'separator' },
       // closing a pin puts it to sleep; the slot stays in the row
       { label: pinned ? 'Close' : 'Close Tab', click: () => tabs.closeTab(id) },
@@ -164,7 +194,7 @@ app.whenReady().then(async () => {
   }
   tabs.restorePins(pinsStore.load())
   const saved = tabsStore.load()
-  tabs.restoreTabs(saved.urls, saved.active)
+  tabs.restoreTabs(saved.tabs, saved.active)
 
   app.on('before-quit', () => {
     history.flush()

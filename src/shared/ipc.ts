@@ -1,7 +1,10 @@
+export type ProfileId = 'default' | 'work'
+
 export interface PinSlot {
   url: string
   title: string
   favicon: string | null
+  profile?: ProfileId
 }
 
 export interface TabInfo {
@@ -16,6 +19,7 @@ export interface TabInfo {
   isPinned: boolean
   isAsleep: boolean
   pinnedUrl: string | null
+  profile: ProfileId
 }
 
 export interface TabsSnapshot {
