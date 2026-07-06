@@ -26,6 +26,11 @@ Electron + electron-vite + TypeScript. No native build steps.
   UI gets `window.synapse` (typed as `SynapseApi` in `src/shared/ipc.ts`).
 - Stores are debounced JSON (`history.json`, `bookmarks.json`) in `userData`; corrupt
   files become `<name>.bad` and are recreated. Schema carries `v: 1`.
+- Tabs can belong to a session container ("profile"): Default (default session) or
+  Work (persist:profile-work partition). Switching recreates the WebContentsView —
+  a WebContents' session is fixed at creation. Work tabs are deliberately NOT
+  registered with ElectronChromeExtensions (no extensions in the Work session, and
+  registering them would leak Work URLs to default-session extensions via chrome.tabs).
 - Never register `session.webRequest` or `protocol.intercept*` handlers on the session
   hosting extensions — a single listener silently disables all extension webRequest
   events and declarativeNetRequest enforcement for those loader factories
