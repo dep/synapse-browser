@@ -4,9 +4,15 @@ export type Direction = 'forward' | 'back'
 export class TabModel {
   order: string[] = []
   pinned: string[] = []
+  bookmarks: string[] = []
   mru: string[] = []
   activeId: string | null = null
   private cycling = false
+
+  // pins and bookmarks are both "slots": they sleep instead of closing
+  private isSlot(id: string): boolean {
+    return this.pinned.includes(id) || this.bookmarks.includes(id)
+  }
 
   add(id: string, activate = true): void {
     this.order.push(id)
@@ -20,8 +26,8 @@ export class TabModel {
   }
 
   activate(id: string): void {
-    if (!this.order.includes(id) && !this.pinned.includes(id)) return
-    if (this.pinned.includes(id) && !this.mru.includes(id)) return // asleep pins wake via wake()
+    if (!this.order.includes(id) && !this.isSlot(id)) return
+    if (this.isSlot(id) && !this.mru.includes(id)) return // asleep slots wake via wake()
     // an uncommitted cycle preview still counts as a visit
     if (this.cycling) this.cycleCommit()
     this.promote(id)
@@ -57,6 +63,47 @@ export class TabModel {
     this.pinned.push(id)
   }
 
+  // a live tab becomes a bookmark slot in place: same id, same MRU standing
+  bookmark(id: string): void {
+    if (!this.order.includes(id)) return
+    this.order = this.order.filter((t) => t !== id)
+    this.bookmarks.push(id)
+  }
+
+  // the slot falls back to the top of the tab list; only awake slots are
+  // unbookmarked (⌘D acts on the active tab) but mirror unpin defensively
+  unbookmark(id: string): void {
+    if (!this.bookmarks.includes(id)) return
+    this.bookmarks = this.bookmarks.filter((t) => t !== id)
+    this.order.unshift(id)
+    if (!this.mru.includes(id)) this.mru.push(id)
+  }
+
+  // a bookmark restored from the store: present as a slot, asleep
+  addBookmark(id: string): void {
+    this.bookmarks.push(id)
+  }
+
+  // the bookmark was deleted outright: slot and MRU standing both go
+  removeBookmark(id: string): void {
+    if (!this.bookmarks.includes(id)) return
+    if (this.cycling) this.cycleCommit()
+    this.bookmarks = this.bookmarks.filter((t) => t !== id)
+    this.mru = this.mru.filter((t) => t !== id)
+    if (this.activeId === id) this.activeId = this.mru[0] ?? null
+  }
+
+  // bookmark order is store-driven (folders first, then top level); the
+  // manager syncs it here so cycling and at() match the sidebar
+  setBookmarkOrder(ids: string[]): void {
+    const known = new Set(this.bookmarks)
+    this.bookmarks = ids.filter((id) => known.has(id))
+  }
+
+  isBookmarkSlot(id: string): boolean {
+    return this.bookmarks.includes(id)
+  }
+
   // move a tab within its own list (sidebar order or pin row); not a visit,
   // so MRU and activeId are untouched. toIndex is the insertion index after
   // removal; out-of-range clamps, unknown ids no-op.
@@ -68,7 +115,7 @@ export class TabModel {
   }
 
   wake(id: string, activate = true): void {
-    if (!this.pinned.includes(id) || this.mru.includes(id)) return
+    if (!this.isSlot(id) || this.mru.includes(id)) return
     if (this.cycling) this.cycleCommit()
     if (activate) {
       this.mru.unshift(id)
@@ -79,7 +126,7 @@ export class TabModel {
   }
 
   sleep(id: string): void {
-    if (!this.pinned.includes(id) || !this.mru.includes(id)) return
+    if (!this.isSlot(id) || !this.mru.includes(id)) return
     if (this.cycling) this.cycleCommit()
     this.mru = this.mru.filter((t) => t !== id)
     if (this.activeId === id) this.activeId = this.mru[0] ?? null
@@ -93,16 +140,20 @@ export class TabModel {
     return this.mru.includes(id)
   }
 
-  // index into pins-then-tabs; negative counts from the end (-1 = last)
+  // index into pins → bookmarks → tabs; negative counts from the end
   at(index: number): string | null {
-    return [...this.pinned, ...this.order].at(index) ?? null
+    return [...this.pinned, ...this.bookmarks, ...this.order].at(index) ?? null
   }
 
   cycleStep(list: CycleList, dir: Direction): string | null {
     const ids =
       list === 'mru'
         ? this.mru
-        : [...this.pinned.filter((t) => this.mru.includes(t)), ...this.order]
+        : [
+            ...this.pinned.filter((t) => this.mru.includes(t)),
+            ...this.bookmarks.filter((t) => this.mru.includes(t)),
+            ...this.order,
+          ]
     if (ids.length < 2 || !this.activeId) return null
     const idx = ids.indexOf(this.activeId)
     const delta = dir === 'forward' ? 1 : -1

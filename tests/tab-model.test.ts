@@ -369,3 +369,124 @@ describe('TabModel pins', () => {
     })
   })
 })
+
+describe('TabModel bookmarks', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    m.add('a')
+    m.add('b')
+    m.add('c') // order [a, b, c], mru [c, b, a], active c
+  })
+
+  it('bookmark moves a tab from order to bookmarks and keeps it awake', () => {
+    m.bookmark('b')
+    expect(m.order).toEqual(['a', 'c'])
+    expect(m.bookmarks).toEqual(['b'])
+    expect(m.isBookmarkSlot('b')).toBe(true)
+    expect(m.isAwake('b')).toBe(true)
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+  })
+
+  it('bookmark ignores unknown or already-bookmarked ids', () => {
+    m.bookmark('b')
+    m.bookmark('b')
+    m.bookmark('nope')
+    expect(m.bookmarks).toEqual(['b'])
+    expect(m.order).toEqual(['a', 'c'])
+  })
+
+  it('unbookmark returns the slot to the top of the tab list, awake', () => {
+    m.bookmark('b')
+    m.unbookmark('b')
+    expect(m.bookmarks).toEqual([])
+    expect(m.order).toEqual(['b', 'a', 'c'])
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+  })
+
+  it('restored bookmarks start asleep: listed, absent from mru', () => {
+    m.addBookmark('bm1')
+    expect(m.bookmarks).toEqual(['bm1'])
+    expect(m.isAwake('bm1')).toBe(false)
+    expect(m.activeId).toBe('c')
+  })
+
+  it('wake activates a bookmark slot and promotes it in MRU', () => {
+    m.addBookmark('bm1')
+    m.wake('bm1')
+    expect(m.activeId).toBe('bm1')
+    expect(m.mru).toEqual(['bm1', 'c', 'b', 'a'])
+  })
+
+  it('sleeping the active bookmark hands off to the MRU front, slot intact', () => {
+    m.bookmark('c') // active bookmark
+    m.sleep('c')
+    expect(m.bookmarks).toEqual(['c'])
+    expect(m.mru).toEqual(['b', 'a'])
+    expect(m.activeId).toBe('b')
+  })
+
+  it('close is a no-op on bookmark slots', () => {
+    m.bookmark('b')
+    m.close('b')
+    expect(m.bookmarks).toEqual(['b'])
+    expect(m.mru).toContain('b')
+  })
+
+  it('activating an asleep bookmark is a no-op — asleep slots wake via wake()', () => {
+    m.addBookmark('bm1')
+    m.activate('bm1')
+    expect(m.activeId).toBe('c')
+    expect(m.isAwake('bm1')).toBe(false)
+  })
+
+  it('setBookmarkOrder reorders and drops unknown ids', () => {
+    m.addBookmark('x')
+    m.addBookmark('y')
+    m.setBookmarkOrder(['y', 'x', 'ghost'])
+    expect(m.bookmarks).toEqual(['y', 'x'])
+  })
+
+  it('removeBookmark drops the slot and hands off the active tab', () => {
+    m.bookmark('c') // active bookmark
+    m.removeBookmark('c')
+    expect(m.bookmarks).toEqual([])
+    expect(m.mru).toEqual(['b', 'a'])
+    expect(m.activeId).toBe('b')
+  })
+
+  it('removeBookmark on an asleep slot just drops it', () => {
+    m.addBookmark('bm1')
+    m.removeBookmark('bm1')
+    expect(m.bookmarks).toEqual([])
+    expect(m.activeId).toBe('c')
+  })
+
+  it('at() addresses pins, then bookmarks, then tabs', () => {
+    m.pin('a') // pinned [a], order [b, c]
+    m.bookmark('b') // bookmarks [b], order [c]
+    expect(m.at(0)).toBe('a')
+    expect(m.at(1)).toBe('b')
+    expect(m.at(2)).toBe('c')
+    expect(m.at(-1)).toBe('c')
+  })
+
+  it('order cycling walks awake pins, awake bookmarks, then tabs', () => {
+    m.pin('a') // awake pin
+    m.bookmark('b') // awake bookmark
+    m.addBookmark('bm1') // asleep — skipped
+    // active c: forward wraps to first entry a, then b, then c
+    expect(m.cycleStep('order', 'forward')).toBe('a')
+    expect(m.cycleStep('order', 'forward')).toBe('b')
+    expect(m.cycleStep('order', 'forward')).toBe('c')
+  })
+
+  it('MRU cycling includes awake bookmarks and never asleep ones', () => {
+    m.bookmark('b')
+    m.addBookmark('bm1')
+    expect(m.cycleStep('mru', 'forward')).toBe('b')
+    m.cycleCommit()
+    expect(m.mru).toEqual(['b', 'c', 'a'])
+  })
+})
