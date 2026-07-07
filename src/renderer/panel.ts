@@ -213,17 +213,17 @@ function inlineEditor(value: string, placeholder: string, onCommit: (v: string) 
     done = true
     editing = null
     const next = input.value.trim()
-    if (commit && next) {
-      onCommit(next) // the re-render arrives via ui:bookmarks-changed
-    } else {
-      rerender?.()
-    }
+    if (commit && next) onCommit(next)
+    // always exit edit mode locally — the ui:bookmarks-changed push then
+    // repaints the committed value, and a lost push can't wedge the editor
+    rerender?.()
   }
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') finish(true)
     else if (e.key === 'Escape') finish(false)
   })
-  input.addEventListener('blur', () => finish(false))
+  // clicking away saves (Esc is the cancel gesture)
+  input.addEventListener('blur', () => finish(true))
   row.append(input)
   queueMicrotask(() => input.focus())
   return row
