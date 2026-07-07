@@ -2,6 +2,9 @@ import type { Bookmark, BookmarkFolder, BookmarksData, TabsSnapshot } from '../s
 import { wireDragItem, wireDropZone } from './drag-list'
 
 const collapsed = new Set<string>()
+// all folders start collapsed on the first render after launch; folders
+// created afterward default to expanded
+let seededInitialCollapse = false
 // id of the folder or bookmark being renamed, 'new' while naming a new
 // folder, null when idle — one inline editor at a time
 let editing: string | null = null
@@ -20,6 +23,10 @@ export function renderBookmarks(
 ): void {
   rerender = onRerender
   const { folders, bookmarks } = data
+  if (!seededInitialCollapse) {
+    seededInitialCollapse = true
+    for (const folder of folders) collapsed.add(folder.id)
+  }
   el.innerHTML = ''
 
   const heading = document.createElement('div')
@@ -63,8 +70,11 @@ export function renderBookmarks(
     ),
   )
   wireDropZone(loose, {
-    accepts: (d) => d.kind === 'bookmark',
-    onDrop: (d) => window.synapse.bookmarks.moveToFolder(d.id, null),
+    accepts: (d) => d.kind === 'bookmark' || d.kind === 'tab',
+    onDrop: (d) => {
+      if (d.kind === 'tab') window.synapse.bookmarks.createFromTab(d.id, null)
+      else window.synapse.bookmarks.moveToFolder(d.id, null)
+    },
   })
   el.append(loose)
 }
@@ -133,12 +143,16 @@ function bookmarkRow(
     window.synapse.bookmarks.showContextMenu('bookmark', bm.id)
   })
   wireDragItem(row, { kind: 'bookmark', id: bm.id }, {
-    accepts: (d) => d.kind === 'bookmark',
+    accepts: (d) => d.kind === 'bookmark' || d.kind === 'tab',
     onDrop: (d, before) => {
+      let to = index + (before ? 0 : 1)
+      if (d.kind === 'tab') {
+        window.synapse.bookmarks.createFromTab(d.id, bm.folderId ?? null)
+        return
+      }
       // a sibling drag is a reorder; a drag from another container is a
       // position-preserving move into this row's container
       const from = siblings.findIndex((s) => s.id === d.id)
-      let to = index + (before ? 0 : 1)
       if (from !== -1 && from < to) to -= 1
       if (from !== -1) window.synapse.bookmarks.reorder(d.id, to)
       else window.synapse.bookmarks.moveToFolder(d.id, bm.folderId ?? null, to)
@@ -176,9 +190,14 @@ function folderRow(
     window.synapse.bookmarks.showContextMenu('folder', folder.id)
   })
   wireDragItem(row, { kind: 'folder', id: folder.id }, {
-    accepts: (d) => d.kind === 'folder' || d.kind === 'bookmark',
-    into: (d) => d.kind === 'bookmark',
+    accepts: (d) => d.kind === 'folder' || d.kind === 'bookmark' || d.kind === 'tab',
+    into: (d) => d.kind === 'bookmark' || d.kind === 'tab',
     onDrop: (d, before) => {
+      if (d.kind === 'tab') {
+        collapsed.delete(folder.id) // auto-expand so the drop is visible
+        window.synapse.bookmarks.createFromTab(d.id, folder.id)
+        return
+      }
       if (d.kind === 'bookmark') {
         collapsed.delete(folder.id) // auto-expand so the drop is visible
         window.synapse.bookmarks.moveToFolder(d.id, folder.id)

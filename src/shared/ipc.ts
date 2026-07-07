@@ -89,6 +89,7 @@ export interface SynapseApi {
     rename(id: string, title: string): void
     reorder(id: string, toIndex: number): void
     moveToFolder(id: string, folderId: string | null, toIndex?: number): void
+    createFromTab(tabId: string, folderId: string | null): void
     addFolder(name: string): void
     renameFolder(id: string, name: string): void
     removeFolder(id: string): void

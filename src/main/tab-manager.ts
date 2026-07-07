@@ -92,6 +92,26 @@ export class TabManager {
     if (wasAttached) this.attached?.webContents.focus()
   }
 
+  // pins/bookmarks are separate slots (model.order excludes them), so these
+  // never touch them; each closed id still goes through closeTab for proper
+  // view teardown
+  closeTabsRight(id: string): void {
+    const i = this.model.order.indexOf(id)
+    if (i === -1) return
+    for (const t of this.model.order.slice(i + 1)) this.closeTab(t)
+  }
+
+  closeTabsLeft(id: string): void {
+    const i = this.model.order.indexOf(id)
+    if (i === -1) return
+    for (const t of this.model.order.slice(0, i)) this.closeTab(t)
+  }
+
+  closeOtherTabs(id: string): void {
+    if (!this.model.order.includes(id)) return
+    for (const t of this.model.order.filter((t) => t !== id)) this.closeTab(t)
+  }
+
   private destroyView(id: string, view: WebContentsView, wasAttached: boolean): void {
     this.views.delete(id)
     this.favicons.delete(id)
@@ -371,8 +391,12 @@ export class TabManager {
 
   activeInfo(): { url: string; title: string } | null {
     const id = this.model.activeId
-    if (!id) return null
-    const wc = this.views.get(id)!.webContents
+    return id ? this.infoFor(id) : null
+  }
+
+  infoFor(id: string): { url: string; title: string } | null {
+    const wc = this.views.get(id)?.webContents
+    if (!wc) return null
     return { url: wc.getURL(), title: wc.getTitle() || wc.getURL() }
   }
 

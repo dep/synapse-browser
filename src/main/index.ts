@@ -199,6 +199,22 @@ app.whenReady().then(async () => {
   ipcMain.handle('bookmarks:toggle-active', () => toggleBookmark())
   ipcMain.handle('bookmarks:list', () => bookmarks.list())
 
+  // drag a sidebar tab into the bookmarks panel or a folder
+  ipcMain.on(
+    'bookmarks:create-from-tab',
+    (_e, tabId: string, folderId: string | null) => {
+      if (typeof tabId !== 'string') return
+      if (folderId !== null && typeof folderId !== 'string') return
+      if (tabs.isPinned(tabId) || tabs.bookmarkIdOf(tabId)) return
+      const info = tabs.infoFor(tabId)
+      if (!info || !/^https?:\/\//.test(info.url)) return
+      const bm = bookmarks.add(info.url, info.title, Date.now(), tabs.profileOf(tabId))
+      tabs.bookmarkTab(tabId, bm.id)
+      if (folderId) bookmarks.moveToFolder(bm.id, folderId)
+      bookmarksChanged()
+    },
+  )
+
   ipcMain.on('bookmarks:open', (_e, id: string) => {
     if (typeof id === 'string') tabs.openBookmark(id)
   })

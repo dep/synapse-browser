@@ -30,6 +30,8 @@ const api: SynapseApi = {
     reorder: (id, toIndex) => ipcRenderer.send('bookmarks:reorder', id, toIndex),
     moveToFolder: (id, folderId, toIndex) =>
       ipcRenderer.send('bookmarks:move-to-folder', id, folderId, toIndex),
+    createFromTab: (tabId, folderId) =>
+      ipcRenderer.send('bookmarks:create-from-tab', tabId, folderId),
     addFolder: (name) => ipcRenderer.send('bookmarks:add-folder', name),
     renameFolder: (id, name) => ipcRenderer.send('bookmarks:rename-folder', id, name),
     removeFolder: (id) => ipcRenderer.send('bookmarks:remove-folder', id),
