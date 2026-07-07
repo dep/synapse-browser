@@ -195,6 +195,12 @@ app.whenReady().then(async () => {
     bookmarks.remove(id)
     bookmarksChanged()
   })
+  ipcMain.on('bookmarks:rename', (_e, id: string, title: string) => {
+    const trimmed = typeof title === 'string' ? title.trim() : ''
+    if (typeof id !== 'string' || !trimmed) return
+    bookmarks.renameBookmark(id, trimmed)
+    bookmarksChanged()
+  })
   ipcMain.on('bookmarks:reorder', (_e, id: string, toIndex: number) => {
     if (typeof id !== 'string' || !Number.isFinite(Number(toIndex))) return
     bookmarks.reorder(id, Number(toIndex))
@@ -263,6 +269,7 @@ app.whenReady().then(async () => {
         bookmarksChanged()
       }
       Menu.buildFromTemplate([
+        { label: 'Rename', click: () => win.webContents.send('ui:edit-bookmark', id) },
         {
           label: 'Move to',
           submenu: [

@@ -26,6 +26,7 @@ const api: SynapseApi = {
     list: () => ipcRenderer.invoke('bookmarks:list'),
     open: (id) => ipcRenderer.send('bookmarks:open', id),
     remove: (id) => ipcRenderer.send('bookmarks:remove', id),
+    rename: (id, title) => ipcRenderer.send('bookmarks:rename', id, title),
     reorder: (id, toIndex) => ipcRenderer.send('bookmarks:reorder', id, toIndex),
     moveToFolder: (id, folderId, toIndex) =>
       ipcRenderer.send('bookmarks:move-to-folder', id, folderId, toIndex),
@@ -56,6 +57,9 @@ const api: SynapseApi = {
     },
     onEditFolder: (cb) => {
       ipcRenderer.on('ui:edit-folder', (_e, folderId) => cb(folderId))
+    },
+    onEditBookmark: (cb) => {
+      ipcRenderer.on('ui:edit-bookmark', (_e, bookmarkId) => cb(bookmarkId))
     },
   },
 }

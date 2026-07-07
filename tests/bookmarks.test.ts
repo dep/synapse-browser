@@ -73,6 +73,19 @@ describe('BookmarksStore', () => {
     expect(reloaded.list().bookmarks[0]!.id).toBe(store.list().bookmarks[0]!.id)
   })
 
+  it('renameBookmark updates the title and nothing else', () => {
+    store.toggle('https://a.com', 'A', 1)
+    const before = store.list().bookmarks[0]!
+    store.renameBookmark(before.id, 'Renamed')
+    expect(store.list().bookmarks[0]).toEqual({ ...before, title: 'Renamed' })
+  })
+
+  it('renameBookmark with an unknown id is a no-op', () => {
+    store.toggle('https://a.com', 'A', 1)
+    store.renameBookmark('nope', 'X')
+    expect(store.list().bookmarks[0]!.title).toBe('A')
+  })
+
   it('addFolder appends and returns the folder', () => {
     const a = store.addFolder('Work')
     const b = store.addFolder('Play')

@@ -64,6 +64,15 @@ export class BookmarksStore {
     this.store.set({ v: 2, folders, bookmarks: bookmarks.filter((b) => b.id !== id) })
   }
 
+  renameBookmark(id: string, title: string): void {
+    const { folders, bookmarks } = this.data
+    this.store.set({
+      v: 2,
+      folders,
+      bookmarks: bookmarks.map((b) => (b.id === id ? { ...b, title } : b)),
+    })
+  }
+
   addFolder(name: string): BookmarkFolder {
     const { folders, bookmarks } = this.data
     const folder = { id: randomUUID(), name }

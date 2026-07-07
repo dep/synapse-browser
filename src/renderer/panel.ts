@@ -4,12 +4,13 @@ import { wireDragItem, wireDropZone } from './drag-list'
 export type PanelMode = 'none' | 'history' | 'bookmarks'
 
 const collapsed = new Set<string>()
-// folder id being renamed, 'new' while naming a new folder, null when idle
+// id of the folder or bookmark being renamed, 'new' while naming a new
+// folder, null when idle — one inline editor at a time
 let editing: string | null = null
 let rerender: (() => void) | null = null
 
-export function startFolderEdit(folderId: string): void {
-  editing = folderId
+export function startItemEdit(id: string): void {
+  editing = id
   rerender?.()
 }
 
@@ -67,7 +68,9 @@ async function renderBookmarks(el: HTMLElement): Promise<void> {
     const members = bookmarks.filter((b) => b.folderId === folder.id)
     el.append(folderRow(folder, i, folders, members.length))
     if (!collapsed.has(folder.id)) {
-      members.forEach((bm, j) => el.append(bookmarkRow(bm, j, members, true)))
+      members.forEach((bm, j) =>
+        el.append(editing === bm.id ? bookmarkEditor(bm, true) : bookmarkRow(bm, j, members, true)),
+      )
     }
   })
 
@@ -82,7 +85,9 @@ async function renderBookmarks(el: HTMLElement): Promise<void> {
   // rows is a "move to top level" drop target
   const loose = document.createElement('div')
   loose.className = 'panel-loose'
-  topLevel.forEach((bm, j) => loose.append(bookmarkRow(bm, j, topLevel, false)))
+  topLevel.forEach((bm, j) =>
+    loose.append(editing === bm.id ? bookmarkEditor(bm, false) : bookmarkRow(bm, j, topLevel, false)),
+  )
   wireDropZone(loose, {
     accepts: (d) => d.kind === 'bookmark',
     onDrop: (d) => window.synapse.bookmarks.moveToFolder(d.id, null),
@@ -133,7 +138,7 @@ function folderRow(
     else collapsed.add(folder.id)
     rerender?.()
   })
-  row.addEventListener('dblclick', () => startFolderEdit(folder.id))
+  row.addEventListener('dblclick', () => startItemEdit(folder.id))
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault()
     window.synapse.bookmarks.showContextMenu('folder', folder.id)
@@ -164,7 +169,18 @@ function bookmarkRow(
 ): HTMLDivElement {
   const row = itemRow(bm.title, bm.url)
   if (indented) row.classList.add('indent')
-  row.addEventListener('click', () => window.synapse.bookmarks.open(bm.id))
+  // single click opens after a beat; a double-click cancels it and renames
+  // instead, so renaming never navigates the active tab
+  let clickTimer: ReturnType<typeof setTimeout> | null = null
+  row.addEventListener('click', () => {
+    if (clickTimer) clearTimeout(clickTimer)
+    clickTimer = setTimeout(() => window.synapse.bookmarks.open(bm.id), 250)
+  })
+  row.addEventListener('dblclick', () => {
+    if (clickTimer) clearTimeout(clickTimer)
+    clickTimer = null
+    startItemEdit(bm.id)
+  })
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault()
     window.synapse.bookmarks.showContextMenu('bookmark', bm.id)
@@ -184,23 +200,21 @@ function bookmarkRow(
   return row
 }
 
-function folderEditor(folder: BookmarkFolder | null): HTMLDivElement {
+function inlineEditor(value: string, placeholder: string, onCommit: (v: string) => void): HTMLDivElement {
   const row = document.createElement('div')
   row.className = 'panel-item folder'
   const input = document.createElement('input')
   input.className = 'folder-input'
-  input.value = folder?.name ?? ''
-  input.placeholder = 'Folder name'
+  input.value = value
+  input.placeholder = placeholder
   let done = false
   const finish = (commit: boolean): void => {
     if (done) return
     done = true
     editing = null
-    const name = input.value.trim()
-    if (commit && name) {
-      // the re-render arrives via ui:bookmarks-changed
-      if (folder) window.synapse.bookmarks.renameFolder(folder.id, name)
-      else window.synapse.bookmarks.addFolder(name)
+    const next = input.value.trim()
+    if (commit && next) {
+      onCommit(next) // the re-render arrives via ui:bookmarks-changed
     } else {
       rerender?.()
     }
@@ -212,5 +226,20 @@ function folderEditor(folder: BookmarkFolder | null): HTMLDivElement {
   input.addEventListener('blur', () => finish(false))
   row.append(input)
   queueMicrotask(() => input.focus())
+  return row
+}
+
+function folderEditor(folder: BookmarkFolder | null): HTMLDivElement {
+  return inlineEditor(folder?.name ?? '', 'Folder name', (name) => {
+    if (folder) window.synapse.bookmarks.renameFolder(folder.id, name)
+    else window.synapse.bookmarks.addFolder(name)
+  })
+}
+
+function bookmarkEditor(bm: Bookmark, indented: boolean): HTMLDivElement {
+  const row = inlineEditor(bm.title, 'Bookmark title', (title) =>
+    window.synapse.bookmarks.rename(bm.id, title),
+  )
+  if (indented) row.classList.add('indent')
   return row
 }

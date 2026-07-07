@@ -83,6 +83,7 @@ export interface SynapseApi {
     list(): Promise<BookmarksData>
     open(id: string): void
     remove(id: string): void
+    rename(id: string, title: string): void
     reorder(id: string, toIndex: number): void
     moveToFolder(id: string, folderId: string | null, toIndex?: number): void
     addFolder(name: string): void
@@ -101,5 +102,6 @@ export interface SynapseApi {
     onToggleBookmarks(cb: () => void): void
     onBookmarksChanged(cb: () => void): void
     onEditFolder(cb: (folderId: string) => void): void
+    onEditBookmark(cb: (bookmarkId: string) => void): void
   }
 }

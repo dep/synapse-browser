@@ -1,6 +1,6 @@
 import './style.css'
 import type { TabsSnapshot } from '../shared/ipc'
-import { PanelMode, renderPanel, startFolderEdit } from './panel'
+import { PanelMode, renderPanel, startItemEdit } from './panel'
 import { renderPins, renderTabList } from './sidebar'
 import { initTopbar } from './topbar'
 
@@ -26,7 +26,10 @@ window.synapse.ui.onBookmarksChanged(() => {
   if (panelMode === 'bookmarks') void renderPanel(panelEl, panelMode)
 })
 window.synapse.ui.onEditFolder((id) => {
-  if (panelMode === 'bookmarks') startFolderEdit(id)
+  if (panelMode === 'bookmarks') startItemEdit(id)
+})
+window.synapse.ui.onEditBookmark((id) => {
+  if (panelMode === 'bookmarks') startItemEdit(id)
 })
 
 function setPanel(mode: PanelMode): void {
