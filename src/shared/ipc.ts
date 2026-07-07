@@ -26,6 +26,7 @@ export interface TabsSnapshot {
   tabs: Record<string, TabInfo>
   order: string[]
   pinned: string[]
+  bookmarkTabs: Record<string, string> // bookmarkId → tabId, awake only
   activeId: string | null
 }
 
@@ -46,6 +47,8 @@ export interface Bookmark {
   title: string
   createdAt: number
   folderId?: string // absent = top level
+  profile?: ProfileId // absent = default
+  favicon?: string | null // captured while the bookmark's tab is awake
 }
 
 export interface BookmarksData {
@@ -99,7 +102,6 @@ export interface SynapseApi {
     setOverlayHeight(px: number): void
     onFocusUrlBar(cb: () => void): void
     onToggleHistory(cb: () => void): void
-    onToggleBookmarks(cb: () => void): void
     onBookmarksChanged(cb: () => void): void
     onEditFolder(cb: (folderId: string) => void): void
     onEditBookmark(cb: (bookmarkId: string) => void): void

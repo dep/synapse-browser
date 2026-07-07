@@ -49,9 +49,6 @@ const api: SynapseApi = {
     onToggleHistory: (cb) => {
       ipcRenderer.on('ui:toggle-history', () => cb())
     },
-    onToggleBookmarks: (cb) => {
-      ipcRenderer.on('ui:toggle-bookmarks', () => cb())
-    },
     onBookmarksChanged: (cb) => {
       ipcRenderer.on('ui:bookmarks-changed', () => cb())
     },

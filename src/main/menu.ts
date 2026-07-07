@@ -88,11 +88,6 @@ export function buildMenu(
           accelerator: 'CmdOrCtrl+Y',
           click: () => win.webContents.send('ui:toggle-history'),
         },
-        {
-          label: 'Bookmarks',
-          accelerator: 'CmdOrCtrl+B',
-          click: () => win.webContents.send('ui:toggle-bookmarks'),
-        },
         { type: 'separator' },
         {
           label: 'Extensions',

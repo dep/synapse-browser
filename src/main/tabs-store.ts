@@ -5,7 +5,6 @@ import { JsonStore } from './store'
 export interface TabEntry {
   url: string
   profile: ProfileId
-  anchor?: string // bookmark anchor url; Ctrl+Cmd+H restores the tab to it
 }
 
 interface TabsFileV1 {
@@ -36,11 +35,7 @@ export class TabsStore {
   save(tabs: TabEntry[], active: number): void {
     this.store.set({
       v: 2,
-      tabs: tabs.map((t) => ({
-        url: PERSISTABLE.test(t.url) ? t.url : '',
-        profile: t.profile,
-        ...(t.anchor && PERSISTABLE.test(t.anchor) ? { anchor: t.anchor } : {}),
-      })),
+      tabs: tabs.map((t) => ({ url: PERSISTABLE.test(t.url) ? t.url : '', profile: t.profile })),
       active,
     })
   }
@@ -56,15 +51,9 @@ export class TabsStore {
           : []
     const clean = raw.flatMap((t): TabEntry[] => {
       if (typeof t !== 'object' || t === null) return []
-      const { url, profile, anchor } = t as { url?: unknown; profile?: unknown; anchor?: unknown }
+      const { url, profile } = t as { url?: unknown; profile?: unknown }
       if (typeof url !== 'string') return []
-      return [
-        {
-          url,
-          profile: profile === 'work' ? 'work' : 'default',
-          ...(typeof anchor === 'string' && PERSISTABLE.test(anchor) ? { anchor } : {}),
-        },
-      ]
+      return [{ url, profile: profile === 'work' ? 'work' : 'default' }]
     })
     const idx = Number.isInteger(data.active) ? data.active : 0
     return { tabs: clean, active: Math.min(Math.max(idx, 0), clean.length - 1) }

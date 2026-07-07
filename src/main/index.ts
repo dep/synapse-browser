@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, session } from 'electron'
 import type { WebContents } from 'electron'
 import { appendFileSync, copyFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import type { ProfileId } from '../shared/ipc'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
@@ -67,14 +68,18 @@ app.whenReady().then(async () => {
   })
 
   const tabs = new TabManager(win, {
-    isBookmarked: (url) => bookmarks.isBookmarked(url),
+    getBookmark: (id) => bookmarks.get(id),
+    onBookmarkFavicon: (id, favicon) => {
+      bookmarks.setFavicon(id, favicon)
+      win.webContents.send('ui:bookmarks-changed')
+    },
     onNavigated: (url, title) => history.add(url, title, Date.now()),
     onSnapshot: (snap) => {
       win.webContents.send('tabs:updated', snap)
       tabsStore.save(
         snap.order.map((id) => {
           const t = snap.tabs[id]!
-          return { url: t.url, profile: t.profile, ...(t.anchorUrl ? { anchor: t.anchorUrl } : {}) }
+          return { url: t.url, profile: t.profile }
         }),
         snap.activeId ? snap.order.indexOf(snap.activeId) : -1,
       )
@@ -139,8 +144,6 @@ app.whenReady().then(async () => {
     ]
     if (pinned && tabs.isAwake(id)) {
       template.push({ label: 'Restore Pinned URL', click: () => tabs.restoreAnchor(id) })
-    } else if (tabs.isAwake(id) && tabs.isAnchored(id)) {
-      template.push({ label: 'Restore Bookmarked URL', click: () => tabs.restoreAnchor(id) })
     }
     template.push(
       { type: 'separator' },
@@ -172,23 +175,32 @@ app.whenReady().then(async () => {
   ipcMain.handle('history:list', () => history.list())
 
   const bookmarksChanged = (): void => {
-    // isBookmarked on tab snapshots (star state) may have changed
-    tabs.refresh()
+    tabs.syncBookmarks(bookmarks.ordered())
     win.webContents.send('ui:bookmarks-changed')
   }
 
+  // ⌘D / ☆: convert the active tab into a bookmark, or a bookmark tab back
   const toggleBookmark = (): void => {
-    const info = tabs.activeInfo()
-    if (!info || !/^https?:\/\//.test(info.url)) return
-    bookmarks.toggle(info.url, info.title, Date.now())
+    const tid = tabs.activeId
+    if (!tid) return
+    const bid = tabs.bookmarkIdOf(tid)
+    if (bid) {
+      bookmarks.remove(bid)
+      tabs.unbookmarkTab(bid)
+    } else {
+      if (tabs.isPinned(tid)) return // pins aren't convertible to bookmarks
+      const info = tabs.activeInfo()
+      if (!info || !/^https?:\/\//.test(info.url)) return
+      const bm = bookmarks.add(info.url, info.title, Date.now(), tabs.profileOf(tid))
+      tabs.bookmarkTab(tid, bm.id)
+    }
     bookmarksChanged()
   }
   ipcMain.handle('bookmarks:toggle-active', () => toggleBookmark())
   ipcMain.handle('bookmarks:list', () => bookmarks.list())
 
   ipcMain.on('bookmarks:open', (_e, id: string) => {
-    const bm = bookmarks.list().bookmarks.find((b) => b.id === id)
-    if (bm) tabs.openBookmark(bm.url)
+    if (typeof id === 'string') tabs.openBookmark(id)
   })
   ipcMain.on('bookmarks:remove', (_e, id: string) => {
     if (typeof id !== 'string') return
@@ -264,11 +276,21 @@ app.whenReady().then(async () => {
       const { folders, bookmarks: all } = bookmarks.list()
       const bm = all.find((b) => b.id === id)
       if (!bm) return
+      const tid = tabs.bookmarkTabIdOf(id)
+      const awake = tid !== null && tabs.isAwake(tid)
+      const currentUrl = awake ? tabs.webContentsFor(tid!)?.getURL() : undefined
       const moveTo = (folderId: string | null) => () => {
         bookmarks.moveToFolder(id, folderId)
         bookmarksChanged()
       }
-      Menu.buildFromTemplate([
+      const setProfile = (profile: ProfileId) => () => {
+        bookmarks.setProfile(id, profile)
+        // an awake tab must move partitions now; asleep slots pick the
+        // profile up from the store on wake
+        if (awake) tabs.setProfile(tid!, profile)
+        bookmarksChanged()
+      }
+      const template: Electron.MenuItemConstructorOptions[] = [
         { label: 'Rename', click: () => win.webContents.send('ui:edit-bookmark', id) },
         {
           label: 'Move to',
@@ -286,13 +308,40 @@ app.whenReady().then(async () => {
         },
         { type: 'separator' },
         {
+          label: 'Profile',
+          submenu: [
+            {
+              label: 'Default',
+              type: 'radio',
+              checked: (bm.profile ?? 'default') === 'default',
+              click: setProfile('default'),
+            },
+            {
+              label: 'Work',
+              type: 'radio',
+              checked: bm.profile === 'work',
+              click: setProfile('work'),
+            },
+          ],
+        },
+      ]
+      if (awake && currentUrl !== bm.url) {
+        template.push({ label: 'Restore Bookmarked URL', click: () => tabs.restoreAnchor(tid) })
+      }
+      if (awake) {
+        template.push({ label: 'Put to Sleep', click: () => tabs.closeTab(tid!) })
+      }
+      template.push(
+        { type: 'separator' },
+        {
           label: 'Delete Bookmark',
           click: () => {
             bookmarks.remove(id)
             bookmarksChanged()
           },
         },
-      ]).popup({ window: win })
+      )
+      Menu.buildFromTemplate(template).popup({ window: win })
     }
   })
 
@@ -317,6 +366,7 @@ app.whenReady().then(async () => {
     console.error('extensions: startup failed, continuing without extensions', err)
   }
   tabs.restorePins(pinsStore.load())
+  tabs.syncBookmarks(bookmarks.ordered())
   const saved = tabsStore.load()
   tabs.restoreTabs(saved.tabs, saved.active)
 

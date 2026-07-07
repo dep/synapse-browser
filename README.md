@@ -6,12 +6,16 @@ A very simple Chromium browser for macOS, built on Electron.
 
 - Vertical tabs (Arc-style sidebar)
 - Pinned tabs: icon grid atop the sidebar (Cmd+P to pin/unpin, right-click for menu);
-  pins persist across restarts, wake lazily, share Cmd+1–9 with tabs (pins first), and
-  Ctrl+Cmd+H returns the active pin to its pinned URL
+  pins persist across restarts, wake lazily, share Cmd+1–9 with bookmarks and tabs
+  (pins, then bookmarks, then tabs), and Ctrl+Cmd+H returns the active pin to its
+  pinned URL
 - URL bar with history suggestions (DuckDuckGo search fallback)
 - MRU tab cycling: Ctrl+Tab / Ctrl+Shift+Tab (hold to walk, release to commit)
 - Sidebar-order cycling: Option+Tab / Option+Shift+Tab
-- Bookmarks (Cmd+D), History (Cmd+Y), Downloads to ~/Downloads
+- Bookmarks live in the sidebar above the tab list (Cmd+D converts the active
+  tab into a bookmark and back; click to wake, × to sleep; right-click to
+  rename, file into folders, or assign a Default/Work profile), History
+  (Cmd+Y), Downloads to ~/Downloads
 - In-app error pages, popup-to-tab handling
 
 ## Extensions
