@@ -41,24 +41,6 @@ export class BookmarksStore {
     return this.store.get() as BookmarksFileV2
   }
 
-  isBookmarked(url: string): boolean {
-    return this.data.bookmarks.some((b) => b.url === url)
-  }
-
-  toggle(url: string, title: string, createdAt: number): boolean {
-    const { folders, bookmarks } = this.data
-    if (this.isBookmarked(url)) {
-      this.store.set({ v: 2, folders, bookmarks: bookmarks.filter((b) => b.url !== url) })
-      return false
-    }
-    this.store.set({
-      v: 2,
-      folders,
-      bookmarks: [{ id: randomUUID(), url, title, createdAt }, ...bookmarks],
-    })
-    return true
-  }
-
   add(url: string, title: string, createdAt: number, profile: ProfileId = 'default'): Bookmark {
     const { folders, bookmarks } = this.data
     const bm: Bookmark = {

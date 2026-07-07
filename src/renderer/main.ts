@@ -9,7 +9,7 @@ const tabListEl = document.getElementById('tab-list')!
 const panelEl = document.getElementById('panel')!
 const topbar = initTopbar()
 
-let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], activeId: null }
+let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], bookmarkTabs: {}, activeId: null }
 let panelMode: PanelMode = 'none'
 
 window.synapse.onTabsUpdated((s) => {

@@ -1,6 +1,6 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput } from '../shared/url-classifier'
-import type { PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
+import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 
@@ -9,7 +9,8 @@ export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
 
 export interface TabManagerOptions {
-  isBookmarked(url: string): boolean
+  getBookmark(id: string): Bookmark | undefined
+  onBookmarkFavicon(id: string, favicon: string | null): void
   onNavigated(url: string, title: string): void
   onSnapshot(snap: TabsSnapshot): void
   onTabCreated?(wc: WebContents, profile: ProfileId): void
@@ -22,7 +23,7 @@ export class TabManager {
   private favicons = new Map<string, string | null>()
   private pins = new Map<string, PinSlot>()
   private profiles = new Map<string, ProfileId>()
-  private anchors = new Map<string, string>()
+  private bmTabId = new Map<string, string>() // bookmarkId → tabId
   private attached: WebContentsView | null = null
   private overlayHeight = 0
   private counter = 0
@@ -71,8 +72,8 @@ export class TabManager {
   }
 
   closeTab(id: string): void {
-    if (this.model.isPinned(id)) {
-      this.sleepPin(id)
+    if (this.model.isPinned(id) || this.model.isBookmarkSlot(id)) {
+      this.sleepSlot(id)
       return
     }
     const view = this.views.get(id)
@@ -81,7 +82,6 @@ export class TabManager {
     this.model.close(id)
     this.destroyView(id, view, wasAttached)
     this.profiles.delete(id)
-    this.anchors.delete(id)
     if (!this.model.activeId) {
       this.createTab()
       return
@@ -102,7 +102,7 @@ export class TabManager {
     view.webContents.close()
   }
 
-  private sleepPin(id: string): void {
+  private sleepSlot(id: string): void {
     const view = this.views.get(id)
     if (!view) return // already asleep
     const slot = this.pins.get(id)
@@ -123,11 +123,11 @@ export class TabManager {
   }
 
   activateTab(id: string): void {
-    if (this.model.isPinned(id) && !this.views.has(id)) {
-      this.wakePin(id)
+    if (!this.views.has(id)) {
+      if (this.model.isPinned(id)) this.wakePin(id)
+      else if (this.model.isBookmarkSlot(id)) this.wakeBookmark(id)
       return
     }
-    if (!this.views.has(id)) return
     this.model.activate(id)
     this.syncViews()
     this.attached?.webContents.focus()
@@ -143,17 +143,26 @@ export class TabManager {
     this.attached?.webContents.focus()
   }
 
+  private wakeBookmark(tabId: string): void {
+    const bid = this.bookmarkIdOf(tabId)
+    const bm = bid ? this.opts.getBookmark(bid) : undefined
+    if (!bm) return
+    // profile can have changed while asleep; the store is authoritative
+    this.profiles.set(tabId, bm.profile ?? 'default')
+    const view = this.createView(tabId)
+    this.model.wake(tabId)
+    view.webContents.loadURL(bm.url)
+    this.syncViews()
+    this.attached?.webContents.focus()
+  }
+
   // recreate a saved session: tabs in sidebar order, then the active one
-  restoreTabs(tabs: { url: string; profile: ProfileId; anchor?: string }[], active: number): void {
+  restoreTabs(tabs: { url: string; profile: ProfileId }[], active: number): void {
     if (tabs.length === 0) {
       this.createTab()
       return
     }
-    const ids = tabs.map((t) => {
-      const id = this.createTab(t.url || undefined, false, t.profile)
-      if (t.anchor) this.anchors.set(id, t.anchor)
-      return id
-    })
+    const ids = tabs.map((t) => this.createTab(t.url || undefined, false, t.profile))
     this.activateTab(ids[Math.min(Math.max(active, 0), ids.length - 1)]!)
   }
 
@@ -193,6 +202,15 @@ export class TabManager {
     return this.profiles.get(id) ?? 'default'
   }
 
+  bookmarkIdOf(tabId: string): string | null {
+    for (const [bid, tid] of this.bmTabId) if (tid === tabId) return bid
+    return null
+  }
+
+  bookmarkTabIdOf(bookmarkId: string): string | null {
+    return this.bmTabId.get(bookmarkId) ?? null
+  }
+
   // a WebContents' session is fixed at creation, so switching profile
   // recreates the view in the new partition; the tab keeps its id and
   // sidebar/MRU position, but navigation history resets
@@ -216,37 +234,67 @@ export class TabManager {
     if (wasAttached) this.attached?.webContents.focus()
   }
 
-  // open a bookmark pin-style: pinned slots win, an exact anchor match
-  // refocuses, and otherwise ONE shared bookmark tab is reused — navigated to
-  // the new url and re-anchored — so browsing bookmarks never piles up tabs
-  openBookmark(url: string): void {
-    for (const [id, slot] of this.pins) {
-      if (slot.url === url) return this.activateTab(id)
+  // reconcile bookmark slots with the store: new bookmarks get asleep slots,
+  // deleted ones lose their slot (and live view), order mirrors the sidebar
+  syncBookmarks(ordered: Bookmark[]): void {
+    const live = new Set(ordered.map((b) => b.id))
+    let destroyedAttached = false
+    for (const [bid, tid] of [...this.bmTabId]) {
+      if (live.has(bid)) continue
+      const view = this.views.get(tid)
+      if (view) {
+        const wasAttached = this.attached === view
+        destroyedAttached ||= wasAttached
+        this.destroyView(tid, view, wasAttached)
+      }
+      this.model.removeBookmark(tid)
+      this.profiles.delete(tid)
+      this.bmTabId.delete(bid)
     }
-    const anchored = [...this.anchors.keys()].filter(
-      (id) => !this.model.isPinned(id) && this.views.has(id),
-    )
-    const exact = anchored.find((id) => this.anchors.get(id) === url)
-    if (exact) return this.activateTab(exact)
-    const reuse = anchored[0]
-    if (reuse) {
-      this.anchors.set(reuse, url)
-      this.views.get(reuse)!.webContents.loadURL(url)
-      return this.activateTab(reuse)
+    for (const b of ordered) {
+      if (this.bmTabId.has(b.id)) continue
+      const tid = `tab-${++this.counter}`
+      this.bmTabId.set(b.id, tid)
+      this.profiles.set(tid, b.profile ?? 'default')
+      this.model.addBookmark(tid)
     }
-    const id = this.createTab(url)
-    this.anchors.set(id, url)
-    this.refresh()
+    this.model.setBookmarkOrder(ordered.map((b) => this.bmTabId.get(b.id)!))
+    if (destroyedAttached && !this.model.activeId) {
+      this.createTab()
+      return
+    }
+    this.syncViews()
+    if (destroyedAttached) this.attached?.webContents.focus()
+  }
+
+  openBookmark(bookmarkId: string): void {
+    const tid = this.bmTabId.get(bookmarkId)
+    if (tid) this.activateTab(tid)
+  }
+
+  // ⌘D: a live tab becomes the bookmark's tab in place
+  bookmarkTab(tabId: string, bookmarkId: string): void {
+    this.bmTabId.set(bookmarkId, tabId)
+    this.model.bookmark(tabId)
+  }
+
+  // ⌘D again: the page survives as a normal tab; an asleep slot just vanishes
+  unbookmarkTab(bookmarkId: string): void {
+    const tid = this.bmTabId.get(bookmarkId)
+    if (!tid) return
+    this.bmTabId.delete(bookmarkId)
+    if (this.views.has(tid)) this.model.unbookmark(tid)
+    else {
+      this.model.removeBookmark(tid)
+      this.profiles.delete(tid)
+    }
   }
 
   restoreAnchor(id: string | null = this.model.activeId): void {
     if (!id) return
-    const url = this.pins.get(id)?.url ?? this.anchors.get(id)
+    const bid = this.bookmarkIdOf(id)
+    const url = this.pins.get(id)?.url ?? (bid ? this.opts.getBookmark(bid)?.url : undefined)
     if (url) this.views.get(id)?.webContents.loadURL(url)
-  }
-
-  isAnchored(id: string): boolean {
-    return this.anchors.has(id)
   }
 
   isPinned(id: string): boolean {
@@ -338,8 +386,9 @@ export class TabManager {
 
   private snapshot(): TabsSnapshot {
     const tabs: Record<string, TabInfo> = {}
-    for (const id of [...this.model.pinned, ...this.model.order]) {
+    for (const id of [...this.model.pinned, ...this.model.bookmarks, ...this.model.order]) {
       const slot = this.pins.get(id)
+      const bid = this.bookmarkIdOf(id)
       const wc = this.views.get(id)?.webContents
       if (wc) {
         const url = wc.getURL()
@@ -351,10 +400,10 @@ export class TabManager {
           isLoading: wc.isLoading(),
           canGoBack: wc.navigationHistory.canGoBack(),
           canGoForward: wc.navigationHistory.canGoForward(),
-          isBookmarked: this.opts.isBookmarked(url),
+          isBookmarked: bid !== null,
           isPinned: !!slot,
           isAsleep: false,
-          anchorUrl: slot?.url ?? this.anchors.get(id) ?? null,
+          anchorUrl: slot?.url ?? (bid ? (this.opts.getBookmark(bid)?.url ?? null) : null),
           profile: this.profileOf(id),
         }
       } else if (slot) {
@@ -366,7 +415,7 @@ export class TabManager {
           isLoading: false,
           canGoBack: false,
           canGoForward: false,
-          isBookmarked: this.opts.isBookmarked(slot.url),
+          isBookmarked: false,
           isPinned: true,
           isAsleep: true,
           anchorUrl: slot.url,
@@ -374,10 +423,13 @@ export class TabManager {
         }
       }
     }
+    const bookmarkTabs: Record<string, string> = {}
+    for (const [bid, tid] of this.bmTabId) if (this.views.has(tid)) bookmarkTabs[bid] = tid
     return {
       tabs,
       order: [...this.model.order],
       pinned: [...this.model.pinned],
+      bookmarkTabs,
       activeId: this.model.activeId,
     }
   }
@@ -417,6 +469,8 @@ export class TabManager {
     })
     wc.on('page-favicon-updated', (_e, favicons) => {
       this.favicons.set(id, favicons[0] ?? null)
+      const bid = this.bookmarkIdOf(id)
+      if (bid) this.opts.onBookmarkFavicon(bid, favicons[0] ?? null)
       this.refresh()
     })
     wc.on('did-finish-load', () => {

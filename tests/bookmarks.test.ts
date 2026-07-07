@@ -17,31 +17,15 @@ describe('BookmarksStore', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('toggle adds a bookmark with an id and returns true', () => {
-    expect(store.toggle('https://a.com', 'A', 1)).toBe(true)
-    expect(store.isBookmarked('https://a.com')).toBe(true)
-    const { bookmarks } = store.list()
-    expect(bookmarks).toHaveLength(1)
-    expect(bookmarks[0]!.id).toBeTruthy()
-    expect(bookmarks[0]!.folderId).toBeUndefined()
-  })
-
-  it('toggle removes an existing bookmark and returns false', () => {
-    store.toggle('https://a.com', 'A', 1)
-    expect(store.toggle('https://a.com', 'A', 2)).toBe(false)
-    expect(store.isBookmarked('https://a.com')).toBe(false)
-    expect(store.list().bookmarks).toEqual([])
-  })
-
   it('new bookmarks land at the top of the top level', () => {
-    store.toggle('https://a.com', 'A', 1)
-    store.toggle('https://b.com', 'B', 2)
+    store.add('https://a.com', 'A', 1)
+    store.add('https://b.com', 'B', 2)
     expect(store.list().bookmarks.map((b) => b.url)).toEqual(['https://b.com', 'https://a.com'])
   })
 
   it('remove deletes by id', () => {
-    store.toggle('https://a.com', 'A', 1)
-    store.toggle('https://b.com', 'B', 2)
+    store.add('https://a.com', 'A', 1)
+    store.add('https://b.com', 'B', 2)
     const id = store.list().bookmarks.find((b) => b.url === 'https://a.com')!.id
     store.remove(id)
     expect(store.list().bookmarks.map((b) => b.url)).toEqual(['https://b.com'])
@@ -66,22 +50,21 @@ describe('BookmarksStore', () => {
   })
 
   it('persists via flush and reloads', () => {
-    store.toggle('https://a.com', 'A', 1)
+    const bm = store.add('https://a.com', 'A', 1)
     store.flush()
     const reloaded = new BookmarksStore(dir)
-    expect(reloaded.isBookmarked('https://a.com')).toBe(true)
-    expect(reloaded.list().bookmarks[0]!.id).toBe(store.list().bookmarks[0]!.id)
+    expect(reloaded.list().bookmarks[0]!.id).toBe(bm.id)
   })
 
   it('renameBookmark updates the title and nothing else', () => {
-    store.toggle('https://a.com', 'A', 1)
+    store.add('https://a.com', 'A', 1)
     const before = store.list().bookmarks[0]!
     store.renameBookmark(before.id, 'Renamed')
     expect(store.list().bookmarks[0]).toEqual({ ...before, title: 'Renamed' })
   })
 
   it('renameBookmark with an unknown id is a no-op', () => {
-    store.toggle('https://a.com', 'A', 1)
+    store.add('https://a.com', 'A', 1)
     store.renameBookmark('nope', 'X')
     expect(store.list().bookmarks[0]!.title).toBe('A')
   })
@@ -102,18 +85,16 @@ describe('BookmarksStore', () => {
 
   it('removeFolder removes an empty folder', () => {
     const f = store.addFolder('Work')
-    store.toggle('https://out.com', 'Out', 1)
+    store.add('https://out.com', 'Out', 1)
     store.removeFolder(f.id)
     expect(store.list().folders).toEqual([])
     expect(store.list().bookmarks.map((b) => b.url)).toEqual(['https://out.com'])
   })
 
-  // toggle prepends, so toggling A,B,C yields order [C,B,A]; helper for clarity
+  // add prepends, so adding A,B,C yields order [C,B,A]; helper for clarity
   function seed(urls: string[]): string[] {
-    for (const [i, url] of urls.entries()) store.toggle(url, url, i)
-    const { bookmarks } = store.list()
-    // return ids in the same order as `urls`
-    return urls.map((u) => bookmarks.find((b) => b.url === u)!.id)
+    const ids = new Map(urls.map((url, i) => [url, store.add(url, url, i).id]))
+    return urls.map((u) => ids.get(u)!)
   }
 
   function urlsAt(folderId?: string): string[] {

@@ -26,6 +26,7 @@ export interface TabsSnapshot {
   tabs: Record<string, TabInfo>
   order: string[]
   pinned: string[]
+  bookmarkTabs: Record<string, string> // bookmarkId → tabId, awake only
   activeId: string | null
 }
 
