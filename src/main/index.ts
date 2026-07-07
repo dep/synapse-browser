@@ -139,7 +139,7 @@ app.whenReady().then(async () => {
     ]
     if (pinned && tabs.isAwake(id)) {
       template.push({ label: 'Restore Pinned URL', click: () => tabs.restoreAnchor(id) })
-    } else if (tabs.isAnchored(id)) {
+    } else if (tabs.isAwake(id) && tabs.isAnchored(id)) {
       template.push({ label: 'Restore Bookmarked URL', click: () => tabs.restoreAnchor(id) })
     }
     template.push(

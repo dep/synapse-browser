@@ -65,7 +65,14 @@ export function wireDropZone(
   if (wiredZones.has(el)) return
   wiredZones.add(el)
   el.addEventListener('dragover', (e) => {
-    if (drag && opts.accepts(drag)) e.preventDefault()
+    if (!drag || !opts.accepts(drag)) return
+    e.preventDefault()
+    // only when over the zone's own empty space — child rows draw their own
+    // indicators and clear this one via clearIndicators()
+    if (e.target === el) {
+      clearIndicators()
+      el.classList.add('drop-into')
+    }
   })
   el.addEventListener('drop', (e) => {
     if (!drag || !opts.accepts(drag)) return
