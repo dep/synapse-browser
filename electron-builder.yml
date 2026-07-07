@@ -10,6 +10,13 @@ files:
   - out/**/*
   - package.json
 
+protocols:
+  - name: Web Page
+    schemes:
+      - http
+      - https
+    role: Viewer
+
 mac:
   category: public.app-category.utilities
   icon: resources/icon.icns

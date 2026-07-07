@@ -12,10 +12,39 @@ import { TabManager, WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { buildMenu } from './menu'
 
+// as the default browser, links clicked in other apps launch a new process;
+// route them into the existing window instead of spawning duplicate ones
+if (!app.requestSingleInstanceLock()) app.quit()
+
+let openUrlInExistingWindow: ((url: string) => void) | null = null
+const pendingUrls: string[] = []
+
+function handleLaunchUrl(url: string): void {
+  if (openUrlInExistingWindow) openUrlInExistingWindow(url)
+  else pendingUrls.push(url)
+}
+
+// macOS delivers link-open requests via this event, not argv
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  handleLaunchUrl(url)
+})
+
+app.on('second-instance', (_e, argv) => {
+  const url = argv.find((a) => /^https?:\/\//.test(a))
+  if (url) handleLaunchUrl(url)
+})
+
 app.whenReady().then(async () => {
   // in dev the Dock shows the stock Electron icon; a packaged app gets icon.icns
   const dockIcon = join(app.getAppPath(), 'resources/icon.png')
   if (existsSync(dockIcon)) app.dock?.setIcon(dockIcon)
+
+  // lets macOS list Synapse under System Settings > Desktop & Dock > Default web browser
+  if (app.isPackaged) {
+    app.setAsDefaultProtocolClient('http')
+    app.setAsDefaultProtocolClient('https')
+  }
 
   const userData = app.getPath('userData')
   // productName renamed the userData dir; pull stores from the pre-rename one
@@ -107,6 +136,13 @@ app.whenReady().then(async () => {
   })
   const extensions = new ExtensionManager(win, tabs)
   attachCycleHooks(win.webContents)
+
+  openUrlInExistingWindow = (url) => {
+    tabs.createTab(url)
+    if (win.isMinimized()) win.restore()
+    win.focus()
+  }
+  for (const url of pendingUrls.splice(0)) openUrlInExistingWindow(url)
   // losing window focus mid-cycle means the modifier keyUp will never arrive
   win.on('blur', () => tabs.cycleCommit())
 
