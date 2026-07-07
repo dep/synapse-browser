@@ -360,3 +360,21 @@ browser-action-list {
 .panel-loose {
   min-height: 48px;
 }
+#bookmarks {
+  flex: none;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+#bookmarks[hidden] {
+  display: none;
+}
+.tab.asleep .favicon {
+  opacity: 0.45;
+}
+.tab.indent {
+  margin-left: 16px;
+}
+.bookmarks-loose {
+  min-height: 8px;
+}

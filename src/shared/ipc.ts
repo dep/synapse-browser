@@ -102,7 +102,6 @@ export interface SynapseApi {
     setOverlayHeight(px: number): void
     onFocusUrlBar(cb: () => void): void
     onToggleHistory(cb: () => void): void
-    onToggleBookmarks(cb: () => void): void
     onBookmarksChanged(cb: () => void): void
     onEditFolder(cb: (folderId: string) => void): void
     onEditBookmark(cb: (bookmarkId: string) => void): void
