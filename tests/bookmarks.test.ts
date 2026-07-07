@@ -94,4 +94,97 @@ describe('BookmarksStore', () => {
     expect(store.list().folders).toEqual([])
     expect(store.list().bookmarks.map((b) => b.url)).toEqual(['https://out.com'])
   })
+
+  // toggle prepends, so toggling A,B,C yields order [C,B,A]; helper for clarity
+  function seed(urls: string[]): string[] {
+    for (const [i, url] of urls.entries()) store.toggle(url, url, i)
+    const { bookmarks } = store.list()
+    // return ids in the same order as `urls`
+    return urls.map((u) => bookmarks.find((b) => b.url === u)!.id)
+  }
+
+  function urlsAt(folderId?: string): string[] {
+    return store
+      .list()
+      .bookmarks.filter((b) => b.folderId === folderId)
+      .map((b) => b.url)
+  }
+
+  it('reorder moves a bookmark within the top level', () => {
+    seed(['a', 'b', 'c']) // top-level order: c, b, a
+    const cId = store.list().bookmarks.find((b) => b.url === 'c')!.id
+    store.reorder(cId, 2)
+    expect(urlsAt()).toEqual(['b', 'a', 'c'])
+  })
+
+  it('reorder clamps out-of-range indices', () => {
+    seed(['a', 'b'])
+    const aId = store.list().bookmarks.find((b) => b.url === 'a')!.id
+    store.reorder(aId, 99)
+    expect(urlsAt()).toEqual(['b', 'a'])
+    store.reorder(aId, -5)
+    expect(urlsAt()).toEqual(['a', 'b'])
+  })
+
+  it('reorder moves a folder within the folder list', () => {
+    const f1 = store.addFolder('One')
+    store.addFolder('Two')
+    store.addFolder('Three')
+    store.reorder(f1.id, 2)
+    expect(store.list().folders.map((f) => f.name)).toEqual(['Two', 'Three', 'One'])
+  })
+
+  it('moveToFolder appends when no index given', () => {
+    const f = store.addFolder('F')
+    const [aId, bId] = seed(['a', 'b'])
+    store.moveToFolder(aId!, f.id)
+    store.moveToFolder(bId!, f.id)
+    expect(urlsAt(f.id)).toEqual(['a', 'b'])
+    expect(urlsAt()).toEqual([])
+  })
+
+  it('moveToFolder places at a container-relative index', () => {
+    const f = store.addFolder('F')
+    const [aId, bId, cId] = seed(['a', 'b', 'c'])
+    store.moveToFolder(aId!, f.id)
+    store.moveToFolder(bId!, f.id)
+    store.moveToFolder(cId!, f.id, 1) // between a and b
+    expect(urlsAt(f.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('moveToFolder(null) returns a bookmark to the top level', () => {
+    const f = store.addFolder('F')
+    const [aId] = seed(['a', 'b']) // top level: b, a
+    store.moveToFolder(aId!, f.id)
+    store.moveToFolder(aId!, null, 0)
+    expect(urlsAt()).toEqual(['a', 'b'])
+    expect(urlsAt(f.id)).toEqual([])
+  })
+
+  it('moveToFolder to a nonexistent folder is a no-op', () => {
+    const [aId] = seed(['a'])
+    store.moveToFolder(aId!, 'nope')
+    expect(urlsAt()).toEqual(['a'])
+    expect(store.list().bookmarks[0]!.folderId).toBeUndefined()
+  })
+
+  it('reorder inside a folder leaves other containers untouched', () => {
+    const f = store.addFolder('F')
+    const [aId, bId, cId] = seed(['a', 'b', 'c', 'x', 'y'])
+    store.moveToFolder(aId!, f.id)
+    store.moveToFolder(bId!, f.id)
+    store.moveToFolder(cId!, f.id) // folder: a, b, c ; top level: y, x
+    store.reorder(cId!, 0)
+    expect(urlsAt(f.id)).toEqual(['c', 'a', 'b'])
+    expect(urlsAt()).toEqual(['y', 'x'])
+  })
+
+  it('removeFolder deletes member bookmarks only', () => {
+    const f = store.addFolder('F')
+    const [aId] = seed(['a', 'b'])
+    store.moveToFolder(aId!, f.id)
+    store.removeFolder(f.id)
+    expect(store.list().folders).toEqual([])
+    expect(urlsAt()).toEqual(['b'])
+  })
 })

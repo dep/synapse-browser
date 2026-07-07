@@ -90,6 +90,49 @@ export class BookmarksStore {
     })
   }
 
+  // toIndex is container-relative for bookmarks, folder-list-relative for folders
+  reorder(id: string, toIndex: number): void {
+    const { folders, bookmarks } = this.data
+    const folderIdx = folders.findIndex((f) => f.id === id)
+    if (folderIdx !== -1) {
+      const next = [...folders]
+      const [folder] = next.splice(folderIdx, 1)
+      next.splice(Math.max(0, Math.min(Math.round(toIndex), next.length)), 0, folder!)
+      this.store.set({ v: 2, folders: next, bookmarks })
+      return
+    }
+    const bookmark = bookmarks.find((b) => b.id === id)
+    if (bookmark) this.place(bookmark, bookmark.folderId, toIndex)
+  }
+
+  moveToFolder(id: string, folderId: string | null, toIndex = Number.MAX_SAFE_INTEGER): void {
+    const { folders, bookmarks } = this.data
+    if (folderId !== null && !folders.some((f) => f.id === folderId)) return
+    const bookmark = bookmarks.find((b) => b.id === id)
+    if (bookmark) this.place(bookmark, folderId ?? undefined, toIndex)
+  }
+
+  // container membership is folderId; order within a container is the members'
+  // relative order in the global bookmarks array, so placing = remove + insert
+  // adjacent to the member currently at the target slot
+  private place(bookmark: Bookmark, folderId: string | undefined, toIndex: number): void {
+    const { folders, bookmarks } = this.data
+    const rest = bookmarks.filter((b) => b.id !== bookmark.id)
+    const moved: Bookmark = { ...bookmark }
+    if (folderId === undefined) delete moved.folderId
+    else moved.folderId = folderId
+    const members = rest.filter((b) => b.folderId === folderId)
+    const clamped = Math.max(0, Math.min(Math.round(toIndex), members.length))
+    const insertAt =
+      clamped >= members.length
+        ? members.length === 0
+          ? rest.length
+          : rest.indexOf(members[members.length - 1]!) + 1
+        : rest.indexOf(members[clamped]!)
+    rest.splice(insertAt, 0, moved)
+    this.store.set({ v: 2, folders, bookmarks: rest })
+  }
+
   list(): BookmarksData {
     const { folders, bookmarks } = this.data
     return { folders, bookmarks }
