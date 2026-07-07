@@ -216,14 +216,23 @@ export class TabManager {
     if (wasAttached) this.attached?.webContents.focus()
   }
 
-  // open a bookmark pin-style: refocus the tab already carrying it, else
-  // create one anchored to it. Pinned slots win over anchors when both match.
+  // open a bookmark pin-style: pinned slots win, an exact anchor match
+  // refocuses, and otherwise ONE shared bookmark tab is reused — navigated to
+  // the new url and re-anchored — so browsing bookmarks never piles up tabs
   openBookmark(url: string): void {
     for (const [id, slot] of this.pins) {
       if (slot.url === url) return this.activateTab(id)
     }
-    for (const [id, anchor] of this.anchors) {
-      if (anchor === url) return this.activateTab(id)
+    const anchored = [...this.anchors.keys()].filter(
+      (id) => !this.model.isPinned(id) && this.views.has(id),
+    )
+    const exact = anchored.find((id) => this.anchors.get(id) === url)
+    if (exact) return this.activateTab(exact)
+    const reuse = anchored[0]
+    if (reuse) {
+      this.anchors.set(reuse, url)
+      this.views.get(reuse)!.webContents.loadURL(url)
+      return this.activateTab(reuse)
     }
     const id = this.createTab(url)
     this.anchors.set(id, url)

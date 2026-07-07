@@ -178,6 +178,19 @@ Repo convention: pure logic → Vitest; Electron-coupled → manual smoke.
   a bookmark tab, including after app restart. `npm run typecheck` and `npm test`
   green before done.
 
+## Addendum (2026-07-07, post-smoke user feedback)
+
+- **Bookmark rename:** bookmarks are renameable like folders — right-click →
+  *Rename* (via a `ui:edit-bookmark` push) or double-click the row, both opening
+  the shared inline editor. Store gains `renameBookmark(id, title)`; IPC gains
+  `bookmarks:rename`. Single-click open is debounced 250ms so a double-click
+  renames without navigating.
+- **One shared bookmark tab:** `openBookmark` no longer creates a tab per
+  bookmark. Pinned slots still win and an exact anchor match still refocuses,
+  but otherwise the existing anchored (non-pinned) tab is reused — navigated to
+  the new bookmark and re-anchored. Browsing around bookmarks therefore adds at
+  most one tab to the sidebar.
+
 ## Out of scope
 
 - Nested folders.
