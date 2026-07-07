@@ -72,4 +72,26 @@ describe('BookmarksStore', () => {
     expect(reloaded.isBookmarked('https://a.com')).toBe(true)
     expect(reloaded.list().bookmarks[0]!.id).toBe(store.list().bookmarks[0]!.id)
   })
+
+  it('addFolder appends and returns the folder', () => {
+    const a = store.addFolder('Work')
+    const b = store.addFolder('Play')
+    expect(a.id).toBeTruthy()
+    expect(store.list().folders.map((f) => f.name)).toEqual(['Work', 'Play'])
+    expect(store.list().folders[1]!.id).toBe(b.id)
+  })
+
+  it('renameFolder renames in place', () => {
+    const f = store.addFolder('Work')
+    store.renameFolder(f.id, 'Werk')
+    expect(store.list().folders).toEqual([{ id: f.id, name: 'Werk' }])
+  })
+
+  it('removeFolder removes an empty folder', () => {
+    const f = store.addFolder('Work')
+    store.toggle('https://out.com', 'Out', 1)
+    store.removeFolder(f.id)
+    expect(store.list().folders).toEqual([])
+    expect(store.list().bookmarks.map((b) => b.url)).toEqual(['https://out.com'])
+  })
 })

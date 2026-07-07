@@ -64,6 +64,32 @@ export class BookmarksStore {
     this.store.set({ v: 2, folders, bookmarks: bookmarks.filter((b) => b.id !== id) })
   }
 
+  addFolder(name: string): BookmarkFolder {
+    const { folders, bookmarks } = this.data
+    const folder = { id: randomUUID(), name }
+    this.store.set({ v: 2, folders: [...folders, folder], bookmarks })
+    return folder
+  }
+
+  renameFolder(id: string, name: string): void {
+    const { folders, bookmarks } = this.data
+    this.store.set({
+      v: 2,
+      folders: folders.map((f) => (f.id === id ? { ...f, name } : f)),
+      bookmarks,
+    })
+  }
+
+  // deleting a folder deletes its bookmarks too (confirmed UX decision)
+  removeFolder(id: string): void {
+    const { folders, bookmarks } = this.data
+    this.store.set({
+      v: 2,
+      folders: folders.filter((f) => f.id !== id),
+      bookmarks: bookmarks.filter((b) => b.folderId !== id),
+    })
+  }
+
   list(): BookmarksData {
     const { folders, bookmarks } = this.data
     return { folders, bookmarks }
