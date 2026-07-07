@@ -1,6 +1,6 @@
 import './style.css'
 import type { TabsSnapshot } from '../shared/ipc'
-import { PanelMode, renderPanel } from './panel'
+import { PanelMode, renderPanel, startFolderEdit } from './panel'
 import { renderPins, renderTabList } from './sidebar'
 import { initTopbar } from './topbar'
 
@@ -24,6 +24,9 @@ window.synapse.ui.onToggleHistory(() => setPanel('history'))
 window.synapse.ui.onToggleBookmarks(() => setPanel('bookmarks'))
 window.synapse.ui.onBookmarksChanged(() => {
   if (panelMode === 'bookmarks') void renderPanel(panelEl, panelMode)
+})
+window.synapse.ui.onEditFolder((id) => {
+  if (panelMode === 'bookmarks') startFolderEdit(id)
 })
 
 function setPanel(mode: PanelMode): void {
