@@ -6,3 +6,4 @@ dist/
 .superpowers/
 
 .env
+.worktrees/
