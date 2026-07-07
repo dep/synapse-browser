@@ -118,6 +118,14 @@ export function initTopbar(): Topbar {
     hideSuggestions()
   }
 
+  // pop the highlighted suggestion's URL into the bar, cursor at the end,
+  // so the user can start editing it immediately
+  function applySelection(): void {
+    const value = suggestions[selected].url
+    urlbar.value = value
+    urlbar.setSelectionRange(value.length, value.length)
+  }
+
   urlbar.addEventListener('input', async () => {
     const q = urlbar.value.trim()
     if (!q) {
@@ -152,10 +160,12 @@ export function initTopbar(): Topbar {
       e.preventDefault()
       selected = (selected + 1) % suggestions.length
       renderSuggestions()
+      applySelection()
     } else if (e.key === 'ArrowUp' && suggestions.length > 0) {
       e.preventDefault()
       selected = (selected - 1 + suggestions.length) % suggestions.length
       renderSuggestions()
+      applySelection()
     } else if (e.key === 'Escape') {
       hideSuggestions()
     } else if (e.key === 'Enter' && activeId && urlbar.value.trim()) {
