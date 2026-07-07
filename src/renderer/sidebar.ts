@@ -79,6 +79,7 @@ export function renderPins(el: HTMLElement, snap: TabsSnapshot): void {
 
     const icon = document.createElement('img')
     icon.className = 'favicon'
+    icon.onerror = () => (icon.style.visibility = 'hidden')
     if (tab.favicon) icon.src = tab.favicon
     else icon.style.visibility = 'hidden'
 
@@ -104,6 +105,7 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
 
     const icon = document.createElement('img')
     icon.className = 'favicon'
+    icon.onerror = () => (icon.style.visibility = 'hidden')
     if (tab.favicon) icon.src = tab.favicon
     else icon.style.visibility = 'hidden'
 
