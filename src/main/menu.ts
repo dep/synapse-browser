@@ -22,6 +22,27 @@ export function buildMenu(
             if (tabs.activeId) tabs.closeTab(tabs.activeId)
           },
         },
+        {
+          label: 'Close Other Tabs',
+          accelerator: 'CmdOrCtrl+Shift+W',
+          click: () => {
+            if (tabs.activeId) tabs.closeOtherTabs(tabs.activeId)
+          },
+        },
+        {
+          label: 'Close Tabs Below',
+          accelerator: 'Control+CmdOrCtrl+Down',
+          click: () => {
+            if (tabs.activeId) tabs.closeTabsRight(tabs.activeId)
+          },
+        },
+        {
+          label: 'Close Tabs Above',
+          accelerator: 'Control+CmdOrCtrl+Up',
+          click: () => {
+            if (tabs.activeId) tabs.closeTabsLeft(tabs.activeId)
+          },
+        },
       ],
     },
     { role: 'editMenu' },

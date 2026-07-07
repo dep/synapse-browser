@@ -85,6 +85,10 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
       item.append(icon, title, close)
     }
     item.addEventListener('click', () => window.synapse.tabs.activate(id))
+    // middle click doesn't fire 'click' in browsers; it's reported via auxclick
+    item.addEventListener('auxclick', (e) => {
+      if (e.button === 1) window.synapse.tabs.close(id)
+    })
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault()
       window.synapse.tabs.showContextMenu(id)
