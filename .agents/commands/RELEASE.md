@@ -51,7 +51,9 @@ npm run typecheck && npm test && npm run build
 ### 2. Build, sign, notarize, and DMG in one step
 
 ```bash
-export CSC_NAME="Developer ID Application: Danny Peck (299R8V27FZ)"
+# CSC_NAME must NOT include the "Developer ID Application:" prefix —
+# electron-builder errors out and picks the certificate type automatically
+export CSC_NAME="Danny Peck (299R8V27FZ)"
 export APPLE_KEYCHAIN_PROFILE="notarytool"
 npm run dist:mac
 ```
