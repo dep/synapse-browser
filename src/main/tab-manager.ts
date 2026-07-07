@@ -22,6 +22,7 @@ export class TabManager {
   private favicons = new Map<string, string | null>()
   private pins = new Map<string, PinSlot>()
   private profiles = new Map<string, ProfileId>()
+  private anchors = new Map<string, string>()
   private attached: WebContentsView | null = null
   private overlayHeight = 0
   private counter = 0
@@ -80,6 +81,7 @@ export class TabManager {
     this.model.close(id)
     this.destroyView(id, view, wasAttached)
     this.profiles.delete(id)
+    this.anchors.delete(id)
     if (!this.model.activeId) {
       this.createTab()
       return
@@ -142,12 +144,16 @@ export class TabManager {
   }
 
   // recreate a saved session: tabs in sidebar order, then the active one
-  restoreTabs(tabs: { url: string; profile: ProfileId }[], active: number): void {
+  restoreTabs(tabs: { url: string; profile: ProfileId; anchor?: string }[], active: number): void {
     if (tabs.length === 0) {
       this.createTab()
       return
     }
-    const ids = tabs.map((t) => this.createTab(t.url || undefined, false, t.profile))
+    const ids = tabs.map((t) => {
+      const id = this.createTab(t.url || undefined, false, t.profile)
+      if (t.anchor) this.anchors.set(id, t.anchor)
+      return id
+    })
     this.activateTab(ids[Math.min(Math.max(active, 0), ids.length - 1)]!)
   }
 
@@ -210,10 +216,28 @@ export class TabManager {
     if (wasAttached) this.attached?.webContents.focus()
   }
 
-  restorePinnedUrl(id: string | null = this.model.activeId): void {
-    if (!id || !this.model.isPinned(id)) return
-    const slot = this.pins.get(id)
-    if (slot) this.views.get(id)?.webContents.loadURL(slot.url)
+  // open a bookmark pin-style: refocus the tab already carrying it, else
+  // create one anchored to it. Pinned slots win over anchors when both match.
+  openBookmark(url: string): void {
+    for (const [id, slot] of this.pins) {
+      if (slot.url === url) return this.activateTab(id)
+    }
+    for (const [id, anchor] of this.anchors) {
+      if (anchor === url) return this.activateTab(id)
+    }
+    const id = this.createTab(url)
+    this.anchors.set(id, url)
+    this.refresh()
+  }
+
+  restoreAnchor(id: string | null = this.model.activeId): void {
+    if (!id) return
+    const url = this.pins.get(id)?.url ?? this.anchors.get(id)
+    if (url) this.views.get(id)?.webContents.loadURL(url)
+  }
+
+  isAnchored(id: string): boolean {
+    return this.anchors.has(id)
   }
 
   isPinned(id: string): boolean {
@@ -321,7 +345,7 @@ export class TabManager {
           isBookmarked: this.opts.isBookmarked(url),
           isPinned: !!slot,
           isAsleep: false,
-          pinnedUrl: slot?.url ?? null,
+          anchorUrl: slot?.url ?? this.anchors.get(id) ?? null,
           profile: this.profileOf(id),
         }
       } else if (slot) {
@@ -336,7 +360,7 @@ export class TabManager {
           isBookmarked: this.opts.isBookmarked(slot.url),
           isPinned: true,
           isAsleep: true,
-          pinnedUrl: slot.url,
+          anchorUrl: slot.url,
           profile: this.profileOf(id),
         }
       }

@@ -68,9 +68,9 @@ export function buildMenu(
           click: () => tabs.togglePin(tabs.activeId),
         },
         {
-          label: 'Restore Pinned URL',
+          label: 'Restore Pinned/Bookmarked URL',
           accelerator: 'Control+CmdOrCtrl+H',
-          click: () => tabs.restorePinnedUrl(),
+          click: () => tabs.restoreAnchor(),
         },
       ],
     },
@@ -90,7 +90,7 @@ export function buildMenu(
         },
         {
           label: 'Bookmarks',
-          accelerator: 'CmdOrCtrl+Shift+B',
+          accelerator: 'CmdOrCtrl+B',
           click: () => win.webContents.send('ui:toggle-bookmarks'),
         },
         { type: 'separator' },

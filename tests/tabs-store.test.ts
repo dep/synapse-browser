@@ -86,4 +86,31 @@ describe('TabsStore', () => {
     expect(new TabsStore(dir).load()).toEqual({ tabs: [], active: -1 })
     expect(fs.existsSync(path.join(dir, 'tabs.json.bad'))).toBe(true)
   })
+
+  it('round-trips a bookmark anchor', () => {
+    const store = new TabsStore(dir)
+    store.save(
+      [{ url: 'https://a.test/deep', profile: 'default', anchor: 'https://a.test/' }],
+      0,
+    )
+    store.flush()
+    expect(new TabsStore(dir).load().tabs[0]!.anchor).toBe('https://a.test/')
+  })
+
+  it('drops non-http anchors on save and load', () => {
+    const store = new TabsStore(dir)
+    store.save([{ url: 'https://a.test/', profile: 'default', anchor: 'about:blank' }], 0)
+    store.flush()
+    const raw = JSON.parse(fs.readFileSync(path.join(dir, 'tabs.json'), 'utf8'))
+    expect('anchor' in raw.tabs[0]).toBe(false)
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({
+        v: 2,
+        tabs: [{ url: 'https://a.test/', profile: 'default', anchor: 42 }],
+        active: 0,
+      }),
+    )
+    expect(new TabsStore(dir).load().tabs[0]!.anchor).toBeUndefined()
+  })
 })

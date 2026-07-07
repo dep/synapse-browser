@@ -18,7 +18,7 @@ export interface TabInfo {
   isBookmarked: boolean
   isPinned: boolean
   isAsleep: boolean
-  pinnedUrl: string | null
+  anchorUrl: string | null
   profile: ProfileId
 }
 

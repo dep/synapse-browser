@@ -72,12 +72,15 @@ app.whenReady().then(async () => {
     onSnapshot: (snap) => {
       win.webContents.send('tabs:updated', snap)
       tabsStore.save(
-        snap.order.map((id) => ({ url: snap.tabs[id]!.url, profile: snap.tabs[id]!.profile })),
+        snap.order.map((id) => {
+          const t = snap.tabs[id]!
+          return { url: t.url, profile: t.profile, ...(t.anchorUrl ? { anchor: t.anchorUrl } : {}) }
+        }),
         snap.activeId ? snap.order.indexOf(snap.activeId) : -1,
       )
       pinsStore.save(
         snap.pinned.map((id) => ({
-          url: snap.tabs[id]!.pinnedUrl ?? snap.tabs[id]!.url,
+          url: snap.tabs[id]!.anchorUrl ?? snap.tabs[id]!.url,
           title: snap.tabs[id]!.title,
           favicon: snap.tabs[id]!.favicon,
           profile: snap.tabs[id]!.profile,
@@ -135,7 +138,9 @@ app.whenReady().then(async () => {
       },
     ]
     if (pinned && tabs.isAwake(id)) {
-      template.push({ label: 'Restore Pinned URL', click: () => tabs.restorePinnedUrl(id) })
+      template.push({ label: 'Restore Pinned URL', click: () => tabs.restoreAnchor(id) })
+    } else if (tabs.isAnchored(id)) {
+      template.push({ label: 'Restore Bookmarked URL', click: () => tabs.restoreAnchor(id) })
     }
     template.push(
       { type: 'separator' },
