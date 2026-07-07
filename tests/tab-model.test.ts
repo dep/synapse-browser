@@ -490,3 +490,39 @@ describe('TabModel bookmarks', () => {
     expect(m.mru).toEqual(['b', 'c', 'a'])
   })
 })
+
+describe('TabModel pin/bookmark cross-conversion guards', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    m.add('a')
+    m.add('b')
+    m.add('c') // order [a, b, c], mru [c, b, a], active c
+  })
+
+  it('pin and bookmark return true when converting a normal tab', () => {
+    expect(m.pin('a')).toBe(true)
+    expect(m.bookmark('b')).toBe(true)
+  })
+
+  it('bookmark on a pinned id returns false and changes nothing', () => {
+    m.pin('a') // pinned [a], order [b, c]
+    const result = m.bookmark('a')
+    expect(result).toBe(false)
+    expect(m.pinned).toEqual(['a'])
+    expect(m.bookmarks).toEqual([])
+    expect(m.order).toEqual(['b', 'c'])
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+  })
+
+  it('pin on a bookmark-slot id returns false and changes nothing', () => {
+    m.bookmark('a') // bookmarks [a], order [b, c]
+    const result = m.pin('a')
+    expect(result).toBe(false)
+    expect(m.bookmarks).toEqual(['a'])
+    expect(m.pinned).toEqual([])
+    expect(m.order).toEqual(['b', 'c'])
+    expect(m.mru).toEqual(['c', 'b', 'a'])
+  })
+})

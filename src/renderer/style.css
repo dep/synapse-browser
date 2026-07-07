@@ -350,15 +350,8 @@ browser-action-list {
   box-shadow: 0 2px 0 0 var(--accent);
 }
 .panel-item.drop-into,
-.panel-loose.drop-into {
+.bookmarks-loose.drop-into {
   box-shadow: inset 0 0 0 1.5px var(--accent);
-}
-.panel-divider {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  margin: 6px 8px;
-}
-.panel-loose {
-  min-height: 48px;
 }
 #bookmarks {
   flex: none;

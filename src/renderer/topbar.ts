@@ -187,7 +187,7 @@ export function initTopbar(): Topbar {
       forward.disabled = !tab?.canGoForward
       reload.disabled = !tab
       if (document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
-      const canBookmark = !!tab && (tab.isBookmarked || /^https?:\/\//.test(tab.url))
+      const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || /^https?:\/\//.test(tab.url))
       star.disabled = !canBookmark
       star.textContent = tab?.isBookmarked ? '★' : '☆'
       star.classList.toggle('starred', !!tab?.isBookmarked)

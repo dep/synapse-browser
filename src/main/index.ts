@@ -188,6 +188,7 @@ app.whenReady().then(async () => {
       bookmarks.remove(bid)
       tabs.unbookmarkTab(bid)
     } else {
+      if (tabs.isPinned(tid)) return // pins aren't convertible to bookmarks
       const info = tabs.activeInfo()
       if (!info || !/^https?:\/\//.test(info.url)) return
       const bm = bookmarks.add(info.url, info.title, Date.now(), tabs.profileOf(tid))

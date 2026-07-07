@@ -43,10 +43,11 @@ export class TabModel {
   }
 
   // a live tab becomes a pin in place: same id, same MRU standing
-  pin(id: string): void {
-    if (!this.order.includes(id)) return
+  pin(id: string): boolean {
+    if (!this.order.includes(id)) return false
     this.order = this.order.filter((t) => t !== id)
     this.pinned.push(id)
+    return true
   }
 
   // the pin falls out of the row to the top of the tab list; the caller
@@ -64,10 +65,11 @@ export class TabModel {
   }
 
   // a live tab becomes a bookmark slot in place: same id, same MRU standing
-  bookmark(id: string): void {
-    if (!this.order.includes(id)) return
+  bookmark(id: string): boolean {
+    if (!this.order.includes(id)) return false
     this.order = this.order.filter((t) => t !== id)
     this.bookmarks.push(id)
+    return true
   }
 
   // the slot falls back to the top of the tab list; only awake slots are

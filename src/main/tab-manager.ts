@@ -187,13 +187,13 @@ export class TabManager {
       if (!wc) return
       const url = wc.getURL()
       if (!/^https?:\/\//.test(url)) return // blank/error tabs have no url to pin
+      if (!this.model.pin(id)) return // bookmark slots aren't convertible to pins
       this.pins.set(id, {
         url,
         title: wc.getTitle() || url,
         favicon: this.favicons.get(id) ?? null,
         profile: this.profileOf(id),
       })
-      this.model.pin(id)
     }
     this.syncViews()
   }
@@ -273,9 +273,10 @@ export class TabManager {
   }
 
   // ⌘D: a live tab becomes the bookmark's tab in place
-  bookmarkTab(tabId: string, bookmarkId: string): void {
+  bookmarkTab(tabId: string, bookmarkId: string): boolean {
+    if (!this.model.bookmark(tabId)) return false // pins aren't convertible to bookmarks
     this.bmTabId.set(bookmarkId, tabId)
-    this.model.bookmark(tabId)
+    return true
   }
 
   // ⌘D again: the page survives as a normal tab; an asleep slot just vanishes
