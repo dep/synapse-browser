@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
   const userData = app.getPath('userData')
   // productName renamed the userData dir; pull stores from the pre-rename one
   const legacyDir = join(app.getPath('appData'), 'synapse-browser')
-  for (const f of ['history.json', 'bookmarks.json']) {
+  for (const f of ['history.json', 'bookmarks.json', 'pins.json']) {
     const src = join(legacyDir, f)
     const dst = join(userData, f)
     if (src !== dst && existsSync(src) && !existsSync(dst)) copyFileSync(src, dst)
