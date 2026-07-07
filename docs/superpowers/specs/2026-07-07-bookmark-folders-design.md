@@ -107,11 +107,13 @@ helper; `panel.ts` reuses it. Rules:
   level (end).
 - Kind mismatches are ignored (same guard as the existing tab/pin drag code).
 
-**Re-render model:** every mutating IPC is `invoke`-based; the renderer re-renders the
-panel (`renderPanel`) when the invoke resolves. No push channel — the panel exists in
-one window and all mutations originate from it. (Exception already handled today:
-`Cmd+D` toggles a bookmark outside the panel; the panel re-renders on next open, which
-matches current behavior.)
+**Re-render model:** after any bookmark mutation, main pushes `ui:bookmarks-changed`
+to the chrome renderer; the panel re-renders if visible. This is required because
+context-menu actions (rename/delete/move) mutate in main after the popup returns, so
+an invoke-resolve re-render can't see them — and it fixes `Cmd+D` while the panel is
+open for free. Mutations are therefore fire-and-forget `send` channels; only `list`
+is an `invoke`. The context menu's *Rename* pushes `ui:edit-folder` so the panel
+opens its inline editor.
 
 ## Section 3: Anchored bookmark tabs (Ctrl+Cmd+H parity with pins)
 
@@ -145,8 +147,8 @@ toggle already swaps the sidebar between normal view (pins + tab list) and the p
 `Cmd+B` is unbound today (Electron's `editMenu` role has no Bold on macOS). History
 stays on `Cmd+Y`.
 
-**New IPC channels** (all `ipcMain.handle`, args validated in main like existing
-handlers):
+**New IPC channels** (fire-and-forget `ipcMain.on`, args validated in main like
+existing handlers; `bookmarks:list` stays an `ipcMain.handle`):
 
 | Channel | Args |
 |---|---|
