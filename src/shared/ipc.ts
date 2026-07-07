@@ -35,10 +35,22 @@ export interface HistoryEntry {
   visitedAt: number
 }
 
+export interface BookmarkFolder {
+  id: string
+  name: string
+}
+
 export interface Bookmark {
+  id: string
   url: string
   title: string
   createdAt: number
+  folderId?: string // absent = top level
+}
+
+export interface BookmarksData {
+  folders: BookmarkFolder[]
+  bookmarks: Bookmark[]
 }
 
 export interface DownloadInfo {

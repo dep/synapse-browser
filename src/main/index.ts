@@ -173,7 +173,7 @@ app.whenReady().then(async () => {
     tabs.refresh()
   }
   ipcMain.handle('bookmarks:toggle-active', () => toggleBookmark())
-  ipcMain.handle('bookmarks:list', () => bookmarks.list())
+  ipcMain.handle('bookmarks:list', () => bookmarks.list().bookmarks)
 
   buildMenu(win, tabs, toggleBookmark, extensions)
   // the Tools → Extensions submenu lists installed extensions; rebuild it as they change
