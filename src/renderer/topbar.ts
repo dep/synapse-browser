@@ -51,6 +51,33 @@ export function initTopbar(): Topbar {
   reload.addEventListener('click', () => activeId && window.synapse.tabs.reload(activeId))
   star.addEventListener('click', () => void window.synapse.bookmarks.toggleActive())
 
+  const extMenuWrap = document.getElementById('ext-menu-wrap') as HTMLDivElement
+  const extMenuToggle = document.getElementById('ext-menu-toggle') as HTMLButtonElement
+  const extMenu = document.getElementById('ext-menu') as HTMLDivElement
+
+  function hideExtMenu(): void {
+    extMenu.hidden = true
+    window.synapse.ui.setOverlayHeight(0)
+  }
+
+  extMenuToggle.addEventListener('click', (e) => {
+    e.stopPropagation()
+    if (extMenu.hidden) {
+      extMenu.hidden = false
+      window.synapse.ui.setOverlayHeight(extMenu.offsetHeight + 4)
+    } else {
+      hideExtMenu()
+    }
+  })
+
+  document.addEventListener('click', (e) => {
+    if (!extMenu.hidden && !extMenuWrap.contains(e.target as Node)) hideExtMenu()
+  })
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !extMenu.hidden) hideExtMenu()
+  })
+
   function hideSuggestions(): void {
     suggestions = []
     selected = -1

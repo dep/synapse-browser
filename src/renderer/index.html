@@ -19,7 +19,12 @@
           <div id="suggestions" hidden></div>
         </div>
         <button id="star" title="Bookmark this page">☆</button>
-        <browser-action-list id="actions"></browser-action-list>
+        <div id="ext-menu-wrap">
+          <button id="ext-menu-toggle" title="Extensions">⋮</button>
+          <div id="ext-menu" hidden>
+            <browser-action-list id="actions"></browser-action-list>
+          </div>
+        </div>
         <button id="download-pill" hidden></button>
       </header>
       <aside id="sidebar">

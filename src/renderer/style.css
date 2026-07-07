@@ -280,3 +280,14 @@ browser-action-list {
   display: flex;
   align-items: center;
 }
+#ext-menu-wrap {
+  position: relative;
+}
+#ext-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--bg-raised);
+  border-radius: 8px;
+  padding: 4px;
+}
