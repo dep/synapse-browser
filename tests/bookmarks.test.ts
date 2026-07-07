@@ -200,4 +200,53 @@ describe('BookmarksStore', () => {
     expect(store.list().folders).toEqual([])
     expect(urlsAt()).toEqual(['b'])
   })
+
+  it('add prepends at the top level and returns the bookmark', () => {
+    const a = store.add('https://a.com', 'A', 1)
+    const b = store.add('https://b.com', 'B', 2)
+    expect(a.id).toBeTruthy()
+    expect(a.profile).toBeUndefined()
+    expect(store.list().bookmarks.map((x) => x.id)).toEqual([b.id, a.id])
+    expect(store.get(a.id)).toEqual(a)
+  })
+
+  it('add with a work profile stores it; default stays absent', () => {
+    const w = store.add('https://w.com', 'W', 1, 'work')
+    const d = store.add('https://d.com', 'D', 2, 'default')
+    expect(store.get(w.id)!.profile).toBe('work')
+    expect(store.get(d.id)!.profile).toBeUndefined()
+  })
+
+  it('setProfile flips between work and default (default = field absent)', () => {
+    const bm = store.add('https://a.com', 'A', 1)
+    store.setProfile(bm.id, 'work')
+    expect(store.get(bm.id)!.profile).toBe('work')
+    store.setProfile(bm.id, 'default')
+    expect(store.get(bm.id)!.profile).toBeUndefined()
+  })
+
+  it('setFavicon stores and clears', () => {
+    const bm = store.add('https://a.com', 'A', 1)
+    store.setFavicon(bm.id, 'https://a.com/i.png')
+    expect(store.get(bm.id)!.favicon).toBe('https://a.com/i.png')
+    store.setFavicon(bm.id, null)
+    expect(store.get(bm.id)!.favicon).toBeUndefined()
+  })
+
+  it('setProfile and setFavicon on unknown ids are no-ops', () => {
+    store.setProfile('nope', 'work')
+    store.setFavicon('nope', 'x')
+    expect(store.list().bookmarks).toEqual([])
+  })
+
+  it('ordered walks folder members in folder order, then top level', () => {
+    const f1 = store.addFolder('One')
+    const f2 = store.addFolder('Two')
+    const a = store.add('https://a.com', 'a', 1)
+    const b = store.add('https://b.com', 'b', 2)
+    const c = store.add('https://c.com', 'c', 3) // top level: c, b, a
+    store.moveToFolder(b.id, f2.id)
+    store.moveToFolder(a.id, f1.id)
+    expect(store.ordered().map((x) => x.title)).toEqual(['a', 'b', 'c'])
+  })
 })

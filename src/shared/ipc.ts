@@ -46,6 +46,8 @@ export interface Bookmark {
   title: string
   createdAt: number
   folderId?: string // absent = top level
+  profile?: ProfileId // absent = default
+  favicon?: string | null // captured while the bookmark's tab is awake
 }
 
 export interface BookmarksData {

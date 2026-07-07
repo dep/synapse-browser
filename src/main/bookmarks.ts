@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
-import type { Bookmark, BookmarkFolder, BookmarksData } from '../shared/ipc'
+import type { Bookmark, BookmarkFolder, BookmarksData, ProfileId } from '../shared/ipc'
 import { JsonStore } from './store'
 
 interface BookmarksFileV1 {
@@ -59,17 +59,68 @@ export class BookmarksStore {
     return true
   }
 
+  add(url: string, title: string, createdAt: number, profile: ProfileId = 'default'): Bookmark {
+    const { folders, bookmarks } = this.data
+    const bm: Bookmark = {
+      id: randomUUID(),
+      url,
+      title,
+      createdAt,
+      ...(profile !== 'default' ? { profile } : {}),
+    }
+    this.store.set({ v: 2, folders, bookmarks: [bm, ...bookmarks] })
+    return bm
+  }
+
+  get(id: string): Bookmark | undefined {
+    return this.data.bookmarks.find((b) => b.id === id)
+  }
+
+  setProfile(id: string, profile: ProfileId): void {
+    this.patch(id, (b) => {
+      if (profile === 'default') delete b.profile
+      else b.profile = profile
+    })
+  }
+
+  setFavicon(id: string, favicon: string | null): void {
+    this.patch(id, (b) => {
+      if (favicon) b.favicon = favicon
+      else delete b.favicon
+    })
+  }
+
+  private patch(id: string, mutate: (b: Bookmark) => void): void {
+    const { folders, bookmarks } = this.data
+    this.store.set({
+      v: 2,
+      folders,
+      bookmarks: bookmarks.map((b) => {
+        if (b.id !== id) return b
+        const next = { ...b }
+        mutate(next)
+        return next
+      }),
+    })
+  }
+
+  // sidebar visual order: each folder's members in folder order, then top level
+  ordered(): Bookmark[] {
+    const { folders, bookmarks } = this.data
+    return [
+      ...folders.flatMap((f) => bookmarks.filter((b) => b.folderId === f.id)),
+      ...bookmarks.filter((b) => !b.folderId),
+    ]
+  }
+
   remove(id: string): void {
     const { folders, bookmarks } = this.data
     this.store.set({ v: 2, folders, bookmarks: bookmarks.filter((b) => b.id !== id) })
   }
 
   renameBookmark(id: string, title: string): void {
-    const { folders, bookmarks } = this.data
-    this.store.set({
-      v: 2,
-      folders,
-      bookmarks: bookmarks.map((b) => (b.id === id ? { ...b, title } : b)),
+    this.patch(id, (b) => {
+      b.title = title
     })
   }
 
