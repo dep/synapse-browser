@@ -80,7 +80,15 @@ export interface SynapseApi {
   }
   bookmarks: {
     toggleActive(): Promise<void>
-    list(): Promise<Bookmark[]>
+    list(): Promise<BookmarksData>
+    open(id: string): void
+    remove(id: string): void
+    reorder(id: string, toIndex: number): void
+    moveToFolder(id: string, folderId: string | null, toIndex?: number): void
+    addFolder(name: string): void
+    renameFolder(id: string, name: string): void
+    removeFolder(id: string): void
+    showContextMenu(kind: 'bookmark' | 'folder', id: string): void
   }
   downloads: {
     reveal(id: string): void
@@ -91,5 +99,7 @@ export interface SynapseApi {
     onFocusUrlBar(cb: () => void): void
     onToggleHistory(cb: () => void): void
     onToggleBookmarks(cb: () => void): void
+    onBookmarksChanged(cb: () => void): void
+    onEditFolder(cb: (folderId: string) => void): void
   }
 }

@@ -24,6 +24,15 @@ const api: SynapseApi = {
   bookmarks: {
     toggleActive: () => ipcRenderer.invoke('bookmarks:toggle-active'),
     list: () => ipcRenderer.invoke('bookmarks:list'),
+    open: (id) => ipcRenderer.send('bookmarks:open', id),
+    remove: (id) => ipcRenderer.send('bookmarks:remove', id),
+    reorder: (id, toIndex) => ipcRenderer.send('bookmarks:reorder', id, toIndex),
+    moveToFolder: (id, folderId, toIndex) =>
+      ipcRenderer.send('bookmarks:move-to-folder', id, folderId, toIndex),
+    addFolder: (name) => ipcRenderer.send('bookmarks:add-folder', name),
+    renameFolder: (id, name) => ipcRenderer.send('bookmarks:rename-folder', id, name),
+    removeFolder: (id) => ipcRenderer.send('bookmarks:remove-folder', id),
+    showContextMenu: (kind, id) => ipcRenderer.send('bookmarks:context-menu', kind, id),
   },
   downloads: {
     reveal: (id) => ipcRenderer.send('downloads:reveal', id),
@@ -41,6 +50,12 @@ const api: SynapseApi = {
     },
     onToggleBookmarks: (cb) => {
       ipcRenderer.on('ui:toggle-bookmarks', () => cb())
+    },
+    onBookmarksChanged: (cb) => {
+      ipcRenderer.on('ui:bookmarks-changed', () => cb())
+    },
+    onEditFolder: (cb) => {
+      ipcRenderer.on('ui:edit-folder', (_e, folderId) => cb(folderId))
     },
   },
 }

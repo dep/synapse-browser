@@ -22,6 +22,9 @@ document.getElementById('show-history')!.addEventListener('click', () => setPane
 document.getElementById('show-bookmarks')!.addEventListener('click', () => setPanel('bookmarks'))
 window.synapse.ui.onToggleHistory(() => setPanel('history'))
 window.synapse.ui.onToggleBookmarks(() => setPanel('bookmarks'))
+window.synapse.ui.onBookmarksChanged(() => {
+  if (panelMode === 'bookmarks') void renderPanel(panelEl, panelMode)
+})
 
 function setPanel(mode: PanelMode): void {
   panelMode = panelMode === mode ? 'none' : mode

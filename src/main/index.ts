@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, session } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, session } from 'electron'
 import type { WebContents } from 'electron'
 import { appendFileSync, copyFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -171,14 +171,123 @@ app.whenReady().then(async () => {
   ipcMain.handle('history:search', (_e, q: string) => history.search(String(q)))
   ipcMain.handle('history:list', () => history.list())
 
+  const bookmarksChanged = (): void => {
+    // isBookmarked on tab snapshots (star state) may have changed
+    tabs.refresh()
+    win.webContents.send('ui:bookmarks-changed')
+  }
+
   const toggleBookmark = (): void => {
     const info = tabs.activeInfo()
     if (!info || !/^https?:\/\//.test(info.url)) return
     bookmarks.toggle(info.url, info.title, Date.now())
-    tabs.refresh()
+    bookmarksChanged()
   }
   ipcMain.handle('bookmarks:toggle-active', () => toggleBookmark())
-  ipcMain.handle('bookmarks:list', () => bookmarks.list().bookmarks)
+  ipcMain.handle('bookmarks:list', () => bookmarks.list())
+
+  ipcMain.on('bookmarks:open', (_e, id: string) => {
+    const bm = bookmarks.list().bookmarks.find((b) => b.id === id)
+    if (bm) tabs.openBookmark(bm.url)
+  })
+  ipcMain.on('bookmarks:remove', (_e, id: string) => {
+    if (typeof id !== 'string') return
+    bookmarks.remove(id)
+    bookmarksChanged()
+  })
+  ipcMain.on('bookmarks:reorder', (_e, id: string, toIndex: number) => {
+    if (typeof id !== 'string' || !Number.isFinite(Number(toIndex))) return
+    bookmarks.reorder(id, Number(toIndex))
+    bookmarksChanged()
+  })
+  ipcMain.on(
+    'bookmarks:move-to-folder',
+    (_e, id: string, folderId: string | null, toIndex?: number) => {
+      if (typeof id !== 'string') return
+      if (folderId !== null && typeof folderId !== 'string') return
+      const idx = toIndex === undefined ? undefined : Number(toIndex)
+      if (idx !== undefined && !Number.isFinite(idx)) return
+      bookmarks.moveToFolder(id, folderId, idx)
+      bookmarksChanged()
+    },
+  )
+  ipcMain.on('bookmarks:add-folder', (_e, name: string) => {
+    const trimmed = typeof name === 'string' ? name.trim() : ''
+    if (!trimmed) return
+    bookmarks.addFolder(trimmed)
+    bookmarksChanged()
+  })
+  ipcMain.on('bookmarks:rename-folder', (_e, id: string, name: string) => {
+    const trimmed = typeof name === 'string' ? name.trim() : ''
+    if (typeof id !== 'string' || !trimmed) return
+    bookmarks.renameFolder(id, trimmed)
+    bookmarksChanged()
+  })
+
+  // deleting a non-empty folder destroys its bookmarks and has no undo
+  const removeFolderWithConfirm = async (folderId: string): Promise<void> => {
+    const { folders, bookmarks: all } = bookmarks.list()
+    const folder = folders.find((f) => f.id === folderId)
+    if (!folder) return
+    const count = all.filter((b) => b.folderId === folderId).length
+    if (count > 0) {
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'warning',
+        buttons: ['Delete', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        message: `Delete "${folder.name}" and its ${count} bookmark${count === 1 ? '' : 's'}?`,
+      })
+      if (response !== 0) return
+    }
+    bookmarks.removeFolder(folderId)
+    bookmarksChanged()
+  }
+  ipcMain.on('bookmarks:remove-folder', (_e, id: string) => {
+    if (typeof id === 'string') void removeFolderWithConfirm(id)
+  })
+
+  ipcMain.on('bookmarks:context-menu', (_e, kind: string, id: string) => {
+    if (typeof id !== 'string') return
+    if (kind === 'folder') {
+      Menu.buildFromTemplate([
+        { label: 'Rename', click: () => win.webContents.send('ui:edit-folder', id) },
+        { label: 'Delete Folder…', click: () => void removeFolderWithConfirm(id) },
+      ]).popup({ window: win })
+    } else if (kind === 'bookmark') {
+      const { folders, bookmarks: all } = bookmarks.list()
+      const bm = all.find((b) => b.id === id)
+      if (!bm) return
+      const moveTo = (folderId: string | null) => () => {
+        bookmarks.moveToFolder(id, folderId)
+        bookmarksChanged()
+      }
+      Menu.buildFromTemplate([
+        {
+          label: 'Move to',
+          submenu: [
+            { label: 'Top Level', type: 'radio', checked: !bm.folderId, click: moveTo(null) },
+            ...folders.map(
+              (f): Electron.MenuItemConstructorOptions => ({
+                label: f.name,
+                type: 'radio',
+                checked: bm.folderId === f.id,
+                click: moveTo(f.id),
+              }),
+            ),
+          ],
+        },
+        { type: 'separator' },
+        {
+          label: 'Delete Bookmark',
+          click: () => {
+            bookmarks.remove(id)
+            bookmarksChanged()
+          },
+        },
+      ]).popup({ window: win })
+    }
+  })
 
   buildMenu(win, tabs, toggleBookmark, extensions)
   // the Tools → Extensions submenu lists installed extensions; rebuild it as they change

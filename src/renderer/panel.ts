@@ -10,7 +10,9 @@ export async function renderPanel(el: HTMLElement, mode: PanelMode): Promise<voi
   el.append(heading)
 
   const items =
-    mode === 'history' ? await window.synapse.history.list() : await window.synapse.bookmarks.list()
+    mode === 'history'
+      ? await window.synapse.history.list()
+      : (await window.synapse.bookmarks.list()).bookmarks
 
   if (items.length === 0) {
     const empty = document.createElement('div')
@@ -30,7 +32,9 @@ export async function renderPanel(el: HTMLElement, mode: PanelMode): Promise<voi
     url.className = 'panel-item-url'
     url.textContent = item.url
     row.append(title, url)
-    row.addEventListener('click', () => window.synapse.tabs.create(item.url))
+    row.addEventListener('click', () =>
+      'id' in item ? window.synapse.bookmarks.open(item.id) : window.synapse.tabs.create(item.url),
+    )
     el.append(row)
   }
 }
