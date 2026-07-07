@@ -29,7 +29,14 @@ describe('TabModel', () => {
     expect(m.mru).toEqual(['a', 'c', 'b'])
   })
 
-  it('closing the active tab activates the MRU front', () => {
+  it('closing the active tab activates its right/below sidebar neighbor', () => {
+    m.activate('a')
+    m.close('a')
+    expect(m.order).toEqual(['b', 'c'])
+    expect(m.activeId).toBe('b')
+  })
+
+  it('closing the last tab in sidebar order falls back to its new last neighbor', () => {
     m.close('c')
     expect(m.order).toEqual(['a', 'b'])
     expect(m.activeId).toBe('b')

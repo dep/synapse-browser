@@ -35,11 +35,17 @@ export class TabModel {
   }
 
   close(id: string): void {
-    if (!this.order.includes(id)) return // pins never close; they sleep
+    const closedIndex = this.order.indexOf(id)
+    if (closedIndex === -1) return // pins never close; they sleep
     if (this.cycling) this.cycleCommit()
     this.order = this.order.filter((t) => t !== id)
     this.mru = this.mru.filter((t) => t !== id)
-    if (this.activeId === id) this.activeId = this.mru[0] ?? null
+    if (this.activeId === id) {
+      // focus the tab that slid into the closed tab's spot (the one to the
+      // right/below); if it was the last one, fall back to its new neighbor
+      this.activeId = this.order[Math.min(closedIndex, this.order.length - 1)] ?? null
+      if (this.activeId) this.promote(this.activeId)
+    }
   }
 
   // a live tab becomes a pin in place: same id, same MRU standing
