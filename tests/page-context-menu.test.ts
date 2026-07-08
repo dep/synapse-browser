@@ -162,3 +162,23 @@ describe('edit and selection section', () => {
     ])
   })
 })
+
+describe('page fallback section', () => {
+  it('shows Back/Forward/Reload when nothing else applies', () => {
+    const items = buildPageContextMenu(params(), { canGoBack: true, canGoForward: false })
+    expect(items).toEqual([
+      { kind: 'item', label: 'Back', action: 'back', enabled: true },
+      { kind: 'item', label: 'Forward', action: 'forward', enabled: false },
+      { kind: 'item', label: 'Reload', action: 'reload', enabled: true },
+    ])
+  })
+
+  it('does not appear when any other section rendered', () => {
+    const items = buildPageContextMenu(params({ linkURL: 'https://example.com/a' }), {
+      canGoBack: true,
+      canGoForward: true,
+    })
+    expect(labels(items)).not.toContain('Back')
+    expect(labels(items)).not.toContain('Reload')
+  })
+})

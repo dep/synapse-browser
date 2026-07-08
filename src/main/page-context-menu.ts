@@ -78,6 +78,13 @@ export function buildPageContextMenu(
   } else if (params.selectionText.trim()) {
     sections.push([item('Copy', 'copy', params.editFlags.canCopy)])
   }
+  if (sections.length === 0) {
+    sections.push([
+      item('Back', 'back', ctx.canGoBack),
+      item('Forward', 'forward', ctx.canGoForward),
+      item('Reload', 'reload'),
+    ])
+  }
   return sections.flatMap((s, i) =>
     i === 0 ? s : [{ kind: 'separator' } as PageMenuItem, ...s],
   )
