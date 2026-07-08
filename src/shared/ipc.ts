@@ -105,6 +105,7 @@ export interface SynapseApi {
     endSidebarDrag(): void
     onSidebarWidth(cb: (px: number) => void): void
     onSidebarVisible(cb: (visible: boolean) => void): void
+    onSettings(cb: (open: boolean) => void): void
     onFocusUrlBar(cb: () => void): void
     onToggleHistory(cb: () => void): void
     onBookmarksChanged(cb: () => void): void

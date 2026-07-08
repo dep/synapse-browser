@@ -15,6 +15,7 @@ export interface TabManagerOptions {
   onSnapshot(snap: TabsSnapshot): void
   onTabCreated?(wc: WebContents, profile: ProfileId): void
   onTabActivated?(wc: WebContents, profile: ProfileId): void
+  onSettingsClosed?(): void
 }
 
 export class TabManager {
@@ -28,6 +29,7 @@ export class TabManager {
   private overlayHeight = 0
   private sidebarWidth = SIDEBAR_WIDTH_DEFAULT
   private sidebarVisible = true
+  private settingsOpen = false
   private counter = 0
 
   constructor(
@@ -42,6 +44,10 @@ export class TabManager {
   }
 
   createTab(url?: string, activate = true, profile: ProfileId = 'default'): string {
+    if (this.settingsOpen) {
+      this.settingsOpen = false
+      this.opts.onSettingsClosed?.()
+    }
     const id = `tab-${++this.counter}`
     this.profiles.set(id, profile)
     const view = this.createView(id)
@@ -145,6 +151,10 @@ export class TabManager {
   }
 
   activateTab(id: string): void {
+    if (this.settingsOpen) {
+      this.settingsOpen = false
+      this.opts.onSettingsClosed?.()
+    }
     if (!this.views.has(id)) {
       if (this.model.isPinned(id)) this.wakePin(id)
       else if (this.model.isBookmarkSlot(id)) this.wakeBookmark(id)
@@ -417,6 +427,14 @@ export class TabManager {
     this.layout()
   }
 
+  // while settings is open no page view is attached, so the chrome renderer
+  // (which draws the settings UI in the page cell) is fully visible
+  toggleSettings(): boolean {
+    this.settingsOpen = !this.settingsOpen
+    this.syncViews()
+    return this.settingsOpen
+  }
+
   // zoom the active page; Chromium's practical zoom-level range is about -7..9
   zoomActive(delta: 1 | -1 | 0): void {
     const wc = this.attached?.webContents
@@ -491,7 +509,10 @@ export class TabManager {
   }
 
   private syncViews(): void {
-    const active = this.model.activeId ? (this.views.get(this.model.activeId) ?? null) : null
+    const active =
+      !this.settingsOpen && this.model.activeId
+        ? (this.views.get(this.model.activeId) ?? null)
+        : null
     if (this.attached !== active) {
       if (this.attached) this.win.contentView.removeChildView(this.attached)
       if (active) this.win.contentView.addChildView(active)

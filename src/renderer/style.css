@@ -402,3 +402,48 @@ browser-action-list {
 #sidebar-resize:active::after {
   background: var(--accent);
 }
+#settings {
+  grid-row: 2;
+  grid-column: 2;
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+#settings[hidden] {
+  display: none;
+}
+#settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+.settings-nav-item {
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--fg);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.settings-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.settings-nav-item.active {
+  background: var(--bg-raised);
+}
+#settings-body {
+  flex: 1;
+  max-width: 640px;
+}
+#settings-body h1 {
+  font-size: 18px;
+  margin-bottom: 16px;
+}
+.settings-empty {
+  color: var(--fg-dim);
+}

@@ -53,6 +53,9 @@ const api: SynapseApi = {
     onSidebarVisible: (cb) => {
       ipcRenderer.on('ui:sidebar-visible', (_e, visible) => cb(visible))
     },
+    onSettings: (cb) => {
+      ipcRenderer.on('ui:settings', (_e, open) => cb(open))
+    },
     onFocusUrlBar: (cb) => {
       ipcRenderer.on('ui:focus-urlbar', () => cb())
     },

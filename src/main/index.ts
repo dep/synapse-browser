@@ -148,6 +148,7 @@ app.whenReady().then(async () => {
     onTabActivated: (wc, profile) => {
       if (profile === 'default') extensions.selectTab(wc)
     },
+    onSettingsClosed: () => win.webContents.send('ui:settings', false),
   })
   const extensions = new ExtensionManager(win, tabs)
   tabs.setSidebarWidth(uiStore.sidebarWidth())
@@ -436,7 +437,7 @@ app.whenReady().then(async () => {
     buildMenu(win, tabs, extensions, shortcutsStore.resolved(), {
       toggleBookmark,
       toggleSidebar,
-      toggleSettings: () => {},
+      toggleSettings: () => win.webContents.send('ui:settings', tabs.toggleSettings()),
       exportBookmarks: () => {},
       importBookmarks: () => {},
     })

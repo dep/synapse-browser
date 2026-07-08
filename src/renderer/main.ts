@@ -3,6 +3,7 @@ import type { BookmarksData, TabsSnapshot } from '../shared/ipc'
 import { renderBookmarks, startItemEdit } from './bookmarks-section'
 import { PanelMode, renderPanel } from './panel'
 import { renderPins, renderTabList } from './sidebar'
+import { renderSettings } from './settings'
 import { initTopbar } from './topbar'
 
 const pinGridEl = document.getElementById('pin-grid')!
@@ -11,6 +12,7 @@ const tabListEl = document.getElementById('tab-list')!
 const panelEl = document.getElementById('panel')!
 const appEl = document.getElementById('app')!
 const sidebarResizeEl = document.getElementById('sidebar-resize')!
+const settingsEl = document.getElementById('settings')!
 const topbar = initTopbar()
 
 let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], bookmarkTabs: {}, activeId: null }
@@ -30,6 +32,10 @@ window.synapse.ui.onSidebarWidth((px) => {
 })
 window.synapse.ui.onSidebarVisible((visible) => {
   appEl.classList.toggle('sidebar-hidden', !visible)
+})
+window.synapse.ui.onSettings((open) => {
+  settingsEl.hidden = !open
+  if (open) renderSettings(settingsEl, 'general')
 })
 sidebarResizeEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return
