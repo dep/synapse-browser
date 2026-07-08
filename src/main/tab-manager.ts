@@ -3,8 +3,7 @@ import { classifyInput } from '../shared/url-classifier'
 import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
-
-export const SIDEBAR_WIDTH = 240
+import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
 export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
 
@@ -26,6 +25,7 @@ export class TabManager {
   private bmTabId = new Map<string, string>() // bookmarkId → tabId
   private attached: WebContentsView | null = null
   private overlayHeight = 0
+  private sidebarWidth = SIDEBAR_WIDTH_DEFAULT
   private counter = 0
 
   constructor(
@@ -405,6 +405,11 @@ export class TabManager {
     this.layout()
   }
 
+  setSidebarWidth(px: number): void {
+    this.sidebarWidth = clampSidebarWidth(px)
+    this.layout()
+  }
+
   refresh(): void {
     this.opts.onSnapshot(this.snapshot())
   }
@@ -476,9 +481,9 @@ export class TabManager {
     const [w, h] = this.win.getContentSize()
     const top = TOPBAR_HEIGHT + this.overlayHeight
     this.attached.setBounds({
-      x: SIDEBAR_WIDTH,
+      x: this.sidebarWidth,
       y: top,
-      width: Math.max(0, w - SIDEBAR_WIDTH),
+      width: Math.max(0, w - this.sidebarWidth),
       height: Math.max(0, h - top),
     })
   }
