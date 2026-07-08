@@ -31,11 +31,15 @@ owns drag tracking via cursor polling; the renderer only initiates and renders.
    `layout()` (zero-hop view update), and pushes `ui:sidebar-width` (number) to the
    chrome renderer, which sets `#app { grid-template-columns: <px>px 1fr }`.
 3. **End** — first of:
-   - renderer `mouseup` → `ui:sidebar-drag-end` (cursor over chrome);
-   - active page view `webContents` `input-event` with a left-button-up, or a
-     mouse-move without `leftButtonDown` in its modifiers (cursor over page);
-   - chrome UI `webContents` `input-event` equivalent (redundant with mouseup);
+   - renderer `mouseup` → `ui:sidebar-drag-end` (reliable everywhere: Chromium
+     mouse-captures to the web contents that got the mousedown, so the chrome
+     renderer sees the release even over the page view);
+   - active page view or chrome UI `webContents` `input-event` of type `mouseUp`;
    - window `blur`.
+   (Amended post-smoke: the original design also ended the drag on an
+   `input-event` mouse-move without `leftButtonDown` in its modifiers, but
+   emitted input-events carry `modifiers=undefined` on Electron 43 — the
+   heuristic killed every drag on its first move and was removed.)
    On end: stop the interval, detach the `input-event` listeners attached at drag
    start, persist the final width.
 4. **Boot** — main pushes `ui:sidebar-width` with the stored value after the chrome

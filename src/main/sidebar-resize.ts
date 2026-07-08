@@ -55,12 +55,12 @@ export class SidebarResizeController {
   }
 
   private onInputEvent = (_e: Electron.Event, input: Electron.InputEvent): void => {
-    // a move without the left button means the mouseUp happened where we
-    // couldn't see it (e.g. outside the window) — treat it as the release
-    const released =
-      input.type === 'mouseUp' ||
-      (input.type === 'mouseMove' && !(input.modifiers ?? []).includes('leftbuttondown'))
-    if (released) this.end()
+    // only mouseUp is trustworthy here: emitted input-events carry
+    // modifiers=undefined (verified on Electron 43), so a
+    // "mouseMove without leftbuttondown" release heuristic would end
+    // every drag on its first move. Releases we can't see land on the
+    // renderer's captured mouseup or the window blur fallback instead.
+    if (input.type === 'mouseUp') this.end()
   }
 
   private track(): void {
