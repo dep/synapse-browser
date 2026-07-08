@@ -19,6 +19,15 @@ import { UiStore } from './ui-store'
 import { Updater } from './updater'
 import { buildMenu } from './menu'
 import { attachPageContextMenu } from './page-context-menu-host'
+import { toChromeUserAgent } from '../shared/user-agent'
+
+// must run before any session exists so every partition inherits it
+app.userAgentFallback = toChromeUserAgent(app.userAgentFallback, app.getName(), app.getVersion())
+
+// relocating userData also moves the single-instance lock, letting a dev
+// instance run alongside the installed app
+const userDataOverride = process.env['SYNAPSE_USER_DATA']
+if (userDataOverride) app.setPath('userData', userDataOverride)
 
 // as the default browser, links clicked in other apps launch a new process;
 // route them into the existing window instead of spawning duplicate ones
