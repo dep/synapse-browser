@@ -87,7 +87,12 @@ export function buildMenu(
         {
           label: 'Find…',
           accelerator: shortcuts['find'],
-          click: () => win.webContents.send('ui:find-open'),
+          click: () => {
+            // DOM focus() in the chrome renderer is not enough while a page
+            // view holds native focus (same dance as focusUrlBar)
+            win.webContents.focus()
+            win.webContents.send('ui:find-open')
+          },
         },
         {
           label: 'Find Next',
