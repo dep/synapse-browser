@@ -9,6 +9,7 @@ export interface MenuCommands {
   toggleSettings(): void
   exportBookmarks(): void
   importBookmarks(): void
+  checkForUpdates(): void
 }
 
 export function buildMenu(
@@ -163,6 +164,7 @@ export function buildMenu(
           accelerator: shortcuts['settings'],
           click: () => commands.toggleSettings(),
         },
+        { label: 'Check for Updates…', click: () => commands.checkForUpdates() },
         { type: 'separator' },
         {
           label: 'Extensions',

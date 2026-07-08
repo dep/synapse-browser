@@ -16,6 +16,7 @@ import { ShortcutsStore } from './shortcuts-store'
 import { TabManager, WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { UiStore } from './ui-store'
+import { Updater } from './updater'
 import { buildMenu } from './menu'
 import { attachPageContextMenu } from './page-context-menu-host'
 
@@ -168,6 +169,9 @@ app.whenReady().then(async () => {
     },
     uiStore.sidebarWidth(),
   )
+  const updater = new Updater(win)
+  // silent launch check; dev builds check only via the menu
+  if (app.isPackaged) setTimeout(() => void updater.check(false), 10_000)
   const toggleSidebar = (): void => {
     const visible = !uiStore.sidebarVisible()
     uiStore.setSidebarVisible(visible)
@@ -495,6 +499,7 @@ app.whenReady().then(async () => {
       toggleSettings: () => win.webContents.send('ui:settings', tabs.toggleSettings()),
       exportBookmarks: () => void exportBookmarks(),
       importBookmarks: () => void importBookmarks(),
+      checkForUpdates: () => void updater.check(true),
     })
   rebuildMenu()
   // the Tools → Extensions submenu lists installed extensions; rebuild it as they change
