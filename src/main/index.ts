@@ -8,8 +8,10 @@ import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
 import { HistoryStore } from './history'
 import { PinsStore } from './pins-store'
+import { SidebarResizeController } from './sidebar-resize'
 import { TabManager, WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
+import { UiStore } from './ui-store'
 import { buildMenu } from './menu'
 import { attachPageContextMenu } from './page-context-menu-host'
 
@@ -59,6 +61,7 @@ app.whenReady().then(async () => {
   const bookmarks = new BookmarksStore(userData)
   const tabsStore = new TabsStore(userData)
   const pinsStore = new PinsStore(userData)
+  const uiStore = new UiStore(userData)
 
   function attachCycleHooks(wc: WebContents): void {
     wc.on('before-input-event', (event, input) => {
@@ -145,6 +148,19 @@ app.whenReady().then(async () => {
     },
   })
   const extensions = new ExtensionManager(win, tabs)
+  tabs.setSidebarWidth(uiStore.sidebarWidth())
+  const sidebarResize = new SidebarResizeController(
+    {
+      win,
+      getPageWebContents: () => (tabs.activeId ? tabs.webContentsFor(tabs.activeId) : null),
+      onWidth: (px) => {
+        tabs.setSidebarWidth(px)
+        win.webContents.send('ui:sidebar-width', px)
+      },
+      onCommit: (px) => uiStore.setSidebarWidth(px),
+    },
+    uiStore.sidebarWidth(),
+  )
   attachCycleHooks(win.webContents)
 
   openUrlInExistingWindow = (url) => {
@@ -413,8 +429,13 @@ app.whenReady().then(async () => {
   session.defaultSession.on('extension-unloaded', () => buildMenu(win, tabs, toggleBookmark, extensions))
 
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
+  ipcMain.on('ui:sidebar-drag-start', () => sidebarResize.start())
+  ipcMain.on('ui:sidebar-drag-end', () => sidebarResize.end())
 
-  win.webContents.on('did-finish-load', () => tabs.refresh())
+  win.webContents.on('did-finish-load', () => {
+    tabs.refresh()
+    win.webContents.send('ui:sidebar-width', sidebarResize.current)
+  })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -437,6 +458,7 @@ app.whenReady().then(async () => {
     bookmarks.flush()
     tabsStore.flush()
     pinsStore.flush()
+    uiStore.flush()
   })
 })
 
