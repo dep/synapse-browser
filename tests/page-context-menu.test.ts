@@ -109,3 +109,56 @@ describe('image section', () => {
     expect(labels(items)).not.toContain('Copy Image')
   })
 })
+
+describe('edit and selection section', () => {
+  it('shows Copy for a text selection', () => {
+    const items = buildPageContextMenu(
+      params({
+        selectionText: 'hello',
+        editFlags: { canCut: false, canCopy: true, canPaste: false },
+      }),
+      ctx,
+    )
+    expect(items).toEqual([{ kind: 'item', label: 'Copy', action: 'copy', enabled: true }])
+  })
+
+  it('shows no Copy for a whitespace-only selection', () => {
+    const items = buildPageContextMenu(params({ selectionText: '   ' }), ctx)
+    expect(labels(items)).not.toContain('Copy')
+  })
+
+  it('shows Cut/Copy/Paste in editable fields, enabled per editFlags', () => {
+    const items = buildPageContextMenu(
+      params({
+        isEditable: true,
+        editFlags: { canCut: false, canCopy: false, canPaste: true },
+      }),
+      ctx,
+    )
+    expect(items).toEqual([
+      { kind: 'item', label: 'Cut', action: 'cut', enabled: false },
+      { kind: 'item', label: 'Copy', action: 'copy', enabled: false },
+      { kind: 'item', label: 'Paste', action: 'paste', enabled: true },
+    ])
+  })
+
+  it('separates selection Copy from a link section', () => {
+    const items = buildPageContextMenu(
+      params({
+        linkURL: 'https://example.com/a',
+        selectionText: 'hello',
+        editFlags: { canCut: false, canCopy: true, canPaste: false },
+      }),
+      ctx,
+    )
+    expect(labels(items)).toEqual([
+      'Open Link',
+      'Open in a New Tab',
+      '---',
+      'Bookmark Link',
+      'Copy Link URL',
+      '---',
+      'Copy',
+    ])
+  })
+})

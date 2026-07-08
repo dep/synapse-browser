@@ -69,6 +69,15 @@ export function buildPageContextMenu(
       item('Download Image', 'download-image'),
     ])
   }
+  if (params.isEditable) {
+    sections.push([
+      item('Cut', 'cut', params.editFlags.canCut),
+      item('Copy', 'copy', params.editFlags.canCopy),
+      item('Paste', 'paste', params.editFlags.canPaste),
+    ])
+  } else if (params.selectionText.trim()) {
+    sections.push([item('Copy', 'copy', params.editFlags.canCopy)])
+  }
   return sections.flatMap((s, i) =>
     i === 0 ? s : [{ kind: 'separator' } as PageMenuItem, ...s],
   )
