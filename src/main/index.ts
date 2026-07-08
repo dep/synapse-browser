@@ -11,6 +11,7 @@ import { PinsStore } from './pins-store'
 import { TabManager, WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { buildMenu } from './menu'
+import { attachPageContextMenu } from './page-context-menu-host'
 
 // as the default browser, links clicked in other apps launch a new process;
 // route them into the existing window instead of spawning duplicate ones
@@ -128,6 +129,15 @@ app.whenReady().then(async () => {
     // extensions through chrome.tabs
     onTabCreated: (wc, profile) => {
       attachCycleHooks(wc)
+      // `bookmarksChanged` is declared below; safe for the same reason as
+      // `extensions` — no tab exists until startup wiring completes
+      attachPageContextMenu(wc, win, {
+        openLinkInNewTab: (url) => tabs.createTab(url, false, profile),
+        bookmarkLink: (url, title) => {
+          bookmarks.add(url, title, Date.now(), profile)
+          bookmarksChanged()
+        },
+      })
       if (profile === 'default') extensions.addTab(wc)
     },
     onTabActivated: (wc, profile) => {

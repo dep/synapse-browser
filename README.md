@@ -74,6 +74,21 @@ enforcement.
 7. Ctrl+Tab hold-and-walk cycling still works: hold Ctrl, press Tab repeatedly to walk
    the MRU list, release to commit — the walk must not commit on each step.
 
+### Page context menu smoke checklist
+
+1. Right-click a link → Open Link navigates the same tab.
+2. Right-click a link → Open in a New Tab: tab appears in the sidebar, focus stays put;
+   from a Work tab the new tab is also Work.
+3. Right-click a link → Bookmark Link: bookmark appears (asleep) in the sidebar with the
+   link's text as its title.
+4. Right-click a link → Copy Link URL: URL is on the clipboard.
+5. Right-click an image → Copy Image (paste somewhere), Copy Image URL, Download Image
+   (lands in the downloads UI).
+6. Right-click selected text → Copy. Right-click a text input → Cut/Copy/Paste with
+   correct enablement.
+7. Right-click empty page area → Back/Forward/Reload, enabled to match history.
+8. `mailto:` link → no link items (fallback section only).
+
 ## Development
 
 ```bash
