@@ -1,10 +1,11 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session } from 'electron'
 import type { WebContents } from 'electron'
-import { appendFileSync, copyFileSync, existsSync } from 'node:fs'
+import { appendFileSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ProfileId, ShortcutRow } from '../shared/ipc'
 import { normalizeAccelerator } from '../shared/accelerator'
 import { FIXED_SHORTCUTS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
+import { parseBookmarksExport, planImport } from '../shared/bookmarks-io'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
@@ -270,6 +271,57 @@ app.whenReady().then(async () => {
     }
     bookmarksChanged()
   }
+
+  const exportBookmarks = async (): Promise<void> => {
+    const date = new Date().toISOString().slice(0, 10)
+    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+      defaultPath: `synapse-bookmarks-${date}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (canceled || !filePath) return
+    writeFileSync(filePath, JSON.stringify({ v: 1, ...bookmarks.list() }, null, 2))
+  }
+
+  const importBookmarks = async (): Promise<void> => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (canceled || !filePaths[0]) return
+    let text: string
+    try {
+      text = readFileSync(filePaths[0], 'utf8')
+    } catch {
+      void dialog.showMessageBox(win, { type: 'error', message: 'Could not read that file.' })
+      return
+    }
+    const incoming = parseBookmarksExport(text)
+    if (!incoming) {
+      void dialog.showMessageBox(win, {
+        type: 'error',
+        message: 'Not a Synapse bookmarks export file.',
+      })
+      return
+    }
+    const plan = planImport(bookmarks.list(), incoming)
+    const folderIds = new Map(bookmarks.list().folders.map((f) => [f.name, f.id]))
+    for (const name of plan.folders) folderIds.set(name, bookmarks.addFolder(name).id)
+    for (const item of plan.bookmarks) {
+      const created = bookmarks.add(item.url, item.title, Date.now(), item.profile)
+      if (item.folderName) {
+        const fid = folderIds.get(item.folderName)
+        if (fid) bookmarks.moveToFolder(created.id, fid)
+      }
+    }
+    bookmarksChanged()
+    const n = plan.bookmarks.length
+    void dialog.showMessageBox(win, {
+      type: 'info',
+      message: `Imported ${n} bookmark${n === 1 ? '' : 's'}${
+        plan.skipped ? ` (${plan.skipped} skipped as duplicates)` : ''
+      }.`,
+    })
+  }
   ipcMain.handle('bookmarks:toggle-active', () => toggleBookmark())
   ipcMain.handle('bookmarks:list', () => bookmarks.list())
 
@@ -440,8 +492,8 @@ app.whenReady().then(async () => {
       toggleBookmark,
       toggleSidebar,
       toggleSettings: () => win.webContents.send('ui:settings', tabs.toggleSettings()),
-      exportBookmarks: () => {},
-      importBookmarks: () => {},
+      exportBookmarks: () => void exportBookmarks(),
+      importBookmarks: () => void importBookmarks(),
     })
   rebuildMenu()
   // the Tools → Extensions submenu lists installed extensions; rebuild it as they change
