@@ -16,15 +16,16 @@ export function parseAppcast(xml: string): AppcastItem[] {
     const block = m[1]!
     const enclosure = /<enclosure\b([\s\S]*?)\/>/.exec(block)?.[1]
     if (!enclosure) continue
+    // anchored on leading whitespace so e.g. sourceurl= can never match url=
     const attr = (name: string): string | null =>
-      new RegExp(`${name}="([^"]*)"`).exec(enclosure)?.[1] ?? null
+      new RegExp(`[\\s"']${name}="([^"]*)"`).exec(enclosure)?.[1] ?? null
     const tag = (name: string): string | null =>
       new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(block)?.[1]?.trim() ?? null
     const url = attr('url')
     const edSignature = attr('sparkle:edSignature')
     const version = tag('sparkle:version')
     if (!url || !edSignature || !version) continue
-    const cdata = /<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/.exec(block)
+    const cdata = /<description>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/description>/.exec(block)
     items.push({
       version,
       shortVersion: tag('sparkle:shortVersionString') ?? version,

@@ -51,6 +51,25 @@ describe('parseAppcast', () => {
     expect(parseAppcast('')).toEqual([])
     expect(parseAppcast('not xml at all')).toEqual([])
   })
+
+  it('is not fooled by attribute names that end with a real attribute name', () => {
+    const feed = `<rss><channel><item>
+      <sparkle:version>1.0.0</sparkle:version>
+      <enclosure sourceurl="https://wrong.example.com/evil.dmg" url="https://real.example.com/x.dmg" sparkle:edSignature="c2ln" length="5" type="application/octet-stream" />
+    </item></channel></rss>`
+    expect(parseAppcast(feed)[0]?.url).toBe('https://real.example.com/x.dmg')
+  })
+
+  it('tolerates whitespace between description and CDATA', () => {
+    const feed = `<rss><channel><item>
+      <sparkle:version>1.0.0</sparkle:version>
+      <description>
+        <![CDATA[<p>hi</p>]]>
+      </description>
+      <enclosure url="https://a.com/x.dmg" sparkle:edSignature="c2ln" length="5" type="application/octet-stream" />
+    </item></channel></rss>`
+    expect(parseAppcast(feed)[0]?.notesHtml).toBe('<p>hi</p>')
+  })
 })
 
 describe('compareVersions', () => {
