@@ -62,6 +62,13 @@ export function buildPageContextMenu(
       item('Copy Link URL', 'copy-link-url'),
     ])
   }
+  if (params.mediaType === 'image' && params.srcURL) {
+    sections.push([
+      item('Copy Image', 'copy-image'),
+      item('Copy Image URL', 'copy-image-url'),
+      item('Download Image', 'download-image'),
+    ])
+  }
   return sections.flatMap((s, i) =>
     i === 0 ? s : [{ kind: 'separator' } as PageMenuItem, ...s],
   )

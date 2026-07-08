@@ -71,3 +71,41 @@ describe('linkBookmarkTitle', () => {
     expect(linkBookmarkTitle(p)).toBe('https://a.example')
   })
 })
+
+describe('image section', () => {
+  it('shows copy / copy url / download for an image', () => {
+    const items = buildPageContextMenu(
+      params({ mediaType: 'image', srcURL: 'https://example.com/cat.png' }),
+      ctx,
+    )
+    expect(labels(items)).toEqual(['Copy Image', 'Copy Image URL', 'Download Image'])
+    expect(actions(items)).toEqual(['copy-image', 'copy-image-url', 'download-image'])
+  })
+
+  it('shows the link section above the image section for a linked image', () => {
+    const items = buildPageContextMenu(
+      params({
+        linkURL: 'https://example.com/a',
+        mediaType: 'image',
+        srcURL: 'https://example.com/cat.png',
+      }),
+      ctx,
+    )
+    expect(labels(items)).toEqual([
+      'Open Link',
+      'Open in a New Tab',
+      '---',
+      'Bookmark Link',
+      'Copy Link URL',
+      '---',
+      'Copy Image',
+      'Copy Image URL',
+      'Download Image',
+    ])
+  })
+
+  it('shows no image section when the image has no src url', () => {
+    const items = buildPageContextMenu(params({ mediaType: 'image' }), ctx)
+    expect(labels(items)).not.toContain('Copy Image')
+  })
+})
