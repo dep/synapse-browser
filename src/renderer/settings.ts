@@ -3,7 +3,17 @@ import type { ShortcutRow } from '../shared/ipc'
 
 export type SettingsSection = 'general' | 'shortcuts'
 
+// only one chord recording can be live; re-renders and settings close must
+// tear down its window-level capture listener or it would swallow keydowns
+// app-wide forever
+let cancelActiveRecording: (() => void) | null = null
+
+export function cancelRecording(): void {
+  cancelActiveRecording?.()
+}
+
 export function renderSettings(el: HTMLElement, section: SettingsSection): void {
+  cancelRecording()
   el.innerHTML = ''
   const nav = document.createElement('nav')
   nav.id = 'settings-nav'
@@ -60,6 +70,7 @@ function renderShortcutsSection(body: HTMLElement): void {
 }
 
 function renderRows(list: HTMLElement, rows: ShortcutRow[], refresh: () => void): void {
+  cancelRecording()
   list.innerHTML = ''
   for (const row of rows) {
     const item = document.createElement('div')
@@ -125,6 +136,8 @@ function beginRecording(
   const cleanup = (): void => {
     window.removeEventListener('keydown', onKey, true)
     chip.classList.remove('recording')
+    cancelActiveRecording = null
   }
+  cancelActiveRecording = cleanup
   window.addEventListener('keydown', onKey, true)
 }

@@ -3,7 +3,7 @@ import type { BookmarksData, TabsSnapshot } from '../shared/ipc'
 import { renderBookmarks, startItemEdit } from './bookmarks-section'
 import { PanelMode, renderPanel } from './panel'
 import { renderPins, renderTabList } from './sidebar'
-import { renderSettings } from './settings'
+import { cancelRecording, renderSettings } from './settings'
 import { initTopbar } from './topbar'
 
 const pinGridEl = document.getElementById('pin-grid')!
@@ -36,6 +36,7 @@ window.synapse.ui.onSidebarVisible((visible) => {
 window.synapse.ui.onSettings((open) => {
   settingsEl.hidden = !open
   if (open) renderSettings(settingsEl, 'general')
+  else cancelRecording()
 })
 sidebarResizeEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return

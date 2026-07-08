@@ -481,7 +481,8 @@ app.whenReady().then(async () => {
         return { ok: false, error: `Already used by “${other.label}”.` }
       }
     }
-    shortcutsStore.set(id, accelerator)
+    if (wanted === normalizeAccelerator(command.default, isMac)) shortcutsStore.reset(id)
+    else shortcutsStore.set(id, accelerator)
     rebuildMenu()
     return { ok: true }
   })
