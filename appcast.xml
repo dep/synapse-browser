@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Synapse Browser</title>
+        <link>https://raw.githubusercontent.com/dep/synapse-browser/main/appcast.xml</link>
+        <description>Most recent changes to Synapse Browser</description>
+        <language>en</language>
+        <item>
+            <title>Version 0.3.1</title>
+            <pubDate>Wed, 08 Jul 2026 18:41:08 +0000</pubDate>
+            <sparkle:version>0.3.1</sparkle:version>
+            <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Find in page: Cmd+F highlights every match with an N-of-M count; Cmd+G and Cmd+Shift+G step through matches.</li>
+                    <li>Automatic updates: the browser now checks for signed updates on launch and via Tools &gt; Check for Updates.</li>
+                    <li>Cmd+click opens links in a background tab.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.3.1/Synapse.Browser-0.3.1-universal.dmg"
+              sparkle:edSignature="cPVsw4qwn3S4joxkBtD+1QwB3Pg3c64dn/KWR/jxBHZHW9Gj0PPbxe4VTdWyZLHp3CRjD80T0+sxxmQ+EJv4Dw=="
+              length="219212989"
+              type="application/octet-stream" />
+        </item>
+    </channel>
+</rss>
