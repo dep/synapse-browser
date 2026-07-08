@@ -9,6 +9,7 @@ import { ExtensionManager } from './extensions'
 import { HistoryStore } from './history'
 import { PinsStore } from './pins-store'
 import { SidebarResizeController } from './sidebar-resize'
+import { ShortcutsStore } from './shortcuts-store'
 import { TabManager, WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { UiStore } from './ui-store'
@@ -62,6 +63,7 @@ app.whenReady().then(async () => {
   const tabsStore = new TabsStore(userData)
   const pinsStore = new PinsStore(userData)
   const uiStore = new UiStore(userData)
+  const shortcutsStore = new ShortcutsStore(userData)
 
   function attachCycleHooks(wc: WebContents): void {
     wc.on('before-input-event', (event, input) => {
@@ -161,6 +163,13 @@ app.whenReady().then(async () => {
     },
     uiStore.sidebarWidth(),
   )
+  const toggleSidebar = (): void => {
+    const visible = !uiStore.sidebarVisible()
+    uiStore.setSidebarVisible(visible)
+    tabs.setSidebarVisible(visible)
+    win.webContents.send('ui:sidebar-visible', visible)
+  }
+  tabs.setSidebarVisible(uiStore.sidebarVisible())
   attachCycleHooks(win.webContents)
 
   openUrlInExistingWindow = (url) => {
@@ -423,10 +432,18 @@ app.whenReady().then(async () => {
     }
   })
 
-  buildMenu(win, tabs, toggleBookmark, extensions)
+  const rebuildMenu = (): void =>
+    buildMenu(win, tabs, extensions, shortcutsStore.resolved(), {
+      toggleBookmark,
+      toggleSidebar,
+      toggleSettings: () => {},
+      exportBookmarks: () => {},
+      importBookmarks: () => {},
+    })
+  rebuildMenu()
   // the Tools → Extensions submenu lists installed extensions; rebuild it as they change
-  session.defaultSession.on('extension-loaded', () => buildMenu(win, tabs, toggleBookmark, extensions))
-  session.defaultSession.on('extension-unloaded', () => buildMenu(win, tabs, toggleBookmark, extensions))
+  session.defaultSession.on('extension-loaded', rebuildMenu)
+  session.defaultSession.on('extension-unloaded', rebuildMenu)
 
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
   ipcMain.on('ui:sidebar-drag-start', () => sidebarResize.start())
@@ -435,6 +452,7 @@ app.whenReady().then(async () => {
   win.webContents.on('did-finish-load', () => {
     tabs.refresh()
     win.webContents.send('ui:sidebar-width', sidebarResize.current)
+    win.webContents.send('ui:sidebar-visible', uiStore.sidebarVisible())
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {
@@ -459,6 +477,7 @@ app.whenReady().then(async () => {
     tabsStore.flush()
     pinsStore.flush()
     uiStore.flush()
+    shortcutsStore.flush()
   })
 })
 
