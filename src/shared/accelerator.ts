@@ -57,7 +57,13 @@ const MOD_ORDER = ['Control', 'Alt', 'Shift', 'Cmd']
 
 // canonical form for comparing two accelerators for conflicts
 export function normalizeAccelerator(accel: string, isMac: boolean): string {
-  const parts = accel.split('+').map((p) => p.trim())
+  // a trailing literal + is the Plus key ('Cmd++' or '+'), not a separator
+  const plusKey = /(^|\+)\s*\+\s*$/.test(accel)
+  const parts = accel
+    .split('+')
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+  if (plusKey) parts.push('Plus')
   const mods: string[] = []
   let key = ''
   for (const raw of parts) {

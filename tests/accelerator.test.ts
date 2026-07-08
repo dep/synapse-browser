@@ -65,4 +65,10 @@ describe('normalizeAccelerator', () => {
   it('detects equality across styles', () => {
     expect(normalizeAccelerator('CmdOrCtrl+=', true)).toBe(normalizeAccelerator('Cmd+=', true))
   })
+
+  it('treats a trailing literal + as the Plus key', () => {
+    expect(normalizeAccelerator('CmdOrCtrl++', true)).toBe('Cmd+Plus')
+    expect(normalizeAccelerator('+', true)).toBe('Plus')
+    expect(normalizeAccelerator('Cmd+Plus', true)).toBe('Cmd+Plus')
+  })
 })
