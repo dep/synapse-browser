@@ -106,6 +106,7 @@ app.whenReady().then(async () => {
     })
   }
 
+  let sessionRestored = false
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -124,6 +125,10 @@ app.whenReady().then(async () => {
     onNavigated: (url, title) => history.add(url, title, Date.now()),
     onSnapshot: (snap) => {
       win.webContents.send('tabs:updated', snap)
+      // the renderer's did-finish-load can fire a snapshot while startup is
+      // still awaiting extensions.init(); persisting that empty state would
+      // wipe the stores before restorePins/restoreTabs read them
+      if (!sessionRestored) return
       tabsStore.save(
         snap.order.map((id) => {
           const t = snap.tabs[id]!
@@ -606,6 +611,8 @@ app.whenReady().then(async () => {
   tabs.syncBookmarks(bookmarks.ordered())
   const saved = tabsStore.load()
   tabs.restoreTabs(saved.tabs, saved.active)
+  sessionRestored = true
+  tabs.refresh() // persist the restored state now that saves are unblocked
 
   app.on('before-quit', () => {
     history.flush()
