@@ -102,7 +102,7 @@ function renderRows(list: HTMLElement, rows: ShortcutRow[], refresh: () => void)
         })
         item.append(reset)
       }
-      chip.addEventListener('click', () => beginRecording(chip, error, row.id, refresh))
+      chip.addEventListener('click', () => beginRecording(chip, error, row, refresh))
     }
     list.append(item)
   }
@@ -111,7 +111,7 @@ function renderRows(list: HTMLElement, rows: ShortcutRow[], refresh: () => void)
 function beginRecording(
   chip: HTMLButtonElement,
   error: HTMLElement,
-  id: string,
+  row: ShortcutRow,
   refresh: () => void,
 ): void {
   cancelRecording()
@@ -119,6 +119,7 @@ function beginRecording(
   chip.classList.add('recording')
   chip.textContent = 'Press shortcut…'
   error.textContent = ''
+  const current = row.accelerator
   const onKey = (e: KeyboardEvent): void => {
     e.preventDefault()
     e.stopPropagation()
@@ -130,9 +131,15 @@ function beginRecording(
     const accel = acceleratorFromKeyEvent(e)
     if (!accel) return // ignore bare modifiers; keep recording
     cleanup()
-    void window.synapse.shortcuts.set(id, accel).then((result) => {
-      if (!result.ok) error.textContent = result.error ?? 'Could not set shortcut.'
-      refresh()
+    void window.synapse.shortcuts.set(row.id, accel).then((result) => {
+      if (result.ok) {
+        refresh()
+        return
+      }
+      // leave the row in place so the message stays visible; refresh() would
+      // rebuild the list and destroy this error span immediately
+      error.textContent = result.error ?? 'Could not set shortcut.'
+      chip.textContent = current
     })
   }
   const cleanup = (): void => {
