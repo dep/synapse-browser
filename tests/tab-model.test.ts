@@ -470,12 +470,12 @@ describe('TabModel bookmarks', () => {
     expect(m.activeId).toBe('c')
   })
 
-  it('at() addresses pins, then bookmarks, then tabs', () => {
+  it('at() addresses pins then tabs, skipping bookmarks', () => {
     m.pin('a') // pinned [a], order [b, c]
     m.bookmark('b') // bookmarks [b], order [c]
     expect(m.at(0)).toBe('a')
-    expect(m.at(1)).toBe('b')
-    expect(m.at(2)).toBe('c')
+    expect(m.at(1)).toBe('c') // Cmd+2 lands on the first normal tab, not the bookmark
+    expect(m.at(2)).toBeNull()
     expect(m.at(-1)).toBe('c')
   })
 

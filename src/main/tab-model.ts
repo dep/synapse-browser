@@ -148,9 +148,10 @@ export class TabModel {
     return this.mru.includes(id)
   }
 
-  // index into pins → bookmarks → tabs; negative counts from the end
+  // index into pins → tabs (Cmd+1..9 addressing); bookmarks are deliberately
+  // not addressable this way. Negative counts from the end.
   at(index: number): string | null {
-    return [...this.pinned, ...this.bookmarks, ...this.order].at(index) ?? null
+    return [...this.pinned, ...this.order].at(index) ?? null
   }
 
   cycleStep(list: CycleList, dir: Direction): string | null {
