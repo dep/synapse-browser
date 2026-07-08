@@ -21,8 +21,15 @@ body {
 #app {
   display: grid;
   grid-template-rows: 52px 1fr;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: var(--sidebar-width, 240px) 1fr;
   height: 100vh;
+}
+#app.sidebar-hidden {
+  grid-template-columns: 0 1fr;
+}
+#app.sidebar-hidden #sidebar,
+#app.sidebar-hidden #sidebar-resize {
+  display: none;
 }
 #topbar {
   grid-column: 1 / 3;

@@ -25,8 +25,11 @@ window.synapse.onTabsUpdated((s) => {
 // width is owned by main (it must position the page view); the renderer
 // only initiates drags and renders pushed widths
 window.synapse.ui.onSidebarWidth((px) => {
-  appEl.style.gridTemplateColumns = `${px}px 1fr`
+  appEl.style.setProperty('--sidebar-width', `${px}px`)
   sidebarResizeEl.style.left = `${px - 5}px`
+})
+window.synapse.ui.onSidebarVisible((visible) => {
+  appEl.classList.toggle('sidebar-hidden', !visible)
 })
 sidebarResizeEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return

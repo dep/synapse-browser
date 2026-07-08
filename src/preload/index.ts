@@ -50,6 +50,9 @@ const api: SynapseApi = {
     onSidebarWidth: (cb) => {
       ipcRenderer.on('ui:sidebar-width', (_e, px) => cb(px))
     },
+    onSidebarVisible: (cb) => {
+      ipcRenderer.on('ui:sidebar-visible', (_e, visible) => cb(visible))
+    },
     onFocusUrlBar: (cb) => {
       ipcRenderer.on('ui:focus-urlbar', () => cb())
     },
