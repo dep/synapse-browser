@@ -385,6 +385,10 @@ export class TabManager {
   }
 
   cycleStep(list: CycleList, dir: Direction): void {
+    if (this.settingsOpen) {
+      this.settingsOpen = false
+      this.opts.onSettingsClosed?.()
+    }
     if (!this.model.cycleStep(list, dir)) return
     this.syncViews()
     // keep native focus on the newly attached view: the modifier keyUp that
@@ -432,6 +436,10 @@ export class TabManager {
   toggleSettings(): boolean {
     this.settingsOpen = !this.settingsOpen
     this.syncViews()
+    return this.settingsOpen
+  }
+
+  isSettingsOpen(): boolean {
     return this.settingsOpen
   }
 

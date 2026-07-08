@@ -48,6 +48,7 @@ const api: SynapseApi = {
     set: (id, accelerator) => ipcRenderer.invoke('shortcuts:set', id, accelerator),
     reset: (id) => ipcRenderer.invoke('shortcuts:reset', id),
     resetAll: () => ipcRenderer.invoke('shortcuts:reset-all'),
+    setRecording: (active) => ipcRenderer.send('shortcuts:recording', active),
   },
   ui: {
     setOverlayHeight: (px) => ipcRenderer.send('ui:set-overlay-height', px),

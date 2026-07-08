@@ -115,6 +115,7 @@ function beginRecording(
   refresh: () => void,
 ): void {
   cancelRecording()
+  window.synapse.shortcuts.setRecording(true)
   chip.classList.add('recording')
   chip.textContent = 'Press shortcut…'
   error.textContent = ''
@@ -136,6 +137,7 @@ function beginRecording(
   }
   const cleanup = (): void => {
     window.removeEventListener('keydown', onKey, true)
+    window.synapse.shortcuts.setRecording(false)
     chip.classList.remove('recording')
     cancelActiveRecording = null
   }

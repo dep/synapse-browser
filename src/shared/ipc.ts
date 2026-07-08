@@ -112,6 +112,7 @@ export interface SynapseApi {
     set(id: string, accelerator: string): Promise<{ ok: boolean; error?: string }>
     reset(id: string): Promise<void>
     resetAll(): Promise<void>
+    setRecording(active: boolean): void
   }
   ui: {
     setOverlayHeight(px: number): void

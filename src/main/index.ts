@@ -4,7 +4,7 @@ import { appendFileSync, copyFileSync, existsSync, readFileSync, writeFileSync }
 import { join } from 'node:path'
 import type { ProfileId, ShortcutRow } from '../shared/ipc'
 import { normalizeAccelerator } from '../shared/accelerator'
-import { FIXED_SHORTCUTS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
+import { FIXED_SHORTCUTS, RESERVED_ACCELERATORS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
 import { parseBookmarksExport, planImport } from '../shared/bookmarks-io'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
@@ -527,6 +527,9 @@ app.whenReady().then(async () => {
     const command = SHORTCUT_COMMANDS.find((c) => c.id === id)
     if (!command) return { ok: false, error: 'Unknown command.' }
     const wanted = normalizeAccelerator(accelerator, isMac)
+    if (RESERVED_ACCELERATORS.has(wanted)) {
+      return { ok: false, error: 'Reserved by the system.' }
+    }
     const resolved = shortcutsStore.resolved()
     for (const other of SHORTCUT_COMMANDS) {
       if (other.id !== id && normalizeAccelerator(resolved[other.id]!, isMac) === wanted) {
@@ -548,6 +551,12 @@ app.whenReady().then(async () => {
     shortcutsStore.resetAll()
     rebuildMenu()
   })
+  // while the settings recorder is capturing a chord, menu accelerators must
+  // not fire — otherwise pressing a bound chord executes the command (e.g.
+  // Cmd+W closes the tab) instead of being recorded
+  ipcMain.on('shortcuts:recording', (_e, active: boolean) => {
+    win.webContents.setIgnoreMenuShortcuts(active === true)
+  })
 
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
   ipcMain.on('ui:sidebar-drag-start', () => sidebarResize.start())
@@ -555,8 +564,10 @@ app.whenReady().then(async () => {
 
   win.webContents.on('did-finish-load', () => {
     tabs.refresh()
+    win.webContents.setIgnoreMenuShortcuts(false)
     win.webContents.send('ui:sidebar-width', sidebarResize.current)
     win.webContents.send('ui:sidebar-visible', uiStore.sidebarVisible())
+    win.webContents.send('ui:settings', tabs.isSettingsOpen())
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {

@@ -37,6 +37,23 @@ export const FIXED_SHORTCUTS: Array<{ id: string; label: string; accelerator: st
   { id: 'goto-tab', label: 'Go to Tab 1–9', accelerator: 'Cmd+1 … Cmd+9' },
 ]
 
+// chords owned by macOS menu roles or the static Tab 1-9 block — never
+// recordable as command overrides (normalized mac spellings)
+export const RESERVED_ACCELERATORS: ReadonlySet<string> = new Set([
+  'Cmd+Q',
+  'Cmd+H',
+  'Alt+Cmd+H',
+  'Cmd+Z',
+  'Shift+Cmd+Z',
+  'Cmd+X',
+  'Cmd+C',
+  'Cmd+V',
+  'Cmd+A',
+  'Cmd+M',
+  'Alt+Cmd+I',
+  ...Array.from({ length: 9 }, (_, i) => `Cmd+${i + 1}`),
+])
+
 export function resolveShortcuts(overrides: Record<string, string>): Record<string, string> {
   const resolved: Record<string, string> = {}
   for (const cmd of SHORTCUT_COMMANDS) {

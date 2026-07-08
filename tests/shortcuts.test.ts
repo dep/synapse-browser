@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SHORTCUT_COMMANDS, resolveShortcuts } from '../src/shared/shortcuts'
+import { RESERVED_ACCELERATORS, SHORTCUT_COMMANDS, resolveShortcuts } from '../src/shared/shortcuts'
 
 describe('resolveShortcuts', () => {
   it('returns every command default when no overrides', () => {
@@ -24,5 +24,14 @@ describe('resolveShortcuts', () => {
     const ids = SHORTCUT_COMMANDS.map((c) => c.id)
     expect(new Set(ids).size).toBe(ids.length)
     for (const c of SHORTCUT_COMMANDS) expect(c.default.length).toBeGreaterThan(0)
+  })
+})
+
+describe('RESERVED_ACCELERATORS', () => {
+  it('covers the role accelerators and the tab-switch block', () => {
+    expect(RESERVED_ACCELERATORS.has('Cmd+Q')).toBe(true)
+    expect(RESERVED_ACCELERATORS.has('Cmd+1')).toBe(true)
+    expect(RESERVED_ACCELERATORS.has('Cmd+9')).toBe(true)
+    expect(RESERVED_ACCELERATORS.has('Cmd+T')).toBe(false)
   })
 })
