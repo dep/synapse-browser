@@ -27,6 +27,7 @@ export class TabManager {
   private attached: WebContentsView | null = null
   private overlayHeight = 0
   private sidebarWidth = SIDEBAR_WIDTH_DEFAULT
+  private sidebarVisible = true
   private counter = 0
 
   constructor(
@@ -411,6 +412,30 @@ export class TabManager {
     this.layout()
   }
 
+  setSidebarVisible(visible: boolean): void {
+    this.sidebarVisible = visible
+    this.layout()
+  }
+
+  // zoom the active page; Chromium's practical zoom-level range is about -7..9
+  zoomActive(delta: 1 | -1 | 0): void {
+    const wc = this.attached?.webContents
+    if (!wc) return
+    wc.setZoomLevel(delta === 0 ? 0 : Math.max(-7, Math.min(9, wc.getZoomLevel() + delta)))
+  }
+
+  // immediate prev/next in sidebar order with wraparound — unlike Ctrl+Tab MRU
+  // cycling there is no preview/commit phase. Pins and bookmark slots are not
+  // in `order`; when one is active, dir 1 starts at the first order tab and
+  // dir -1 at the last.
+  activateSibling(dir: 1 | -1): void {
+    const order = this.model.order
+    if (order.length === 0) return
+    const i = this.model.activeId ? order.indexOf(this.model.activeId) : -1
+    const next = i === -1 ? (dir === 1 ? 0 : order.length - 1) : (i + dir + order.length) % order.length
+    this.activateTab(order[next]!)
+  }
+
   refresh(): void {
     this.opts.onSnapshot(this.snapshot())
   }
@@ -481,10 +506,11 @@ export class TabManager {
     if (!this.attached) return
     const [w, h] = this.win.getContentSize()
     const top = TOPBAR_HEIGHT + this.overlayHeight
+    const left = this.sidebarVisible ? this.sidebarWidth : 0
     this.attached.setBounds({
-      x: this.sidebarWidth,
+      x: left,
       y: top,
-      width: Math.max(0, w - this.sidebarWidth),
+      width: Math.max(0, w - left),
       height: Math.max(0, h - top),
     })
   }

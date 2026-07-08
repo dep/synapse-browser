@@ -41,4 +41,30 @@ describe('UiStore', () => {
     fs.writeFileSync(path.join(dir, 'ui.json'), JSON.stringify({ v: 1, sidebarWidth: 'wide' }))
     expect(new UiStore(dir).sidebarWidth()).toBe(240)
   })
+
+  it('sidebarVisible defaults to true and round-trips false', () => {
+    const store = new UiStore(dir)
+    expect(store.sidebarVisible()).toBe(true)
+    store.setSidebarVisible(false)
+    store.flush()
+    expect(new UiStore(dir).sidebarVisible()).toBe(false)
+  })
+
+  it('setSidebarWidth preserves sidebarVisible and vice versa', () => {
+    const store = new UiStore(dir)
+    store.setSidebarVisible(false)
+    store.setSidebarWidth(300)
+    store.flush()
+    const again = new UiStore(dir)
+    expect(again.sidebarVisible()).toBe(false)
+    expect(again.sidebarWidth()).toBe(300)
+  })
+
+  it('treats non-boolean stored sidebarVisible as true', () => {
+    fs.writeFileSync(
+      path.join(dir, 'ui.json'),
+      JSON.stringify({ v: 1, sidebarWidth: 240, sidebarVisible: 'nope' }),
+    )
+    expect(new UiStore(dir).sidebarVisible()).toBe(true)
+  })
 })
