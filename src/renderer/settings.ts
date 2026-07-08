@@ -114,6 +114,7 @@ function beginRecording(
   id: string,
   refresh: () => void,
 ): void {
+  cancelRecording()
   chip.classList.add('recording')
   chip.textContent = 'Press shortcut…'
   error.textContent = ''
