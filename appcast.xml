@@ -6,6 +6,23 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.4.0</title>
+            <pubDate>Wed, 08 Jul 2026 19:00:29 +0000</pubDate>
+            <sparkle:version>0.4.0</sparkle:version>
+            <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Sites that block unrecognized browsers (Chase and other banks) now work: Synapse presents a standard Chrome user agent to every site.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.4.0/Synapse.Browser-0.4.0-universal.dmg"
+              sparkle:edSignature="4IOpJX6i2jD+dNZzav1kTL0UcE1FfxfZyA/C4NB7HKcF8EhyxbzPgcf95iD3r9HBPctEXR3dyuBIFHL6Oy0XDg=="
+              length="219219869"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.3.1</title>
             <pubDate>Wed, 08 Jul 2026 18:41:08 +0000</pubDate>
             <sparkle:version>0.3.1</sparkle:version>
