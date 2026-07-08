@@ -64,6 +64,14 @@ export interface DownloadInfo {
   totalBytes: number
 }
 
+export interface ShortcutRow {
+  id: string
+  label: string
+  accelerator: string
+  default: string
+  fixed: boolean
+}
+
 export interface SynapseApi {
   tabs: {
     create(url?: string): void
@@ -98,6 +106,12 @@ export interface SynapseApi {
   downloads: {
     reveal(id: string): void
     onUpdated(cb: (list: DownloadInfo[]) => void): void
+  }
+  shortcuts: {
+    list(): Promise<ShortcutRow[]>
+    set(id: string, accelerator: string): Promise<{ ok: boolean; error?: string }>
+    reset(id: string): Promise<void>
+    resetAll(): Promise<void>
   }
   ui: {
     setOverlayHeight(px: number): void

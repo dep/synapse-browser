@@ -2,7 +2,9 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, session } from 'electron'
 import type { WebContents } from 'electron'
 import { appendFileSync, copyFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ProfileId } from '../shared/ipc'
+import type { ProfileId, ShortcutRow } from '../shared/ipc'
+import { normalizeAccelerator } from '../shared/accelerator'
+import { FIXED_SHORTCUTS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
 import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
@@ -445,6 +447,54 @@ app.whenReady().then(async () => {
   // the Tools → Extensions submenu lists installed extensions; rebuild it as they change
   session.defaultSession.on('extension-loaded', rebuildMenu)
   session.defaultSession.on('extension-unloaded', rebuildMenu)
+
+  const isMac = process.platform === 'darwin'
+  ipcMain.handle('shortcuts:list', (): ShortcutRow[] => {
+    const resolved = shortcutsStore.resolved()
+    return [
+      ...SHORTCUT_COMMANDS.map((c) => ({
+        id: c.id,
+        label: c.label,
+        accelerator: resolved[c.id]!,
+        default: c.default,
+        fixed: false,
+      })),
+      ...FIXED_SHORTCUTS.map((f) => ({
+        id: f.id,
+        label: f.label,
+        accelerator: f.accelerator,
+        default: f.accelerator,
+        fixed: true,
+      })),
+    ]
+  })
+  ipcMain.handle('shortcuts:set', (_e, id: string, accelerator: string) => {
+    if (typeof id !== 'string' || typeof accelerator !== 'string' || !accelerator) {
+      return { ok: false, error: 'Invalid shortcut.' }
+    }
+    const command = SHORTCUT_COMMANDS.find((c) => c.id === id)
+    if (!command) return { ok: false, error: 'Unknown command.' }
+    const wanted = normalizeAccelerator(accelerator, isMac)
+    const resolved = shortcutsStore.resolved()
+    for (const other of SHORTCUT_COMMANDS) {
+      if (other.id !== id && normalizeAccelerator(resolved[other.id]!, isMac) === wanted) {
+        return { ok: false, error: `Already used by “${other.label}”.` }
+      }
+    }
+    shortcutsStore.set(id, accelerator)
+    rebuildMenu()
+    return { ok: true }
+  })
+  ipcMain.handle('shortcuts:reset', (_e, id: string) => {
+    if (typeof id === 'string') {
+      shortcutsStore.reset(id)
+      rebuildMenu()
+    }
+  })
+  ipcMain.handle('shortcuts:reset-all', () => {
+    shortcutsStore.resetAll()
+    rebuildMenu()
+  })
 
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
   ipcMain.on('ui:sidebar-drag-start', () => sidebarResize.start())

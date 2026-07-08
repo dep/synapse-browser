@@ -43,6 +43,12 @@ const api: SynapseApi = {
       ipcRenderer.on('downloads:updated', (_e, list) => cb(list))
     },
   },
+  shortcuts: {
+    list: () => ipcRenderer.invoke('shortcuts:list'),
+    set: (id, accelerator) => ipcRenderer.invoke('shortcuts:set', id, accelerator),
+    reset: (id) => ipcRenderer.invoke('shortcuts:reset', id),
+    resetAll: () => ipcRenderer.invoke('shortcuts:reset-all'),
+  },
   ui: {
     setOverlayHeight: (px) => ipcRenderer.send('ui:set-overlay-height', px),
     startSidebarDrag: () => ipcRenderer.send('ui:sidebar-drag-start'),
