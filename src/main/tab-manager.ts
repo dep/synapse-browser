@@ -73,9 +73,12 @@ export class TabManager {
     this.favicons.set(id, null)
     this.wireEvents(id, view.webContents)
     this.opts.onTabCreated?.(view.webContents, profile)
-    view.webContents.setWindowOpenHandler(({ url: popupUrl }) => {
-      // popups (OAuth windows etc.) must land in the opener's container
-      if (/^https?:\/\//.test(popupUrl)) this.createTab(popupUrl, true, this.profileOf(id))
+    view.webContents.setWindowOpenHandler(({ url: popupUrl, disposition }) => {
+      // popups (OAuth windows etc.) must land in the opener's container.
+      // cmd+click reports disposition 'background-tab' and must not steal focus
+      if (/^https?:\/\//.test(popupUrl)) {
+        this.createTab(popupUrl, disposition !== 'background-tab', this.profileOf(id))
+      }
       return { action: 'deny' }
     })
     return view
