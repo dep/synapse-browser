@@ -9,6 +9,8 @@ const pinGridEl = document.getElementById('pin-grid')!
 const bookmarksEl = document.getElementById('bookmarks')!
 const tabListEl = document.getElementById('tab-list')!
 const panelEl = document.getElementById('panel')!
+const appEl = document.getElementById('app')!
+const sidebarResizeEl = document.getElementById('sidebar-resize')!
 const topbar = initTopbar()
 
 let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], bookmarkTabs: {}, activeId: null }
@@ -19,6 +21,21 @@ window.synapse.onTabsUpdated((s) => {
   snap = s
   render()
 })
+
+// width is owned by main (it must position the page view); the renderer
+// only initiates drags and renders pushed widths
+window.synapse.ui.onSidebarWidth((px) => {
+  appEl.style.gridTemplateColumns = `${px}px 1fr`
+  sidebarResizeEl.style.left = `${px - 2}px`
+})
+sidebarResizeEl.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return
+  e.preventDefault()
+  window.synapse.ui.startSidebarDrag()
+})
+// belt-and-braces alongside main's input-event/blur detection; main's
+// end() no-ops when no drag is active
+window.addEventListener('mouseup', () => window.synapse.ui.endSidebarDrag())
 
 async function refreshBookmarks(): Promise<void> {
   bookmarks = await window.synapse.bookmarks.list()

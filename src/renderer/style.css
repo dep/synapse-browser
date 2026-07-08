@@ -371,3 +371,27 @@ browser-action-list {
 .bookmarks-loose {
   min-height: 8px;
 }
+#sidebar-resize {
+  /* 5px grab strip straddling the sidebar edge; left is kept in sync with
+     the sidebar width by main.ts */
+  position: fixed;
+  top: 52px;
+  bottom: 0;
+  left: 238px;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+}
+#sidebar-resize::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 2px;
+  width: 1px;
+  background: transparent;
+}
+#sidebar-resize:hover::after,
+#sidebar-resize:active::after {
+  background: var(--accent);
+}
