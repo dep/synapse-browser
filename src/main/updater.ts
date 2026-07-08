@@ -36,7 +36,9 @@ export class Updater {
   }
 
   private async run(interactive: boolean): Promise<void> {
-    const feedUrl = process.env['SYNAPSE_APPCAST_URL'] || APPCAST_URL
+    // env overrides are for dev/smoke only — a packaged build must never let
+    // the environment swap the feed or the pinned key
+    const feedUrl = (!app.isPackaged && process.env['SYNAPSE_APPCAST_URL']) || APPCAST_URL
     const res = await net.fetch(feedUrl, { signal: AbortSignal.timeout(15_000) })
     if (!res.ok) throw new Error(`appcast HTTP ${res.status}`)
     const item = pickUpdate(parseAppcast(await res.text()), app.getVersion())
@@ -56,7 +58,7 @@ export class Updater {
       defaultId: 0,
       cancelId: 1,
       message: `Synapse Browser ${item.shortVersion} is available.`,
-      detail: stripHtml(item.notesHtml ?? '') || 'A new version is available.',
+      detail: (stripHtml(item.notesHtml ?? '') || 'A new version is available.').slice(0, 600),
     })
     if (response !== 0) return
     // from here on the user asked for it — failures always surface
@@ -79,7 +81,7 @@ export class Updater {
     if (item.length > 0 && data.byteLength !== item.length) {
       throw new Error(`size mismatch: got ${data.byteLength} bytes, appcast says ${item.length}`)
     }
-    const publicKey = process.env['SYNAPSE_SU_PUBLIC_KEY'] || SU_PUBLIC_KEY
+    const publicKey = (!app.isPackaged && process.env['SYNAPSE_SU_PUBLIC_KEY']) || SU_PUBLIC_KEY
     if (!verifyEd25519(data, item.edSignature, publicKey)) {
       throw new Error('EdDSA signature did not verify')
     }
@@ -96,5 +98,13 @@ export class Updater {
 }
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
 }

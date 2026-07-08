@@ -2,6 +2,7 @@ import type { TabsSnapshot } from '../shared/ipc'
 
 export interface FindBar {
   update(snap: TabsSnapshot): void
+  close(): void
 }
 
 // the bar lives in the topbar row, so it never fights the page view for
@@ -31,9 +32,11 @@ export function initFindBar(): FindBar {
 
   function step(dir: 1 | -1): void {
     if (bar.hidden) {
-      // Cmd+G with a closed bar re-opens the last search (macOS convention)
+      // Cmd+G with a closed bar re-opens the last search without claiming
+      // keyboard focus — the page keeps it, matching macOS Cmd+G convention
+      // (input.focus() here would be a lie: a page view holds native focus)
       if (!lastQuery) return
-      open()
+      bar.hidden = false
       input.value = lastQuery
       window.synapse.find.start(lastQuery)
       return
@@ -73,5 +76,6 @@ export function initFindBar(): FindBar {
         closeBar()
       }
     },
+    close: closeBar,
   }
 }

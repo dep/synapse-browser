@@ -36,6 +36,7 @@ window.synapse.ui.onSidebarVisible((visible) => {
   appEl.classList.toggle('sidebar-hidden', !visible)
 })
 window.synapse.ui.onSettings((open) => {
+  findBar.close()
   settingsEl.hidden = !open
   if (open) renderSettings(settingsEl, 'general')
   else cancelRecording()
