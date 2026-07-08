@@ -20,10 +20,10 @@ describe('classifyInput', () => {
     expect(classifyInput('127.0.0.1:8000/admin')).toBe('http://127.0.0.1:8000/admin')
   })
 
-  it('sends everything else to DuckDuckGo', () => {
-    expect(classifyInput('what is rust')).toBe('https://duckduckgo.com/?q=what%20is%20rust')
-    expect(classifyInput('hello')).toBe('https://duckduckgo.com/?q=hello')
-    expect(classifyInput('is example.com down')).toBe('https://duckduckgo.com/?q=is%20example.com%20down')
+  it('sends everything else to Shortmarks', () => {
+    expect(classifyInput('what is rust')).toBe('https://shortmarks.com/s.php?q=what%20is%20rust')
+    expect(classifyInput('hello')).toBe('https://shortmarks.com/s.php?q=hello')
+    expect(classifyInput('is example.com down')).toBe('https://shortmarks.com/s.php?q=is%20example.com%20down')
   })
 
   it('trims whitespace and treats empty as about:blank', () => {

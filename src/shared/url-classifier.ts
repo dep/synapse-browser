@@ -10,5 +10,5 @@ export function classifyInput(raw: string): string {
     const scheme = host === 'localhost' || host === '127.0.0.1' ? 'http' : 'https'
     return `${scheme}://${input}`
   }
-  return `https://duckduckgo.com/?q=${encodeURIComponent(input)}`
+  return `https://shortmarks.com/s.php?q=${encodeURIComponent(input)}`
 }

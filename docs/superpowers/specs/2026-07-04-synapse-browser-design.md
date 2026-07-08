@@ -61,7 +61,7 @@ Input classification (pure function, unit tested):
 
 1. Has a scheme (`https://`, `http://`, `file://`) → load as-is.
 2. Looks like a host (`foo.com`, `localhost:3000`, IP) → prefix `https://`.
-3. Otherwise → DuckDuckGo search: `https://duckduckgo.com/?q=<encoded>`.
+3. Otherwise → Shortmarks search: `https://shortmarks.com/s.php?q=<encoded>`.
 
 While typing, the top 5 fuzzy matches from history render in a dropdown (arrow keys +
 Enter to select, Esc to dismiss).
