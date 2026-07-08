@@ -16,6 +16,7 @@ export interface TabManagerOptions {
   onTabCreated?(wc: WebContents, profile: ProfileId): void
   onTabActivated?(wc: WebContents, profile: ProfileId): void
   onSettingsClosed?(): void
+  onFindResult?(result: { matches: number; active: number }): void
 }
 
 export class TabManager {
@@ -27,6 +28,7 @@ export class TabManager {
   private bmTabId = new Map<string, string>() // bookmarkId → tabId
   private attached: WebContentsView | null = null
   private overlayHeight = 0
+  private findText = ''
   private sidebarWidth = SIDEBAR_WIDTH_DEFAULT
   private sidebarVisible = true
   private settingsOpen = false
@@ -450,6 +452,29 @@ export class TabManager {
     wc.setZoomLevel(delta === 0 ? 0 : Math.max(-7, Math.min(9, wc.getZoomLevel() + delta)))
   }
 
+  // find sessions live on the attached (active) view; switching tabs ends them
+  findStart(text: string): void {
+    const wc = this.attached?.webContents
+    if (!wc) return
+    if (!text) {
+      this.findStop()
+      return
+    }
+    this.findText = text
+    wc.findInPage(text)
+  }
+
+  findStep(dir: 1 | -1): void {
+    const wc = this.attached?.webContents
+    if (!wc || !this.findText) return
+    wc.findInPage(this.findText, { findNext: true, forward: dir === 1 })
+  }
+
+  findStop(): void {
+    this.findText = ''
+    this.attached?.webContents.stopFindInPage('clearSelection')
+  }
+
   // immediate prev/next in sidebar order with wraparound — unlike Ctrl+Tab MRU
   // cycling there is no preview/commit phase. Pins and bookmark slots are not
   // in `order`; when one is active, dir 1 starts at the first order tab and
@@ -522,6 +547,10 @@ export class TabManager {
         ? (this.views.get(this.model.activeId) ?? null)
         : null
     if (this.attached !== active) {
+      if (this.attached && this.findText) {
+        this.attached.webContents.stopFindInPage('clearSelection')
+        this.findText = ''
+      }
       if (this.attached) this.win.contentView.removeChildView(this.attached)
       if (active) this.win.contentView.addChildView(active)
       this.attached = active
@@ -575,6 +604,12 @@ export class TabManager {
     wc.on('render-process-gone', (_e, details) => {
       if (wc.getURL().startsWith('data:')) return // error page crashed; don't loop
       wc.loadURL(errorPageDataUrl(`Page crashed (${details.reason})`, wc.getURL()))
+    })
+    wc.on('found-in-page', (_e, result) => {
+      // only the attached view's session is live; ignore stragglers
+      if (this.attached?.webContents === wc) {
+        this.opts.onFindResult?.({ matches: result.matches, active: result.activeMatchOrdinal })
+      }
     })
   }
 }
