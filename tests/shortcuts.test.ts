@@ -8,6 +8,9 @@ describe('resolveShortcuts', () => {
     expect(resolved['new-tab']).toBe('CmdOrCtrl+T')
     expect(resolved['toggle-sidebar']).toBe('Control+S')
     expect(resolved['settings']).toBe('CmdOrCtrl+,')
+    expect(resolved['find']).toBe('CmdOrCtrl+F')
+    expect(resolved['find-next']).toBe('CmdOrCtrl+G')
+    expect(resolved['find-prev']).toBe('CmdOrCtrl+Shift+G')
   })
 
   it('applies overrides for known ids', () => {
