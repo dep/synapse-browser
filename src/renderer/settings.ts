@@ -1,3 +1,6 @@
+import { acceleratorFromKeyEvent } from '../shared/accelerator'
+import type { ShortcutRow } from '../shared/ipc'
+
 export type SettingsSection = 'general' | 'shortcuts'
 
 export function renderSettings(el: HTMLElement, section: SettingsSection): void {
@@ -35,10 +38,93 @@ export function renderSettings(el: HTMLElement, section: SettingsSection): void 
   el.append(nav, body)
 }
 
-// placeholder until the shortcuts settings task fills it in
 function renderShortcutsSection(body: HTMLElement): void {
-  const empty = document.createElement('p')
-  empty.className = 'settings-empty'
-  empty.textContent = 'Coming soon.'
-  body.append(empty)
+  const toolbar = document.createElement('div')
+  toolbar.className = 'settings-toolbar'
+  const resetAll = document.createElement('button')
+  resetAll.className = 'settings-action'
+  resetAll.textContent = 'Reset All'
+  resetAll.addEventListener('click', () => {
+    void window.synapse.shortcuts.resetAll().then(() => refresh())
+  })
+  toolbar.append(resetAll)
+
+  const list = document.createElement('div')
+  list.id = 'shortcut-list'
+  body.append(toolbar, list)
+
+  const refresh = (): void => {
+    void window.synapse.shortcuts.list().then((rows) => renderRows(list, rows, refresh))
+  }
+  refresh()
+}
+
+function renderRows(list: HTMLElement, rows: ShortcutRow[], refresh: () => void): void {
+  list.innerHTML = ''
+  for (const row of rows) {
+    const item = document.createElement('div')
+    item.className = 'shortcut-row'
+
+    const label = document.createElement('span')
+    label.className = 'shortcut-label'
+    label.textContent = row.label
+
+    const chip = document.createElement('button')
+    chip.className = 'shortcut-chip' + (row.fixed ? ' fixed' : '')
+    chip.textContent = row.accelerator
+    chip.disabled = row.fixed
+    if (row.fixed) chip.title = 'This shortcut is built in and cannot be changed'
+
+    const error = document.createElement('span')
+    error.className = 'shortcut-error'
+
+    item.append(label, chip, error)
+
+    if (!row.fixed) {
+      if (row.accelerator !== row.default) {
+        const reset = document.createElement('button')
+        reset.className = 'settings-action'
+        reset.textContent = 'Reset'
+        reset.title = `Reset to ${row.default}`
+        reset.addEventListener('click', () => {
+          void window.synapse.shortcuts.reset(row.id).then(() => refresh())
+        })
+        item.append(reset)
+      }
+      chip.addEventListener('click', () => beginRecording(chip, error, row.id, refresh))
+    }
+    list.append(item)
+  }
+}
+
+function beginRecording(
+  chip: HTMLButtonElement,
+  error: HTMLElement,
+  id: string,
+  refresh: () => void,
+): void {
+  chip.classList.add('recording')
+  chip.textContent = 'Press shortcut…'
+  error.textContent = ''
+  const onKey = (e: KeyboardEvent): void => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.key === 'Escape') {
+      cleanup()
+      refresh()
+      return
+    }
+    const accel = acceleratorFromKeyEvent(e)
+    if (!accel) return // ignore bare modifiers; keep recording
+    cleanup()
+    void window.synapse.shortcuts.set(id, accel).then((result) => {
+      if (!result.ok) error.textContent = result.error ?? 'Could not set shortcut.'
+      refresh()
+    })
+  }
+  const cleanup = (): void => {
+    window.removeEventListener('keydown', onKey, true)
+    chip.classList.remove('recording')
+  }
+  window.addEventListener('keydown', onKey, true)
 }
