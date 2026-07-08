@@ -114,6 +114,11 @@ export interface SynapseApi {
     resetAll(): Promise<void>
     setRecording(active: boolean): void
   }
+  find: {
+    start(text: string): void
+    step(dir: 1 | -1): void
+    stop(): void
+  }
   ui: {
     setOverlayHeight(px: number): void
     startSidebarDrag(): void
@@ -121,6 +126,9 @@ export interface SynapseApi {
     onSidebarWidth(cb: (px: number) => void): void
     onSidebarVisible(cb: (visible: boolean) => void): void
     onSettings(cb: (open: boolean) => void): void
+    onFindOpen(cb: () => void): void
+    onFindStep(cb: (dir: 1 | -1) => void): void
+    onFindResult(cb: (r: { matches: number; active: number }) => void): void
     onFocusUrlBar(cb: () => void): void
     onToggleHistory(cb: () => void): void
     onBookmarksChanged(cb: () => void): void

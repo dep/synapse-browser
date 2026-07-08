@@ -50,6 +50,11 @@ const api: SynapseApi = {
     resetAll: () => ipcRenderer.invoke('shortcuts:reset-all'),
     setRecording: (active) => ipcRenderer.send('shortcuts:recording', active),
   },
+  find: {
+    start: (text) => ipcRenderer.send('find:start', text),
+    step: (dir) => ipcRenderer.send('find:step', dir),
+    stop: () => ipcRenderer.send('find:stop'),
+  },
   ui: {
     setOverlayHeight: (px) => ipcRenderer.send('ui:set-overlay-height', px),
     startSidebarDrag: () => ipcRenderer.send('ui:sidebar-drag-start'),
@@ -62,6 +67,15 @@ const api: SynapseApi = {
     },
     onSettings: (cb) => {
       ipcRenderer.on('ui:settings', (_e, open) => cb(open))
+    },
+    onFindOpen: (cb) => {
+      ipcRenderer.on('ui:find-open', () => cb())
+    },
+    onFindStep: (cb) => {
+      ipcRenderer.on('ui:find-step', (_e, dir) => cb(dir))
+    },
+    onFindResult: (cb) => {
+      ipcRenderer.on('ui:find-result', (_e, r) => cb(r))
     },
     onFocusUrlBar: (cb) => {
       ipcRenderer.on('ui:focus-urlbar', () => cb())

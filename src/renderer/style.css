@@ -507,3 +507,43 @@ browser-action-list {
   color: #f7768e;
   font-size: 12px;
 }
+#find-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 2px 6px;
+}
+#find-bar[hidden] {
+  display: none;
+}
+#find-input {
+  width: 160px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  outline: none;
+  font-size: 12px;
+}
+#find-input:focus {
+  border-color: var(--accent);
+}
+#find-count {
+  color: var(--fg-dim);
+  font-size: 11px;
+  min-width: 52px;
+  text-align: center;
+  white-space: nowrap;
+}
+#find-count.empty {
+  color: #f7768e;
+}
+#topbar #find-bar button {
+  width: 22px;
+  height: 22px;
+  font-size: 13px;
+}

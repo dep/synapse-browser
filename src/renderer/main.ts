@@ -5,6 +5,7 @@ import { PanelMode, renderPanel } from './panel'
 import { renderPins, renderTabList } from './sidebar'
 import { cancelRecording, renderSettings } from './settings'
 import { initTopbar } from './topbar'
+import { initFindBar } from './find-bar'
 
 const pinGridEl = document.getElementById('pin-grid')!
 const bookmarksEl = document.getElementById('bookmarks')!
@@ -14,6 +15,7 @@ const appEl = document.getElementById('app')!
 const sidebarResizeEl = document.getElementById('sidebar-resize')!
 const settingsEl = document.getElementById('settings')!
 const topbar = initTopbar()
+const findBar = initFindBar()
 
 let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], bookmarkTabs: {}, activeId: null }
 let bookmarks: BookmarksData = { folders: [], bookmarks: [] }
@@ -71,6 +73,7 @@ function render(): void {
   renderBookmarks(bookmarksEl, bookmarks, snap, render)
   renderTabList(tabListEl, snap)
   topbar.update(snap)
+  findBar.update(snap)
   const showSidebar = panelMode === 'none'
   pinGridEl.hidden = !showSidebar || snap.pinned.length === 0
   bookmarksEl.hidden = !showSidebar

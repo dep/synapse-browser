@@ -83,6 +83,22 @@ export function buildMenu(
           },
         },
         { type: 'separator' },
+        {
+          label: 'Find…',
+          accelerator: shortcuts['find'],
+          click: () => win.webContents.send('ui:find-open'),
+        },
+        {
+          label: 'Find Next',
+          accelerator: shortcuts['find-next'],
+          click: () => win.webContents.send('ui:find-step', 1),
+        },
+        {
+          label: 'Find Previous',
+          accelerator: shortcuts['find-prev'],
+          click: () => win.webContents.send('ui:find-step', -1),
+        },
+        { type: 'separator' },
         { label: 'Zoom In', accelerator: shortcuts['zoom-in'], click: () => tabs.zoomActive(1) },
         { label: 'Zoom Out', accelerator: shortcuts['zoom-out'], click: () => tabs.zoomActive(-1) },
         { label: 'Actual Size', accelerator: shortcuts['zoom-reset'], click: () => tabs.zoomActive(0) },

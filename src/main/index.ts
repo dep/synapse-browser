@@ -152,6 +152,7 @@ app.whenReady().then(async () => {
       if (profile === 'default') extensions.selectTab(wc)
     },
     onSettingsClosed: () => win.webContents.send('ui:settings', false),
+    onFindResult: (r) => win.webContents.send('ui:find-result', r),
   })
   const extensions = new ExtensionManager(win, tabs)
   tabs.setSidebarWidth(uiStore.sidebarWidth())
@@ -561,6 +562,12 @@ app.whenReady().then(async () => {
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
   ipcMain.on('ui:sidebar-drag-start', () => sidebarResize.start())
   ipcMain.on('ui:sidebar-drag-end', () => sidebarResize.end())
+
+  ipcMain.on('find:start', (_e, text: string) => {
+    if (typeof text === 'string') tabs.findStart(text)
+  })
+  ipcMain.on('find:step', (_e, dir: number) => tabs.findStep(dir === -1 ? -1 : 1))
+  ipcMain.on('find:stop', () => tabs.findStop())
 
   win.webContents.on('did-finish-load', () => {
     tabs.refresh()
