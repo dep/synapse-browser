@@ -126,6 +126,7 @@ export class TabManager {
     this.views.delete(id)
     this.favicons.delete(id)
     if (wasAttached) {
+      this.findText = ''
       this.win.contentView.removeChildView(view)
       this.attached = null
     }
