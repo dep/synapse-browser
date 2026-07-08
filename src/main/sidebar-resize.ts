@@ -66,7 +66,9 @@ export class SidebarResizeController {
   private track(): void {
     const cursorX = screen.getCursorScreenPoint().x
     const contentLeft = this.opts.win.getContentBounds().x
-    this.width = clampSidebarWidth(cursorX - contentLeft)
-    this.opts.onWidth(this.width)
+    const width = clampSidebarWidth(cursorX - contentLeft)
+    if (width === this.width) return
+    this.width = width
+    this.opts.onWidth(width)
   }
 }

@@ -26,7 +26,7 @@ window.synapse.onTabsUpdated((s) => {
 // only initiates drags and renders pushed widths
 window.synapse.ui.onSidebarWidth((px) => {
   appEl.style.gridTemplateColumns = `${px}px 1fr`
-  sidebarResizeEl.style.left = `${px - 2}px`
+  sidebarResizeEl.style.left = `${px - 5}px`
 })
 sidebarResizeEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return

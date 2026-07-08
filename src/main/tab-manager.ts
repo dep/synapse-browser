@@ -4,6 +4,7 @@ import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../sha
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
+
 export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
 
