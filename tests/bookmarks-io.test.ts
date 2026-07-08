@@ -96,4 +96,27 @@ describe('planImport', () => {
     const plan = planImport(data(), incoming)
     expect(plan.bookmarks[0]?.folderName).toBeNull()
   })
+
+  it('dedupes against an existing bookmark in a same-named folder', () => {
+    const existing = data({
+      folders: [{ id: 'x', name: 'Work' }],
+      bookmarks: [bm('e1', 'https://a.com', { folderId: 'x' })],
+    })
+    const incoming = data({
+      folders: [{ id: 'f9', name: 'Work' }],
+      bookmarks: [bm('b1', 'https://a.com', { folderId: 'f9' })],
+    })
+    const plan = planImport(existing, incoming)
+    expect(plan.bookmarks).toHaveLength(0)
+    expect(plan.skipped).toBe(1)
+    expect(plan.folders).toEqual([])
+  })
+
+  it('does not falsely dedupe across delimiter collisions', () => {
+    const incoming = data({
+      folders: [{ id: 'f1', name: 'b' }],
+      bookmarks: [bm('b1', 'https://a.com b'), bm('b2', 'https://a.com', { folderId: 'f1' })],
+    })
+    expect(planImport(data(), incoming).bookmarks).toHaveLength(2)
+  })
 })

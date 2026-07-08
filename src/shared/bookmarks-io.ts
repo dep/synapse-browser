@@ -45,16 +45,24 @@ export interface ImportPlan {
   skipped: number
 }
 
-// folders are matched by name; bookmarks dedupe by (url, target folder name)
-// against both the existing data and earlier items in the same import
+// collision-proof key: JSON-encoding the tuple avoids ambiguity from raw
+// delimiter concatenation (e.g. url "a.com|b" + folder "" colliding with
+// url "a.com" + folder "b")
+const dedupeKey = (url: string, folderName: string | null): string =>
+  JSON.stringify([url, folderName ?? ''])
+
+// folders are matched by name; bookmarks dedupe by (url, resolved target
+// folder name) against both the existing data and earlier items in the same
+// import — both sides must resolve folderId to folder NAME before keying,
+// since different folder ids can share the same name
 export function planImport(existing: BookmarksData, incoming: BookmarksData): ImportPlan {
   const incomingFolderName = new Map(incoming.folders.map((f) => [f.id, f.name]))
   const existingFolderName = new Map(existing.folders.map((f) => [f.id, f.name]))
   const existingNames = new Set(existing.folders.map((f) => f.name))
 
   const seen = new Set(
-    existing.bookmarks.map(
-      (b) => `${b.url}|${b.folderId || ''}`,
+    existing.bookmarks.map((b) =>
+      dedupeKey(b.url, (b.folderId && existingFolderName.get(b.folderId)) || null),
     ),
   )
 
@@ -65,7 +73,7 @@ export function planImport(existing: BookmarksData, incoming: BookmarksData): Im
 
   for (const b of incoming.bookmarks) {
     const folderName = (b.folderId && incomingFolderName.get(b.folderId)) || null
-    const key = `${b.url}|${folderName || ''}`
+    const key = dedupeKey(b.url, folderName)
     if (seen.has(key)) {
       skipped += 1
       continue
