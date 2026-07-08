@@ -45,6 +45,11 @@ const api: SynapseApi = {
   },
   ui: {
     setOverlayHeight: (px) => ipcRenderer.send('ui:set-overlay-height', px),
+    startSidebarDrag: () => ipcRenderer.send('ui:sidebar-drag-start'),
+    endSidebarDrag: () => ipcRenderer.send('ui:sidebar-drag-end'),
+    onSidebarWidth: (cb) => {
+      ipcRenderer.on('ui:sidebar-width', (_e, px) => cb(px))
+    },
     onFocusUrlBar: (cb) => {
       ipcRenderer.on('ui:focus-urlbar', () => cb())
     },

@@ -101,6 +101,9 @@ export interface SynapseApi {
   }
   ui: {
     setOverlayHeight(px: number): void
+    startSidebarDrag(): void
+    endSidebarDrag(): void
+    onSidebarWidth(cb: (px: number) => void): void
     onFocusUrlBar(cb: () => void): void
     onToggleHistory(cb: () => void): void
     onBookmarksChanged(cb: () => void): void
