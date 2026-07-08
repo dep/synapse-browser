@@ -6,6 +6,23 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.4.1</title>
+            <pubDate>Wed, 08 Jul 2026 21:36:29 +0000</pubDate>
+            <sparkle:version>0.4.1</sparkle:version>
+            <sparkle:shortVersionString>0.4.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Fixes pinned tabs (and occasionally the whole tab session) being wiped across restarts: a startup race could persist an empty snapshot before the saved session was restored.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.4.1/Synapse.Browser-0.4.1-universal.dmg"
+              sparkle:edSignature="bEnoyXGPvnd2+AsLY4TQKsi9+fGUe46B0AiYze8TK4uNiF/4U1zE3r3A7WrUEujyWJ/rrxuqSgo6l3VXrYZVCA=="
+              length="219224177"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.4.0</title>
             <pubDate>Wed, 08 Jul 2026 19:00:29 +0000</pubDate>
             <sparkle:version>0.4.0</sparkle:version>
