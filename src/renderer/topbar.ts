@@ -11,6 +11,8 @@ export function initTopbar(): Topbar {
   const star = document.getElementById('star') as HTMLButtonElement
   const pill = document.getElementById('download-pill') as HTMLButtonElement
   let latestDownload: import('../shared/ipc').DownloadInfo | null = null
+  const PILL_HIDE_DELAY_MS = 5000
+  let pillHideTimer: ReturnType<typeof setTimeout> | null = null
 
   window.synapse.downloads.onUpdated((list) => {
     latestDownload = list[list.length - 1] ?? null
@@ -22,6 +24,8 @@ export function initTopbar(): Topbar {
   })
 
   function renderPill(): void {
+    if (pillHideTimer) clearTimeout(pillHideTimer)
+    pillHideTimer = null
     if (!latestDownload) {
       pill.hidden = true
       return
@@ -31,12 +35,18 @@ export function initTopbar(): Topbar {
     if (d.state === 'progressing') {
       const pct = d.totalBytes > 0 ? Math.round((d.receivedBytes / d.totalBytes) * 100) : 0
       pill.textContent = `↓ ${d.filename} ${pct}%`
-    } else if (d.state === 'completed') {
-      pill.textContent = `✓ ${d.filename}`
-      pill.title = 'Show in Finder'
     } else {
-      pill.textContent = `✕ ${d.filename}`
-      pill.title = 'Download failed'
+      if (d.state === 'completed') {
+        pill.textContent = `✓ ${d.filename}`
+        pill.title = 'Show in Finder'
+      } else {
+        pill.textContent = `✕ ${d.filename}`
+        pill.title = 'Download failed'
+      }
+      // finished chips linger briefly, then get out of the way
+      pillHideTimer = setTimeout(() => {
+        pill.hidden = true
+      }, PILL_HIDE_DELAY_MS)
     }
   }
 
