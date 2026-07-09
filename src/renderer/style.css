@@ -33,11 +33,68 @@ body {
 }
 #topbar {
   grid-column: 1 / 3;
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 0 10px;
   background: var(--bg-raised);
+}
+/* faux-progress hairline; JS drives scaleX each frame, CSS owns the fades */
+#loading-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: linear-gradient(90deg, var(--accent), #a8c3ff);
+  box-shadow: 0 0 8px rgba(122, 162, 247, 0.55);
+  border-radius: 0 1px 1px 0;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+#loading-bar.visible {
+  opacity: 1;
+  transition: opacity 120ms ease-out;
+}
+#loading-bar.finishing {
+  transform: scaleX(1);
+  opacity: 0;
+  transition:
+    transform 180ms ease-out,
+    opacity 250ms ease-out 80ms;
+}
+/* 12px ring in the favicon slot while a tab loads; phase is seeded via a
+   negative animation-delay so full re-renders don't restart the rotation */
+.load-spinner {
+  width: 12px;
+  height: 12px;
+  margin: 2px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid rgba(122, 162, 247, 0.25);
+  border-top-color: var(--accent);
+  animation: load-spin 800ms linear infinite;
+}
+@keyframes load-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #loading-bar {
+    box-shadow: none;
+  }
+  #loading-bar.visible,
+  #loading-bar.finishing {
+    transition: none;
+  }
+  .load-spinner {
+    animation-duration: 2400ms;
+  }
 }
 #topbar button {
   background: none;

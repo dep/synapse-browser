@@ -1,5 +1,6 @@
 import type { Bookmark, BookmarkFolder, BookmarksData, TabsSnapshot } from '../shared/ipc'
 import { wireDragItem, wireDropZone } from './drag-list'
+import { loadSpinner } from './load-spinner'
 
 const collapsed = new Set<string>()
 // all folders start collapsed on the first render after launch; folders
@@ -95,16 +96,22 @@ function bookmarkRow(
     (tab ? '' : ' asleep') +
     (indented ? ' indent' : '')
 
-  const icon = document.createElement('img')
-  icon.className = 'favicon'
-  icon.onerror = () => (icon.style.visibility = 'hidden')
-  const src = tab?.favicon ?? bm.favicon
-  if (src) icon.src = src
-  else icon.style.visibility = 'hidden'
+  let icon: HTMLElement
+  if (tab?.isLoading) {
+    icon = loadSpinner()
+  } else {
+    const img = document.createElement('img')
+    img.className = 'favicon'
+    img.onerror = () => (img.style.visibility = 'hidden')
+    const src = tab?.favicon ?? bm.favicon
+    if (src) img.src = src
+    else img.style.visibility = 'hidden'
+    icon = img
+  }
 
   const title = document.createElement('span')
   title.className = 'tab-title'
-  title.textContent = tab?.isLoading ? `… ${bm.title}` : bm.title
+  title.textContent = bm.title
   row.append(icon, title)
 
   if ((bm.profile ?? 'default') === 'work') {

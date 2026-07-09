@@ -1,5 +1,6 @@
 import type { TabsSnapshot } from '../shared/ipc'
 import { wireDragItem, wireDropZone } from './drag-list'
+import { loadSpinner } from './load-spinner'
 
 // the tab-list container is wired once but order changes every render
 let lastOrder: string[] = []
@@ -56,16 +57,21 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     const item = document.createElement('div')
     item.className = 'tab' + (id === snap.activeId ? ' active' : '')
 
-    const icon = document.createElement('img')
-    icon.className = 'favicon'
-    icon.onerror = () => (icon.style.visibility = 'hidden')
-    if (tab.favicon) icon.src = tab.favicon
-    else icon.style.visibility = 'hidden'
+    let icon: HTMLElement
+    if (tab.isLoading) {
+      icon = loadSpinner()
+    } else {
+      const img = document.createElement('img')
+      img.className = 'favicon'
+      img.onerror = () => (img.style.visibility = 'hidden')
+      if (tab.favicon) img.src = tab.favicon
+      else img.style.visibility = 'hidden'
+      icon = img
+    }
 
     const title = document.createElement('span')
     title.className = 'tab-title'
     title.textContent = tab.title
-    if (tab.isLoading) title.textContent = `… ${tab.title}`
 
     const close = document.createElement('button')
     close.className = 'tab-close'

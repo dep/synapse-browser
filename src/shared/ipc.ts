@@ -81,6 +81,7 @@ export interface SynapseApi {
     back(id: string): void
     forward(id: string): void
     reload(id: string): void
+    stop(id: string): void
     reorder(id: string, toIndex: number): void
     showContextMenu(id: string): void
   }

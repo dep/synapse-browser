@@ -401,6 +401,10 @@ export class TabManager {
     this.views.get(id)?.webContents.reload()
   }
 
+  stop(id: string): void {
+    this.views.get(id)?.webContents.stop()
+  }
+
   reorderTab(id: string, toIndex: number): void {
     if (!Number.isFinite(toIndex)) return
     this.model.reorder(id, Math.round(toIndex))

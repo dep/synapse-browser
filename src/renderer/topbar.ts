@@ -53,12 +53,17 @@ export function initTopbar(): Topbar {
   const urlbar = document.getElementById('urlbar') as HTMLInputElement
   const suggestionsEl = document.getElementById('suggestions') as HTMLDivElement
   let activeId: string | null = null
+  let activeLoading = false
   let suggestions: HistoryEntry[] = []
   let selected = -1
 
   back.addEventListener('click', () => activeId && window.synapse.tabs.back(activeId))
   forward.addEventListener('click', () => activeId && window.synapse.tabs.forward(activeId))
-  reload.addEventListener('click', () => activeId && window.synapse.tabs.reload(activeId))
+  reload.addEventListener('click', () => {
+    if (!activeId) return
+    if (activeLoading) window.synapse.tabs.stop(activeId)
+    else window.synapse.tabs.reload(activeId)
+  })
   star.addEventListener('click', () => void window.synapse.bookmarks.toggleActive())
 
   const extMenuWrap = document.getElementById('ext-menu-wrap') as HTMLDivElement
@@ -206,6 +211,9 @@ export function initTopbar(): Topbar {
       back.disabled = !tab?.canGoBack
       forward.disabled = !tab?.canGoForward
       reload.disabled = !tab
+      activeLoading = !!tab?.isLoading
+      reload.textContent = activeLoading ? '✕' : '⟳'
+      reload.title = activeLoading ? 'Stop' : 'Reload'
       if (document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
       const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || /^https?:\/\//.test(tab.url))
       star.disabled = !canBookmark
