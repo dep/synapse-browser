@@ -10,6 +10,8 @@ import { BookmarksStore } from './bookmarks'
 import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
 import { HistoryStore } from './history'
+import { attachPermissionPrompts } from './media-permissions'
+import { PermissionsStore } from './permissions-store'
 import { PinsStore } from './pins-store'
 import { SidebarResizeController } from './sidebar-resize'
 import { ShortcutsStore } from './shortcuts-store'
@@ -77,6 +79,7 @@ app.whenReady().then(async () => {
   const pinsStore = new PinsStore(userData)
   const uiStore = new UiStore(userData)
   const shortcutsStore = new ShortcutsStore(userData)
+  const permissionsStore = new PermissionsStore(userData)
 
   function attachCycleHooks(wc: WebContents): void {
     wc.on('before-input-event', (event, input) => {
@@ -211,6 +214,9 @@ app.whenReady().then(async () => {
   // (repo rule). Created eagerly so downloads work before any Work tab exists.
   const workSession = session.fromPartition(WORK_PARTITION)
   downloads.attach(workSession)
+  // mic/camera requests prompt per origin (persisted); both containers
+  attachPermissionPrompts(session.defaultSession, win, permissionsStore)
+  attachPermissionPrompts(workSession, win, permissionsStore)
   ipcMain.on('downloads:reveal', (_e, id: string) => downloads.reveal(id))
 
   ipcMain.on('tabs:create', (_e, url?: string) => {
@@ -621,6 +627,7 @@ app.whenReady().then(async () => {
     pinsStore.flush()
     uiStore.flush()
     shortcutsStore.flush()
+    permissionsStore.flush()
   })
 })
 
