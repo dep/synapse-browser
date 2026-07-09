@@ -6,6 +6,23 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.5.1</title>
+            <pubDate>Thu, 09 Jul 2026 14:55:33 +0000</pubDate>
+            <sparkle:version>0.5.1</sparkle:version>
+            <sparkle:shortVersionString>0.5.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Fix: loading an unpacked extension no longer fails with &#8220;Failed to start service worker&#8221;.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.5.1/Synapse.Browser-0.5.1-universal.dmg"
+              sparkle:edSignature="PYmYkBdEXM1PjIe2q+RWHgQZl9kAVMpCUOEcedImsZCFTXNzdbivn+phj46spCNY3NgThQ2PdfLrBobUUHd8Aw=="
+              length="219210566"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.5.0</title>
             <pubDate>Thu, 09 Jul 2026 12:04:34 +0000</pubDate>
             <sparkle:version>0.5.0</sparkle:version>
