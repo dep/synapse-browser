@@ -67,4 +67,42 @@ describe('UiStore', () => {
     )
     expect(new UiStore(dir).sidebarVisible()).toBe(true)
   })
+
+  it('aiSidebar defaults: hidden, 360 wide', () => {
+    const store = new UiStore(dir)
+    expect(store.aiSidebarVisible()).toBe(false)
+    expect(store.aiSidebarWidth()).toBe(360)
+  })
+
+  it('round-trips ai sidebar state without touching the left sidebar', () => {
+    const store = new UiStore(dir)
+    store.setSidebarWidth(300)
+    store.setAiSidebarVisible(true)
+    store.setAiSidebarWidth(420)
+    store.flush()
+    const again = new UiStore(dir)
+    expect(again.aiSidebarVisible()).toBe(true)
+    expect(again.aiSidebarWidth()).toBe(420)
+    expect(again.sidebarWidth()).toBe(300)
+  })
+
+  it('clamps ai sidebar width on read and treats non-boolean visible as false', () => {
+    fs.writeFileSync(
+      path.join(dir, 'ui.json'),
+      JSON.stringify({ v: 1, aiSidebarWidth: 5, aiSidebarVisible: 'yes' }),
+    )
+    const store = new UiStore(dir)
+    expect(store.aiSidebarWidth()).toBe(260)
+    expect(store.aiSidebarVisible()).toBe(false)
+  })
+
+  it('legacy ui.json without ai fields reads as defaults', () => {
+    fs.writeFileSync(
+      path.join(dir, 'ui.json'),
+      JSON.stringify({ v: 1, sidebarWidth: 240, sidebarVisible: true }),
+    )
+    const store = new UiStore(dir)
+    expect(store.aiSidebarVisible()).toBe(false)
+    expect(store.aiSidebarWidth()).toBe(360)
+  })
 })

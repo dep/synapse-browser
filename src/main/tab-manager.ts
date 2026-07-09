@@ -5,6 +5,7 @@ import { ClosedTabsStack } from './closed-tabs'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
+import { AI_SIDEBAR_WIDTH_DEFAULT, clampAiSidebarWidth } from '../shared/ai'
 
 export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
@@ -41,6 +42,8 @@ export class TabManager {
   private findText = ''
   private sidebarWidth = SIDEBAR_WIDTH_DEFAULT
   private sidebarVisible = true
+  private aiSidebarWidth = AI_SIDEBAR_WIDTH_DEFAULT
+  private aiSidebarVisible = false
   private settingsOpen = false
   private counter = 0
 
@@ -466,6 +469,16 @@ export class TabManager {
     this.layout()
   }
 
+  setAiSidebarWidth(px: number): void {
+    this.aiSidebarWidth = clampAiSidebarWidth(px)
+    this.layout()
+  }
+
+  setAiSidebarVisible(visible: boolean): void {
+    this.aiSidebarVisible = visible
+    this.layout()
+  }
+
   // while settings is open no page view is attached, so the chrome renderer
   // (which draws the settings UI in the page cell) is fully visible
   toggleSettings(): boolean {
@@ -616,10 +629,11 @@ export class TabManager {
     const [w, h] = this.win.getContentSize()
     const top = TOPBAR_HEIGHT + this.overlayHeight
     const left = this.sidebarVisible ? this.sidebarWidth : 0
+    const right = this.aiSidebarVisible ? this.aiSidebarWidth : 0
     this.attached.setBounds({
       x: left,
       y: top,
-      width: Math.max(0, w - left),
+      width: Math.max(0, w - left - right),
       height: Math.max(0, h - top),
     })
   }

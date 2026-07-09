@@ -19,6 +19,7 @@ export const SHORTCUT_COMMANDS: ShortcutCommand[] = [
   { id: 'find-next', label: 'Find Next', default: 'CmdOrCtrl+G' },
   { id: 'find-prev', label: 'Find Previous', default: 'CmdOrCtrl+Shift+G' },
   { id: 'toggle-sidebar', label: 'Toggle Sidebar', default: 'Control+S' },
+  { id: 'toggle-ai-sidebar', label: 'Toggle AI Sidebar', default: 'CmdOrCtrl+J' },
   { id: 'zoom-in', label: 'Zoom In', default: 'CmdOrCtrl+=' },
   { id: 'zoom-out', label: 'Zoom Out', default: 'CmdOrCtrl+-' },
   { id: 'zoom-reset', label: 'Actual Size', default: 'CmdOrCtrl+0' },

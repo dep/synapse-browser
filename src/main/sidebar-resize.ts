@@ -7,6 +7,10 @@ export interface SidebarResizeOptions {
   getPageWebContents(): WebContents | null
   onWidth(px: number): void
   onCommit(px: number): void
+  // which window edge the sidebar hangs off; width is measured from there
+  side?: 'left' | 'right'
+  // width clamp; defaults to the left sidebar's range
+  clamp?(px: number): number
 }
 
 // Mouse events over a WebContentsView never reach the chrome renderer —
@@ -18,11 +22,14 @@ export class SidebarResizeController {
   private tracked: WebContents[] = []
   private width: number
 
+  private clamp: (px: number) => number
+
   constructor(
     private opts: SidebarResizeOptions,
     initialWidth: number,
   ) {
-    this.width = clampSidebarWidth(initialWidth)
+    this.clamp = opts.clamp ?? clampSidebarWidth
+    this.width = this.clamp(initialWidth)
     // a release outside the window delivers no mouseUp to any of our surfaces
     opts.win.on('blur', () => this.end())
   }
@@ -65,8 +72,10 @@ export class SidebarResizeController {
 
   private track(): void {
     const cursorX = screen.getCursorScreenPoint().x
-    const contentLeft = this.opts.win.getContentBounds().x
-    const width = clampSidebarWidth(cursorX - contentLeft)
+    const bounds = this.opts.win.getContentBounds()
+    const raw =
+      this.opts.side === 'right' ? bounds.x + bounds.width - cursorX : cursorX - bounds.x
+    const width = this.clamp(raw)
     if (width === this.width) return
     this.width = width
     this.opts.onWidth(width)

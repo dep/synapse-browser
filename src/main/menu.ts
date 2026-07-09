@@ -6,6 +6,7 @@ import type { TabManager } from './tab-manager'
 export interface MenuCommands {
   toggleBookmark(): void
   toggleSidebar(): void
+  toggleAiSidebar(): void
   toggleSettings(): void
   exportBookmarks(): void
   importBookmarks(): void
@@ -118,6 +119,11 @@ export function buildMenu(
           label: 'Toggle Sidebar',
           accelerator: shortcuts['toggle-sidebar'],
           click: () => commands.toggleSidebar(),
+        },
+        {
+          label: 'Toggle AI Sidebar',
+          accelerator: shortcuts['toggle-ai-sidebar'],
+          click: () => commands.toggleAiSidebar(),
         },
         { type: 'separator' },
         { role: 'toggleDevTools' },

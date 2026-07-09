@@ -1,4 +1,11 @@
+import type { AiChatMessage } from './ai'
+
 export type ProfileId = 'default' | 'work'
+
+export interface AiSettings {
+  apiKey: string
+  model: string
+}
 
 export interface PinSlot {
   url: string
@@ -120,12 +127,29 @@ export interface SynapseApi {
     step(dir: 1 | -1): void
     stop(): void
   }
+  settings: {
+    get(): Promise<AiSettings>
+    set(patch: Partial<AiSettings>): Promise<void>
+    open(): void
+  }
+  ai: {
+    send(messages: AiChatMessage[]): void
+    stop(): void
+    toggleSidebar(): void
+    onDelta(cb: (text: string) => void): void
+    onDone(cb: () => void): void
+    onError(cb: (message: string) => void): void
+  }
   ui: {
     setOverlayHeight(px: number): void
     startSidebarDrag(): void
     endSidebarDrag(): void
+    startAiSidebarDrag(): void
+    endAiSidebarDrag(): void
     onSidebarWidth(cb: (px: number) => void): void
     onSidebarVisible(cb: (visible: boolean) => void): void
+    onAiSidebarWidth(cb: (px: number) => void): void
+    onAiSidebarVisible(cb: (visible: boolean) => void): void
     onSettings(cb: (open: boolean) => void): void
     onFindOpen(cb: () => void): void
     onFindStep(cb: (dir: 1 | -1) => void): void

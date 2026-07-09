@@ -6,7 +6,10 @@ import type { ProfileId, ShortcutRow } from '../shared/ipc'
 import { normalizeAccelerator } from '../shared/accelerator'
 import { FIXED_SHORTCUTS, RESERVED_ACCELERATORS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
 import { parseBookmarksExport, planImport } from '../shared/bookmarks-io'
+import { clampAiSidebarWidth, sanitizeMessages } from '../shared/ai'
+import { AiChatController } from './ai'
 import { BookmarksStore } from './bookmarks'
+import { SettingsStore } from './settings-store'
 import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
 import { HistoryStore } from './history'
@@ -80,6 +83,7 @@ app.whenReady().then(async () => {
   const uiStore = new UiStore(userData)
   const shortcutsStore = new ShortcutsStore(userData)
   const permissionsStore = new PermissionsStore(userData)
+  const settingsStore = new SettingsStore(userData)
 
   function attachCycleHooks(wc: WebContents): void {
     wc.on('before-input-event', (event, input) => {
@@ -186,6 +190,27 @@ app.whenReady().then(async () => {
     },
     uiStore.sidebarWidth(),
   )
+  tabs.setAiSidebarWidth(uiStore.aiSidebarWidth())
+  tabs.setAiSidebarVisible(uiStore.aiSidebarVisible())
+  const aiSidebarResize = new SidebarResizeController(
+    {
+      win,
+      side: 'right',
+      clamp: clampAiSidebarWidth,
+      getPageWebContents: () => (tabs.activeId ? tabs.webContentsFor(tabs.activeId) : null),
+      onWidth: (px) => {
+        tabs.setAiSidebarWidth(px)
+        win.webContents.send('ui:ai-width', px)
+      },
+      onCommit: (px) => uiStore.setAiSidebarWidth(px),
+    },
+    uiStore.aiSidebarWidth(),
+  )
+  const ai = new AiChatController({
+    getSettings: () => ({ apiKey: settingsStore.aiApiKey(), model: settingsStore.aiModel() }),
+    getActivePage: () => (tabs.activeId ? tabs.webContentsFor(tabs.activeId) : null),
+    send: (channel, payload) => win.webContents.send(channel, payload),
+  })
   const updater = new Updater(win)
   // silent launch check; dev builds check only via the menu
   if (app.isPackaged) setTimeout(() => void updater.check(false), 10_000)
@@ -194,6 +219,12 @@ app.whenReady().then(async () => {
     uiStore.setSidebarVisible(visible)
     tabs.setSidebarVisible(visible)
     win.webContents.send('ui:sidebar-visible', visible)
+  }
+  const toggleAiSidebar = (): void => {
+    const visible = !uiStore.aiSidebarVisible()
+    uiStore.setAiSidebarVisible(visible)
+    tabs.setAiSidebarVisible(visible)
+    win.webContents.send('ui:ai-visible', visible)
   }
   tabs.setSidebarVisible(uiStore.sidebarVisible())
   attachCycleHooks(win.webContents)
@@ -517,6 +548,7 @@ app.whenReady().then(async () => {
     buildMenu(win, tabs, extensions, shortcutsStore.resolved(), {
       toggleBookmark,
       toggleSidebar,
+      toggleAiSidebar,
       toggleSettings: () => win.webContents.send('ui:settings', tabs.toggleSettings()),
       exportBookmarks: () => void exportBookmarks(),
       importBookmarks: () => void importBookmarks(),
@@ -588,6 +620,27 @@ app.whenReady().then(async () => {
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
   ipcMain.on('ui:sidebar-drag-start', () => sidebarResize.start())
   ipcMain.on('ui:sidebar-drag-end', () => sidebarResize.end())
+  ipcMain.on('ui:ai-drag-start', () => aiSidebarResize.start())
+  ipcMain.on('ui:ai-drag-end', () => aiSidebarResize.end())
+
+  ipcMain.on('ui:toggle-ai', () => toggleAiSidebar())
+
+  // the AI sidebar's "Open Settings" shortcut must open, never close
+  ipcMain.on('ui:open-settings', () => {
+    if (!tabs.isSettingsOpen()) win.webContents.send('ui:settings', tabs.toggleSettings())
+  })
+
+  ipcMain.handle('settings:get', () => ({
+    apiKey: settingsStore.aiApiKey(),
+    model: settingsStore.aiModel(),
+  }))
+  ipcMain.handle('settings:set', (_e, patch: { apiKey?: unknown; model?: unknown }) => {
+    if (typeof patch?.apiKey === 'string') settingsStore.setAiApiKey(patch.apiKey.trim())
+    if (typeof patch?.model === 'string') settingsStore.setAiModel(patch.model)
+  })
+
+  ipcMain.on('ai:send', (_e, messages: unknown) => void ai.start(sanitizeMessages(messages)))
+  ipcMain.on('ai:stop', () => ai.stop())
 
   ipcMain.on('find:start', (_e, text: string) => {
     if (typeof text === 'string') tabs.findStart(text)
@@ -600,6 +653,8 @@ app.whenReady().then(async () => {
     win.webContents.setIgnoreMenuShortcuts(false)
     win.webContents.send('ui:sidebar-width', sidebarResize.current)
     win.webContents.send('ui:sidebar-visible', uiStore.sidebarVisible())
+    win.webContents.send('ui:ai-width', aiSidebarResize.current)
+    win.webContents.send('ui:ai-visible', uiStore.aiSidebarVisible())
     win.webContents.send('ui:settings', tabs.isSettingsOpen())
   })
 
@@ -629,6 +684,7 @@ app.whenReady().then(async () => {
     uiStore.flush()
     shortcutsStore.flush()
     permissionsStore.flush()
+    settingsStore.flush()
   })
 })
 

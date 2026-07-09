@@ -7,6 +7,7 @@ import { cancelRecording, renderSettings } from './settings'
 import { initTopbar } from './topbar'
 import { initFindBar } from './find-bar'
 import { initLoadingBar } from './loading-bar'
+import { initAiSidebar } from './ai-sidebar'
 
 const pinGridEl = document.getElementById('pin-grid')!
 const bookmarksEl = document.getElementById('bookmarks')!
@@ -18,6 +19,9 @@ const settingsEl = document.getElementById('settings')!
 const topbar = initTopbar()
 const findBar = initFindBar()
 const loadingBar = initLoadingBar()
+const aiSidebar = initAiSidebar()
+const aiResizeEl = document.getElementById('ai-resize')!
+const aiToggleEl = document.getElementById('ai-toggle')!
 
 let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], bookmarkTabs: {}, activeId: null }
 let bookmarks: BookmarksData = { folders: [], bookmarks: [] }
@@ -37,6 +41,21 @@ window.synapse.ui.onSidebarWidth((px) => {
 window.synapse.ui.onSidebarVisible((visible) => {
   appEl.classList.toggle('sidebar-hidden', !visible)
 })
+// AI sidebar width/visibility are owned by main for the same reason
+window.synapse.ui.onAiSidebarWidth((px) => {
+  appEl.style.setProperty('--ai-width', `${px}px`)
+})
+window.synapse.ui.onAiSidebarVisible((visible) => {
+  appEl.classList.toggle('ai-hidden', !visible)
+  aiToggleEl.classList.toggle('active', visible)
+  aiSidebar.setVisible(visible)
+})
+aiToggleEl.addEventListener('click', () => window.synapse.ai.toggleSidebar())
+aiResizeEl.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return
+  e.preventDefault()
+  window.synapse.ui.startAiSidebarDrag()
+})
 window.synapse.ui.onSettings((open) => {
   findBar.close()
   settingsEl.hidden = !open
@@ -50,7 +69,10 @@ sidebarResizeEl.addEventListener('mousedown', (e) => {
 })
 // belt-and-braces alongside main's input-event/blur detection; main's
 // end() no-ops when no drag is active
-window.addEventListener('mouseup', () => window.synapse.ui.endSidebarDrag())
+window.addEventListener('mouseup', () => {
+  window.synapse.ui.endSidebarDrag()
+  window.synapse.ui.endAiSidebarDrag()
+})
 
 async function refreshBookmarks(): Promise<void> {
   bookmarks = await window.synapse.bookmarks.list()

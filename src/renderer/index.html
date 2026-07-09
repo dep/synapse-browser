@@ -9,7 +9,7 @@
     <title>Synapse Browser</title>
   </head>
   <body>
-    <div id="app">
+    <div id="app" class="ai-hidden">
       <header id="topbar">
         <div id="loading-bar"></div>
         <button id="nav-back" title="Back" disabled>←</button>
@@ -27,6 +27,7 @@
           </div>
         </div>
         <button id="download-pill" hidden></button>
+        <button id="ai-toggle" title="AI Assistant">✦</button>
         <div id="find-bar" hidden>
           <input id="find-input" type="text" placeholder="Find in page" spellcheck="false" />
           <span id="find-count"></span>
@@ -46,7 +47,24 @@
         </div>
       </aside>
       <main id="settings" hidden></main>
+      <aside id="ai-sidebar">
+        <div id="ai-header">
+          <span id="ai-title">Assistant</span>
+          <button id="ai-clear" title="New conversation">Clear</button>
+        </div>
+        <div id="ai-messages"></div>
+        <form id="ai-composer">
+          <textarea
+            id="ai-input"
+            rows="1"
+            placeholder="Ask about this page…"
+            spellcheck="false"
+          ></textarea>
+          <button id="ai-send" type="submit" title="Send (Enter)" disabled>↑</button>
+        </form>
+      </aside>
       <div id="sidebar-resize"></div>
+      <div id="ai-resize"></div>
     </div>
     <script type="module" src="./main.ts"></script>
   </body>

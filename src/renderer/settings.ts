@@ -1,4 +1,5 @@
 import { acceleratorFromKeyEvent } from '../shared/accelerator'
+import { AI_MODELS } from '../shared/ai'
 import type { ShortcutRow } from '../shared/ipc'
 
 export type SettingsSection = 'general' | 'shortcuts'
@@ -37,15 +38,91 @@ export function renderSettings(el: HTMLElement, section: SettingsSection): void 
   body.append(heading)
 
   if (section === 'general') {
-    const empty = document.createElement('p')
-    empty.className = 'settings-empty'
-    empty.textContent = 'No settings yet.'
-    body.append(empty)
+    renderGeneralSection(body)
   } else {
     renderShortcutsSection(body)
   }
 
   el.append(nav, body)
+}
+
+function renderGeneralSection(body: HTMLElement): void {
+  const group = document.createElement('div')
+  group.className = 'settings-group'
+
+  const heading = document.createElement('h2')
+  heading.textContent = 'AI Assistant'
+  group.append(heading)
+
+  // API key row
+  const keyRow = document.createElement('div')
+  keyRow.className = 'settings-row'
+  const keyLabel = document.createElement('label')
+  keyLabel.textContent = 'Anthropic API key'
+  keyLabel.htmlFor = 'setting-ai-key'
+  const keyWrap = document.createElement('div')
+  keyWrap.className = 'settings-key-wrap'
+  const keyInput = document.createElement('input')
+  keyInput.type = 'password'
+  keyInput.id = 'setting-ai-key'
+  keyInput.className = 'settings-input'
+  keyInput.placeholder = 'sk-ant-…'
+  keyInput.autocomplete = 'off'
+  keyInput.spellcheck = false
+  const reveal = document.createElement('button')
+  reveal.className = 'settings-action'
+  reveal.type = 'button'
+  reveal.textContent = 'Show'
+  reveal.addEventListener('click', () => {
+    const hidden = keyInput.type === 'password'
+    keyInput.type = hidden ? 'text' : 'password'
+    reveal.textContent = hidden ? 'Hide' : 'Show'
+  })
+  keyWrap.append(keyInput, reveal)
+  keyRow.append(keyLabel, keyWrap)
+
+  // model row
+  const modelRow = document.createElement('div')
+  modelRow.className = 'settings-row'
+  const modelLabel = document.createElement('label')
+  modelLabel.textContent = 'Model'
+  modelLabel.htmlFor = 'setting-ai-model'
+  const modelSelect = document.createElement('select')
+  modelSelect.id = 'setting-ai-model'
+  modelSelect.className = 'settings-input'
+  for (const m of AI_MODELS) {
+    const opt = document.createElement('option')
+    opt.value = m.id
+    opt.textContent = m.label
+    modelSelect.append(opt)
+  }
+  modelRow.append(modelLabel, modelSelect)
+
+  const hint = document.createElement('p')
+  hint.className = 'settings-hint'
+  hint.append('Powers the AI sidebar. The key is stored locally on this machine. ')
+  const consoleLink = document.createElement('button')
+  consoleLink.className = 'settings-link'
+  consoleLink.type = 'button'
+  consoleLink.textContent = 'Get an API key ↗'
+  consoleLink.addEventListener('click', () =>
+    window.synapse.tabs.create('https://console.anthropic.com/settings/keys'),
+  )
+  hint.append(consoleLink)
+
+  group.append(keyRow, modelRow, hint)
+  body.append(group)
+
+  void window.synapse.settings.get().then(({ apiKey, model }) => {
+    keyInput.value = apiKey
+    modelSelect.value = model
+  })
+  keyInput.addEventListener('change', () => {
+    void window.synapse.settings.set({ apiKey: keyInput.value })
+  })
+  modelSelect.addEventListener('change', () => {
+    void window.synapse.settings.set({ model: modelSelect.value })
+  })
 }
 
 function renderShortcutsSection(body: HTMLElement): void {

@@ -56,15 +56,42 @@ const api: SynapseApi = {
     step: (dir) => ipcRenderer.send('find:step', dir),
     stop: () => ipcRenderer.send('find:stop'),
   },
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (patch) => ipcRenderer.invoke('settings:set', patch),
+    open: () => ipcRenderer.send('ui:open-settings'),
+  },
+  ai: {
+    send: (messages) => ipcRenderer.send('ai:send', messages),
+    stop: () => ipcRenderer.send('ai:stop'),
+    toggleSidebar: () => ipcRenderer.send('ui:toggle-ai'),
+    onDelta: (cb) => {
+      ipcRenderer.on('ai:delta', (_e, text) => cb(text))
+    },
+    onDone: (cb) => {
+      ipcRenderer.on('ai:done', () => cb())
+    },
+    onError: (cb) => {
+      ipcRenderer.on('ai:error', (_e, message) => cb(message))
+    },
+  },
   ui: {
     setOverlayHeight: (px) => ipcRenderer.send('ui:set-overlay-height', px),
     startSidebarDrag: () => ipcRenderer.send('ui:sidebar-drag-start'),
     endSidebarDrag: () => ipcRenderer.send('ui:sidebar-drag-end'),
+    startAiSidebarDrag: () => ipcRenderer.send('ui:ai-drag-start'),
+    endAiSidebarDrag: () => ipcRenderer.send('ui:ai-drag-end'),
     onSidebarWidth: (cb) => {
       ipcRenderer.on('ui:sidebar-width', (_e, px) => cb(px))
     },
     onSidebarVisible: (cb) => {
       ipcRenderer.on('ui:sidebar-visible', (_e, visible) => cb(visible))
+    },
+    onAiSidebarWidth: (cb) => {
+      ipcRenderer.on('ui:ai-width', (_e, px) => cb(px))
+    },
+    onAiSidebarVisible: (cb) => {
+      ipcRenderer.on('ui:ai-visible', (_e, visible) => cb(visible))
     },
     onSettings: (cb) => {
       ipcRenderer.on('ui:settings', (_e, open) => cb(open))
