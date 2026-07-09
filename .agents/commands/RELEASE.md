@@ -5,8 +5,7 @@
 ## Description
 
 Version, build, sign, notarize, DMG, and publish a new release of Synapse Browser to
-GitHub Releases. No auto-update wiring — users download and re-install the DMG for
-updates.
+GitHub Releases. Users download and re-install the DMG for updates.
 
 electron-builder does the sign + notarize + DMG steps in one call (`electron-builder.yml`),
 unlike the raw xcodebuild flow used for the native Swift app — there's no separate
