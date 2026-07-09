@@ -6,6 +6,25 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.4.2</title>
+            <pubDate>Thu, 09 Jul 2026 09:31:38 +0000</pubDate>
+            <sparkle:version>0.4.2</sparkle:version>
+            <sparkle:shortVersionString>0.4.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Reopen Closed Tab: Cmd+Shift+T brings back the last closed tab at its old sidebar position (also in the File menu; rebindable in Settings).</li>
+                    <li>Microphone and camera support: pages that ask for the mic now show a per-site Allow / Don&#8217;t Allow prompt, and your answer is remembered.</li>
+                    <li>New bookmarks now appear at the bottom of the list instead of the top.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.4.2/Synapse.Browser-0.4.2-universal.dmg"
+              sparkle:edSignature="u6fEiKpHPQR6f2acTSMO4LaS3Gvy9Ht+5mRrsAOagUctmgdEew/m4e+LQ309qp5luTnpV51ldsC1osUSxouDDQ=="
+              length="219188227"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.4.1</title>
             <pubDate>Wed, 08 Jul 2026 21:36:29 +0000</pubDate>
             <sparkle:version>0.4.1</sparkle:version>
