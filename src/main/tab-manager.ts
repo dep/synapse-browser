@@ -9,6 +9,14 @@ import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-widt
 export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
 
+// When a page destroys its own view (window.close() on a script-opened tab)
+// Electron nulls the view's `webContents` getter; an already-torn-down view
+// exposes a destroyed one. Either way the view can no longer be used.
+function isDeadView(view: WebContentsView): boolean {
+  const wc = view.webContents as WebContents | undefined
+  return !wc || wc.isDestroyed()
+}
+
 export interface TabManagerOptions {
   getBookmark(id: string): Bookmark | undefined
   onBookmarkFavicon(id: string, favicon: string | null): void
@@ -557,16 +565,34 @@ export class TabManager {
     }
     const bookmarkTabs: Record<string, string> = {}
     for (const [bid, tid] of this.bmTabId) if (this.views.has(tid)) bookmarkTabs[bid] = tid
+    // A page can destroy its own view (window.close() on a script-opened tab)
+    // between snapshots; `destroyed` reconciles the model, but that event is
+    // async and a synchronous snapshot can land in the gap. Emit only ids that
+    // produced a `tabs` entry so consumers never dereference a missing tab
+    // (renderer render, tabsStore.save). The stale id is dropped here and
+    // fully removed from the model when `destroyed` fires.
+    const emit = (ids: string[]) => ids.filter((id) => tabs[id])
+    const activeId =
+      this.model.activeId && tabs[this.model.activeId] ? this.model.activeId : null
     return {
       tabs,
-      order: [...this.model.order],
-      pinned: [...this.model.pinned],
+      order: emit(this.model.order),
+      pinned: emit(this.model.pinned),
       bookmarkTabs,
-      activeId: this.model.activeId,
+      activeId,
     }
   }
 
   private syncViews(): void {
+    // A page can destroy its own webContents (window.close() on a script-opened
+    // tab) — the `destroyed` event reconciles our state, but it's async and a
+    // synchronous re-entrant path (e.g. extensions.addTab → selectTab →
+    // activateTab while creating the next tab) can run first. Reap any view
+    // whose contents already died so `attached` never points at a dead view;
+    // `destroyed` still fires later, finds the id already gone, and no-ops.
+    for (const [id, view] of [...this.views]) {
+      if (isDeadView(view)) this.dropDeadView(id)
+    }
     const active =
       !this.settingsOpen && this.model.activeId
         ? (this.views.get(this.model.activeId) ?? null)
@@ -636,5 +662,41 @@ export class TabManager {
         this.opts.onFindResult?.({ matches: result.matches, active: result.activeMatchOrdinal })
       }
     })
+    // A page can destroy its own view without going through us — window.close()
+    // on a script-opened tab (OAuth popups routed to tabs), or a renderer kill.
+    // Our own teardown deletes the id from `views` *before* webContents.close(),
+    // so if the id is still mapped to this view here, the destroy came from
+    // outside and the model still lists a tab with no live view. Reconcile it,
+    // else the next snapshot dereferences an undefined tab or `attached` points
+    // at a dead view — either crashes the main process.
+    wc.on('destroyed', () => {
+      if (this.views.get(id)?.webContents !== wc) return
+      this.dropDeadView(id)
+      if (!this.model.activeId) {
+        this.createTab()
+        return
+      }
+      this.syncViews()
+      this.attached?.webContents.focus()
+    })
+  }
+
+  // Remove an externally-destroyed view (page window.close(), renderer gone)
+  // from our state as if the user closed it: slots sleep, plain tabs close.
+  // Pure bookkeeping — no syncViews/focus, so it is safe to call mid-syncViews.
+  private dropDeadView(id: string): void {
+    this.views.delete(id)
+    this.favicons.delete(id)
+    if (this.attached && isDeadView(this.attached)) {
+      this.win.contentView.removeChildView(this.attached)
+      this.attached = null
+      this.findText = ''
+    }
+    if (this.model.isPinned(id) || this.model.isBookmarkSlot(id)) {
+      this.model.sleep(id)
+    } else {
+      this.model.close(id)
+      this.profiles.delete(id)
+    }
   }
 }
