@@ -17,10 +17,10 @@ describe('BookmarksStore', () => {
     fs.rmSync(dir, { recursive: true, force: true })
   })
 
-  it('new bookmarks land at the top of the top level', () => {
+  it('new bookmarks land at the bottom of the top level', () => {
     store.add('https://a.com', 'A', 1)
     store.add('https://b.com', 'B', 2)
-    expect(store.list().bookmarks.map((b) => b.url)).toEqual(['https://b.com', 'https://a.com'])
+    expect(store.list().bookmarks.map((b) => b.url)).toEqual(['https://a.com', 'https://b.com'])
   })
 
   it('remove deletes by id', () => {
@@ -91,7 +91,7 @@ describe('BookmarksStore', () => {
     expect(store.list().bookmarks.map((b) => b.url)).toEqual(['https://out.com'])
   })
 
-  // add prepends, so adding A,B,C yields order [C,B,A]; helper for clarity
+  // add appends, so adding A,B,C yields order [A,B,C]; helper for clarity
   function seed(urls: string[]): string[] {
     const ids = new Map(urls.map((url, i) => [url, store.add(url, url, i).id]))
     return urls.map((u) => ids.get(u)!)
@@ -105,10 +105,10 @@ describe('BookmarksStore', () => {
   }
 
   it('reorder moves a bookmark within the top level', () => {
-    seed(['a', 'b', 'c']) // top-level order: c, b, a
-    const cId = store.list().bookmarks.find((b) => b.url === 'c')!.id
-    store.reorder(cId, 2)
-    expect(urlsAt()).toEqual(['b', 'a', 'c'])
+    seed(['a', 'b', 'c']) // top-level order: a, b, c
+    const aId = store.list().bookmarks.find((b) => b.url === 'a')!.id
+    store.reorder(aId, 2)
+    expect(urlsAt()).toEqual(['b', 'c', 'a'])
   })
 
   it('reorder clamps out-of-range indices', () => {
@@ -148,7 +148,7 @@ describe('BookmarksStore', () => {
 
   it('moveToFolder(null) returns a bookmark to the top level', () => {
     const f = store.addFolder('F')
-    const [aId] = seed(['a', 'b']) // top level: b, a
+    const [aId] = seed(['a', 'b']) // top level: a, b
     store.moveToFolder(aId!, f.id)
     store.moveToFolder(aId!, null, 0)
     expect(urlsAt()).toEqual(['a', 'b'])
@@ -167,10 +167,10 @@ describe('BookmarksStore', () => {
     const [aId, bId, cId] = seed(['a', 'b', 'c', 'x', 'y'])
     store.moveToFolder(aId!, f.id)
     store.moveToFolder(bId!, f.id)
-    store.moveToFolder(cId!, f.id) // folder: a, b, c ; top level: y, x
+    store.moveToFolder(cId!, f.id) // folder: a, b, c ; top level: x, y
     store.reorder(cId!, 0)
     expect(urlsAt(f.id)).toEqual(['c', 'a', 'b'])
-    expect(urlsAt()).toEqual(['y', 'x'])
+    expect(urlsAt()).toEqual(['x', 'y'])
   })
 
   it('removeFolder deletes member bookmarks only', () => {
@@ -182,12 +182,12 @@ describe('BookmarksStore', () => {
     expect(urlsAt()).toEqual(['b'])
   })
 
-  it('add prepends at the top level and returns the bookmark', () => {
+  it('add appends at the top level and returns the bookmark', () => {
     const a = store.add('https://a.com', 'A', 1)
     const b = store.add('https://b.com', 'B', 2)
     expect(a.id).toBeTruthy()
     expect(a.profile).toBeUndefined()
-    expect(store.list().bookmarks.map((x) => x.id)).toEqual([b.id, a.id])
+    expect(store.list().bookmarks.map((x) => x.id)).toEqual([a.id, b.id])
     expect(store.get(a.id)).toEqual(a)
   })
 
@@ -225,7 +225,7 @@ describe('BookmarksStore', () => {
     const f2 = store.addFolder('Two')
     const a = store.add('https://a.com', 'a', 1)
     const b = store.add('https://b.com', 'b', 2)
-    const c = store.add('https://c.com', 'c', 3) // top level: c, b, a
+    const c = store.add('https://c.com', 'c', 3) // top level: a, b, c
     store.moveToFolder(b.id, f2.id)
     store.moveToFolder(a.id, f1.id)
     expect(store.ordered().map((x) => x.title)).toEqual(['a', 'b', 'c'])

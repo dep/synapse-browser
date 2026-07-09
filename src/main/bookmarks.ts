@@ -50,7 +50,7 @@ export class BookmarksStore {
       createdAt,
       ...(profile !== 'default' ? { profile } : {}),
     }
-    this.store.set({ v: 2, folders, bookmarks: [bm, ...bookmarks] })
+    this.store.set({ v: 2, folders, bookmarks: [...bookmarks, bm] })
     return bm
   }
 
