@@ -116,16 +116,10 @@ export class ExtensionManager {
     const dest = alreadyInside ? src : join(this.unpackedPath, basename(src))
     try {
       if (!alreadyInside) cpSync(src, dest, { recursive: true })
-      const ext = await session.defaultSession.extensions.loadExtension(dest)
-      // boot-time loads start MV3 workers via loadAllExtensions; mid-session
-      // loads must do it here
-      const manifest = ext.manifest as {
-        manifest_version?: number
-        background?: { service_worker?: string }
-      }
-      if (manifest.manifest_version === 3 && manifest.background?.service_worker) {
-        await session.defaultSession.serviceWorkers.startWorkerForScope(ext.url)
-      }
+      // no explicit worker start: Chromium self-starts a freshly registered MV3
+      // worker, and startWorkerForScope before registration completes rejects
+      // with "Failed to start service worker"
+      await session.defaultSession.extensions.loadExtension(dest)
     } catch (err) {
       if (!alreadyInside) rmSync(dest, { recursive: true, force: true })
       dialog.showErrorBox('Failed to load extension', err instanceof Error ? err.message : String(err))
