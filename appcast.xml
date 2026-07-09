@@ -6,6 +6,24 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.4.3</title>
+            <pubDate>Thu, 09 Jul 2026 10:52:57 +0000</pubDate>
+            <sparkle:version>0.4.3</sparkle:version>
+            <sparkle:shortVersionString>0.4.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Loading state: a subtle animated progress hairline under the toolbar while pages load, and a smooth micro-spinner on loading tabs in the sidebar.</li>
+                    <li>The reload button becomes a stop button while a page is loading.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.4.3/Synapse.Browser-0.4.3-universal.dmg"
+              sparkle:edSignature="DpTXUZqLp/mrjsjjmipR/indr/GfQIQMxLP3sc6EmSR7vw2AF88WIyrWcsquUMkOQOzN4bOw0BFJYPXRPBDzAw=="
+              length="219182542"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.4.2</title>
             <pubDate>Thu, 09 Jul 2026 09:31:38 +0000</pubDate>
             <sparkle:version>0.4.2</sparkle:version>
