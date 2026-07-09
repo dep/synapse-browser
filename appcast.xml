@@ -6,6 +6,25 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.5.0</title>
+            <pubDate>Thu, 09 Jul 2026 12:04:34 +0000</pubDate>
+            <sparkle:version>0.5.0</sparkle:version>
+            <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>AI sidebar: chat with Claude about the page you're viewing — summarize, ask questions, get explanations. Streaming responses with a stop button; toggle with the ✦ toolbar button or Cmd+J.</li>
+                    <li>Settings &gt; General: add your Anthropic API key and choose a model. The key is stored locally.</li>
+                    <li>Fix: a page closing its own tab (OAuth popups) no longer breaks tab management.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.5.0/Synapse.Browser-0.5.0-universal.dmg"
+              sparkle:edSignature="x2uBz10XBv+4kQU1SMCPiwFY/vBlD7ASiUuXZb+BFZMXMWcwtzbuF9HYHSKgQktVycuZtzLBGsL40KNC1GItCA=="
+              length="219217446"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.4.3</title>
             <pubDate>Thu, 09 Jul 2026 10:52:57 +0000</pubDate>
             <sparkle:version>0.4.3</sparkle:version>
