@@ -8,6 +8,7 @@ export interface ShortcutCommand {
 export const SHORTCUT_COMMANDS: ShortcutCommand[] = [
   { id: 'new-tab', label: 'New Tab', default: 'CmdOrCtrl+T' },
   { id: 'close-tab', label: 'Close Tab', default: 'CmdOrCtrl+W' },
+  { id: 'reopen-tab', label: 'Reopen Closed Tab', default: 'CmdOrCtrl+Shift+T' },
   { id: 'close-other-tabs', label: 'Close Other Tabs', default: 'CmdOrCtrl+Shift+W' },
   { id: 'close-tabs-below', label: 'Close Tabs Below', default: 'Control+CmdOrCtrl+Down' },
   { id: 'close-tabs-above', label: 'Close Tabs Above', default: 'Control+CmdOrCtrl+Up' },

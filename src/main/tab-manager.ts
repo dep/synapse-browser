@@ -1,6 +1,7 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput } from '../shared/url-classifier'
 import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
+import { ClosedTabsStack } from './closed-tabs'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
@@ -26,6 +27,7 @@ export class TabManager {
   private pins = new Map<string, PinSlot>()
   private profiles = new Map<string, ProfileId>()
   private bmTabId = new Map<string, string>() // bookmarkId → tabId
+  private closed = new ClosedTabsStack()
   private attached: WebContentsView | null = null
   private overlayHeight = 0
   private findText = ''
@@ -91,6 +93,11 @@ export class TabManager {
     }
     const view = this.views.get(id)
     if (!view) return
+    this.closed.push({
+      url: view.webContents.getURL(),
+      profile: this.profileOf(id),
+      index: this.model.order.indexOf(id),
+    })
     const wasAttached = this.attached === view
     this.model.close(id)
     this.destroyView(id, view, wasAttached)
@@ -103,6 +110,16 @@ export class TabManager {
     // destroying the focused view leaves no first responder, and Blink then
     // parks keyboard focus on the chrome toolbar's first enabled button
     if (wasAttached) this.attached?.webContents.focus()
+  }
+
+  // Cmd+Shift+T: recreate the last closed tab at its old sidebar position.
+  // Navigation history doesn't survive the close; the URL and container do.
+  reopenClosedTab(): void {
+    const t = this.closed.pop()
+    if (!t) return
+    const id = this.createTab(t.url, true, t.profile)
+    this.model.reorder(id, t.index)
+    this.refresh()
   }
 
   // pins/bookmarks are separate slots (model.order excludes them), so these

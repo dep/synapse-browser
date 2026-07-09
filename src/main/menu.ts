@@ -33,6 +33,11 @@ export function buildMenu(
           },
         },
         {
+          label: 'Reopen Closed Tab',
+          accelerator: shortcuts['reopen-tab'],
+          click: () => tabs.reopenClosedTab(),
+        },
+        {
           label: 'Close Other Tabs',
           accelerator: shortcuts['close-other-tabs'],
           click: () => {
