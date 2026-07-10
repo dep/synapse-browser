@@ -6,6 +6,24 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.5.2</title>
+            <pubDate>Fri, 10 Jul 2026 13:20:34 +0000</pubDate>
+            <sparkle:version>0.5.2</sparkle:version>
+            <sparkle:shortVersionString>0.5.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Closing a tab you just opened with Cmd+click returns you to the tab that opened it (visiting another tab in between restores the usual next-tab focus).</li>
+                    <li>When viewing a pinned or bookmarked tab, Cmd+Shift+W and Cmd+Ctrl+Down now close all regular tabs.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.5.2/Synapse.Browser-0.5.2-universal.dmg"
+              sparkle:edSignature="KVXDepoPJGg9i1XgUHuWQdOA18eMAbGuSsvF5jiwuW7ExKhp7t/MU2dhHuPnRamNBY8bDZr1R2ta2gF8sX3RDA=="
+              length="219218620"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.5.1</title>
             <pubDate>Thu, 09 Jul 2026 14:55:33 +0000</pubDate>
             <sparkle:version>0.5.1</sparkle:version>
