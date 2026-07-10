@@ -162,7 +162,7 @@ app.whenReady().then(async () => {
       // `bookmarksChanged` is declared below; safe for the same reason as
       // `extensions` — no tab exists until startup wiring completes
       attachPageContextMenu(wc, win, {
-        openLinkInNewTab: (url) => tabs.createTab(url, false, profile),
+        openLinkInNewTab: (url) => tabs.createTab(url, false, profile, tabs.idFor(wc)),
         bookmarkLink: (url, title) => {
           bookmarks.add(url, title, Date.now(), profile)
           bookmarksChanged()

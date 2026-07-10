@@ -58,7 +58,7 @@ export class TabManager {
     return this.model.activeId
   }
 
-  createTab(url?: string, activate = true, profile: ProfileId = 'default'): string {
+  createTab(url?: string, activate = true, profile: ProfileId = 'default', opener?: string | null): string {
     if (this.settingsOpen) {
       this.settingsOpen = false
       this.opts.onSettingsClosed?.()
@@ -66,7 +66,7 @@ export class TabManager {
     const id = `tab-${++this.counter}`
     this.profiles.set(id, profile)
     const view = this.createView(id)
-    this.model.add(id, activate)
+    this.model.add(id, activate, opener)
     if (url) view.webContents.loadURL(classifyInput(url))
     else if (activate) this.focusUrlBar()
     this.syncViews()
@@ -90,7 +90,7 @@ export class TabManager {
       // popups (OAuth windows etc.) must land in the opener's container.
       // cmd+click reports disposition 'background-tab' and must not steal focus
       if (/^https?:\/\//.test(popupUrl)) {
-        this.createTab(popupUrl, disposition !== 'background-tab', this.profileOf(id))
+        this.createTab(popupUrl, disposition !== 'background-tab', this.profileOf(id), id)
       }
       return { action: 'deny' }
     })
@@ -98,7 +98,7 @@ export class TabManager {
   }
 
   closeTab(id: string): void {
-    if (this.model.isPinned(id) || this.model.isBookmarkSlot(id)) {
+    if (this.model.isSlot(id)) {
       this.sleepSlot(id)
       return
     }
@@ -133,24 +133,19 @@ export class TabManager {
     this.refresh()
   }
 
-  // pins/bookmarks are separate slots (model.order excludes them), so these
-  // never touch them; each closed id still goes through closeTab for proper
-  // view teardown
+  // the model picks the ids (slot-aware: from a pin/bookmark the whole tab
+  // list counts as "below"/"other"); each id goes through closeTab for
+  // proper view teardown, which never touches slots
   closeTabsRight(id: string): void {
-    const i = this.model.order.indexOf(id)
-    if (i === -1) return
-    for (const t of this.model.order.slice(i + 1)) this.closeTab(t)
+    for (const t of this.model.tabsBelow(id)) this.closeTab(t)
   }
 
   closeTabsLeft(id: string): void {
-    const i = this.model.order.indexOf(id)
-    if (i === -1) return
-    for (const t of this.model.order.slice(0, i)) this.closeTab(t)
+    for (const t of this.model.tabsAbove(id)) this.closeTab(t)
   }
 
   closeOtherTabs(id: string): void {
-    if (!this.model.order.includes(id)) return
-    for (const t of this.model.order.filter((t) => t !== id)) this.closeTab(t)
+    for (const t of this.model.otherTabs(id)) this.closeTab(t)
   }
 
   private destroyView(id: string, view: WebContentsView, wasAttached: boolean): void {
@@ -706,7 +701,7 @@ export class TabManager {
       this.attached = null
       this.findText = ''
     }
-    if (this.model.isPinned(id) || this.model.isBookmarkSlot(id)) {
+    if (this.model.isSlot(id)) {
       this.model.sleep(id)
     } else {
       this.model.close(id)

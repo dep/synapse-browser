@@ -8,18 +8,36 @@ export class TabModel {
   mru: string[] = []
   activeId: string | null = null
   private cycling = false
+  private cycleOrigin: string | null = null
+  // tab → the tab that spawned it (cmd+click, window.open); the link lives
+  // only until the user leaves the spawned tab for any other tab, so closing
+  // it "immediately" returns focus to the opener instead of the neighbor
+  private openers = new Map<string, string>()
 
   // pins and bookmarks are both "slots": they sleep instead of closing
-  private isSlot(id: string): boolean {
+  isSlot(id: string): boolean {
     return this.pinned.includes(id) || this.bookmarks.includes(id)
   }
 
-  add(id: string, activate = true): void {
+  // moving to `next` ends the departing tab's "just spawned" grace window
+  private leaveActive(next: string): void {
+    if (this.activeId && this.activeId !== next) this.openers.delete(this.activeId)
+  }
+
+  // every user-driven focus move funnels through here so leaving a tab
+  // reliably ends its grace window
+  private switchTo(id: string): void {
+    this.leaveActive(id)
+    this.promote(id)
+    this.activeId = id
+  }
+
+  add(id: string, activate = true, opener?: string | null): void {
+    if (opener) this.openers.set(id, opener)
     this.order.push(id)
     if (activate) {
       if (this.cycling) this.cycleCommit()
-      this.mru.unshift(id)
-      this.activeId = id
+      this.switchTo(id)
     } else {
       this.mru.push(id)
     }
@@ -30,30 +48,41 @@ export class TabModel {
     if (this.isSlot(id) && !this.mru.includes(id)) return // asleep slots wake via wake()
     // an uncommitted cycle preview still counts as a visit
     if (this.cycling) this.cycleCommit()
-    this.promote(id)
-    this.activeId = id
+    this.switchTo(id)
   }
 
   close(id: string): void {
     const closedIndex = this.order.indexOf(id)
     if (closedIndex === -1) return // pins never close; they sleep
     if (this.cycling) this.cycleCommit()
+    const opener = this.openers.get(id)
+    this.openers.delete(id)
     this.order = this.order.filter((t) => t !== id)
     this.mru = this.mru.filter((t) => t !== id)
     if (this.activeId === id) {
-      // focus the tab that slid into the closed tab's spot (the one to the
-      // right/below); if it was the last one, fall back to its new neighbor
-      this.activeId = this.order[Math.min(closedIndex, this.order.length - 1)] ?? null
+      // a still-fresh spawned tab hands focus back to its opener (mru
+      // membership ⇔ awake, so closed openers and asleep slots fall through);
+      // otherwise focus the tab that slid into the closed tab's spot (the one
+      // to the right/below), or its new neighbor if it was the last one
+      this.activeId =
+        opener && this.isAwake(opener)
+          ? opener
+          : (this.order[Math.min(closedIndex, this.order.length - 1)] ?? null)
       if (this.activeId) this.promote(this.activeId)
     }
   }
 
-  // a live tab becomes a pin in place: same id, same MRU standing
-  pin(id: string): boolean {
+  // a live tab becomes a slot in place: same id, same MRU standing
+  private toSlot(id: string, slots: string[]): boolean {
     if (!this.order.includes(id)) return false
+    this.openers.delete(id) // a slot is a keeper, not a just-spawned tab
     this.order = this.order.filter((t) => t !== id)
-    this.pinned.push(id)
+    slots.push(id)
     return true
+  }
+
+  pin(id: string): boolean {
+    return this.toSlot(id, this.pinned)
   }
 
   // the pin falls out of the row to the top of the tab list; the caller
@@ -70,12 +99,8 @@ export class TabModel {
     this.pinned.push(id)
   }
 
-  // a live tab becomes a bookmark slot in place: same id, same MRU standing
   bookmark(id: string): boolean {
-    if (!this.order.includes(id)) return false
-    this.order = this.order.filter((t) => t !== id)
-    this.bookmarks.push(id)
-    return true
+    return this.toSlot(id, this.bookmarks)
   }
 
   // the slot falls back to the top of the tab list; only awake slots are
@@ -112,6 +137,25 @@ export class TabModel {
     return this.bookmarks.includes(id)
   }
 
+  // bulk-close selections (Close Tabs Below/Above, Close Other Tabs). Slots
+  // render above the tab list in the sidebar, so from a slot every order tab
+  // is "below"/"other" and none are "above"; unknown ids select nothing.
+  tabsBelow(id: string): string[] {
+    if (this.isSlot(id)) return [...this.order]
+    const i = this.order.indexOf(id)
+    return i === -1 ? [] : this.order.slice(i + 1)
+  }
+
+  tabsAbove(id: string): string[] {
+    const i = this.order.indexOf(id)
+    return i === -1 ? [] : this.order.slice(0, i)
+  }
+
+  otherTabs(id: string): string[] {
+    if (this.isSlot(id)) return [...this.order]
+    return this.order.includes(id) ? this.order.filter((t) => t !== id) : []
+  }
+
   // move a tab within its own list (sidebar order or pin row); not a visit,
   // so MRU and activeId are untouched. toIndex is the insertion index after
   // removal; out-of-range clamps, unknown ids no-op.
@@ -126,8 +170,7 @@ export class TabModel {
     if (!this.isSlot(id) || this.mru.includes(id)) return
     if (this.cycling) this.cycleCommit()
     if (activate) {
-      this.mru.unshift(id)
-      this.activeId = id
+      this.switchTo(id)
     } else {
       this.mru.push(id)
     }
@@ -164,6 +207,7 @@ export class TabModel {
             ...this.order,
           ]
     if (ids.length < 2 || !this.activeId) return null
+    if (!this.cycling) this.cycleOrigin = this.activeId
     const idx = ids.indexOf(this.activeId)
     const delta = dir === 'forward' ? 1 : -1
     const next = ids[(idx + delta + ids.length) % ids.length]
@@ -174,6 +218,13 @@ export class TabModel {
 
   cycleCommit(): void {
     if (!this.cycling) return
+    // a walk is one focus move from origin to landing tab: tabs previewed in
+    // passing keep their opener grace, and a round trip back to the origin
+    // keeps its own
+    if (this.cycleOrigin && this.cycleOrigin !== this.activeId) {
+      this.openers.delete(this.cycleOrigin)
+    }
+    this.cycleOrigin = null
     if (this.activeId) this.promote(this.activeId)
     this.cycling = false
   }

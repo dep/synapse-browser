@@ -498,6 +498,167 @@ describe('TabModel bookmarks', () => {
   })
 })
 
+describe('TabModel openers', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    m.add('a')
+    m.add('b')
+    m.add('c') // order [a, b, c], mru [c, b, a], active c
+  })
+
+  it('closing a spawned tab right after visiting it returns to the opener', () => {
+    m.activate('a')
+    m.add('t', false, 'a') // cmd+click: background tab, opener a
+    m.activate('t')
+    m.close('t')
+    // spatial default would be c (the new last tab); the opener wins
+    expect(m.activeId).toBe('a')
+    expect(m.mru[0]).toBe('a')
+  })
+
+  it('a foreground-spawned tab (window.open) also returns to its opener', () => {
+    m.activate('a')
+    m.add('t', true, 'a')
+    m.close('t')
+    expect(m.activeId).toBe('a')
+  })
+
+  it('visiting another tab after the spawned one clears the link', () => {
+    m.activate('a')
+    m.add('t', false, 'a')
+    m.activate('t')
+    m.activate('b') // leaves t → no longer "immediately"
+    m.activate('t')
+    m.close('t')
+    expect(m.activeId).toBe('c') // spatial default
+  })
+
+  it('cycling away from the spawned tab clears the link', () => {
+    m.activate('a')
+    m.add('t', true, 'a')
+    m.cycleStep('mru', 'forward') // leaves t
+    m.cycleCommit()
+    m.activate('t')
+    m.close('t')
+    expect(m.activeId).toBe('c')
+  })
+
+  it('a cycle round trip back onto the spawned tab keeps the link', () => {
+    m.activate('a')
+    m.add('t', true, 'a') // mru [t, a, c, b]
+    for (let i = 0; i < 4; i++) m.cycleStep('mru', 'forward') // full circle
+    m.cycleCommit() // landed back on t: never left
+    m.close('t')
+    expect(m.activeId).toBe('a')
+  })
+
+  it('a cycle merely previewing past the spawned tab keeps its link', () => {
+    m.activate('a')
+    m.add('t', false, 'a') // background; a stays active, mru [a, c, b, t]
+    m.cycleStep('mru', 'forward') // preview c
+    m.cycleStep('mru', 'forward') // preview b
+    m.cycleStep('mru', 'forward') // preview t (passing through)
+    m.cycleStep('mru', 'forward') // wrap back to a
+    m.cycleCommit()
+    m.activate('t')
+    m.close('t')
+    expect(m.activeId).toBe('a') // t's link survived the drive-by preview
+  })
+
+  it('opener chains are single-hop: spawning a child ends the parent grace', () => {
+    m.activate('a')
+    m.add('t1', true, 'a')
+    m.add('t2', true, 't1') // leaves t1 → t1's own link is spent
+    m.close('t2')
+    expect(m.activeId).toBe('t1') // child still returns to its opener
+    m.close('t1')
+    expect(m.activeId).toBe('c') // but t1 falls back to the spatial default
+  })
+
+  it('a closed opener falls back to the spatial default', () => {
+    m.activate('a')
+    m.add('t', false, 'a')
+    m.activate('t')
+    m.close('a')
+    m.close('t')
+    expect(m.activeId).toBe('c')
+  })
+
+  it('closing a background spawned tab never steals focus', () => {
+    m.activate('a')
+    m.add('t', false, 'a')
+    m.close('t')
+    expect(m.activeId).toBe('a')
+  })
+
+  it('an opener that became an awake slot still gets focus back', () => {
+    m.activate('a')
+    m.pin('a') // a is now an awake pin
+    m.add('t', false, 'a')
+    m.activate('t')
+    m.close('t')
+    expect(m.activeId).toBe('a')
+  })
+
+  it('an opener that fell asleep falls back to the spatial default', () => {
+    m.activate('a')
+    m.pin('a')
+    m.add('t', false, 'a')
+    m.activate('t')
+    m.sleep('a') // asleep slots have no live view to focus
+    m.close('t')
+    expect(m.activeId).toBe('c')
+  })
+
+  it('pinning a spawned tab discards its opener link', () => {
+    m.activate('b')
+    m.add('t', false, 'b')
+    m.activate('t')
+    m.pin('t')
+    m.unpin('t') // back to a plain tab at order[0], still active
+    m.close('t')
+    // spatial default is order[0] = a; a stale link would resurface b
+    expect(m.activeId).toBe('a')
+  })
+})
+
+describe('TabModel bulk-close selections', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    m.add('a')
+    m.add('b')
+    m.add('c') // order [a, b, c]
+  })
+
+  it('selects below/above/other around a regular tab', () => {
+    expect(m.tabsBelow('b')).toEqual(['c'])
+    expect(m.tabsAbove('b')).toEqual(['a'])
+    expect(m.otherTabs('b')).toEqual(['a', 'c'])
+  })
+
+  it('from a slot, the whole tab list is below/other and nothing is above', () => {
+    m.add('s')
+    m.bookmark('s') // order [a, b, c], s is a slot above the list
+    expect(m.tabsBelow('s')).toEqual(['a', 'b', 'c'])
+    expect(m.tabsAbove('s')).toEqual([])
+    expect(m.otherTabs('s')).toEqual(['a', 'b', 'c'])
+    m.pin('a') // pins behave the same
+    expect(m.tabsBelow('a')).toEqual(['b', 'c'])
+    expect(m.otherTabs('a')).toEqual(['b', 'c'])
+    expect(m.tabsAbove('a')).toEqual([])
+  })
+
+  it('unknown ids select nothing', () => {
+    expect(m.tabsBelow('nope')).toEqual([])
+    expect(m.tabsAbove('nope')).toEqual([])
+    expect(m.otherTabs('nope')).toEqual([])
+  })
+})
+
 describe('TabModel pin/bookmark cross-conversion guards', () => {
   let m: TabModel
 
