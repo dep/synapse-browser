@@ -96,6 +96,40 @@ gh release create <version> \
   "dist/Synapse Browser-<version>-universal.dmg"
 ```
 
+### 6. Publish the sparkle appcast
+
+The app checks `https://raw.githubusercontent.com/dep/synapse-browser/main/appcast.xml`
+for signed updates (see `docs/superpowers/specs/2026-07-08-find-and-sparkle-design.md`).
+
+```bash
+# served asset URL (GitHub converts spaces to dots — use this, not the local name)
+gh release view <version> --json assets --jq '.assets[].url'
+# EdDSA signature + length (shared key from the login keychain)
+/tmp/sparkle-bin/bin/sign_update "dist/Synapse Browser-<version>-universal.dmg"
+```
+
+Prepend a new `<item>` to `appcast.xml` (copy the previous item's shape: title,
+RFC-2822 `pubDate`, `sparkle:version`, CDATA release notes, enclosure with the
+served URL + `sparkle:edSignature` + `length`). Do NOT hand-transcribe the
+signature — script the substitution from `sign_update` output. Sanity-check
+before pushing (parser picks the new version, signature verifies against the
+pinned key):
+
+```bash
+node --experimental-strip-types -e "
+import { readFileSync } from 'node:fs'
+import { verifyEd25519 } from './src/main/ed25519.ts'
+import { parseAppcast, pickUpdate } from './src/shared/appcast.ts'
+const upd = pickUpdate(parseAppcast(readFileSync('appcast.xml','utf8')), '<previous-version>')
+const dmg = readFileSync('dist/Synapse Browser-<version>-universal.dmg')
+console.log(upd?.version, dmg.length === Number(upd.length),
+  verifyEd25519(dmg, upd.edSignature, 'Tnoq0NNryfeGcjS0eQ2xfuOuvqf4dRoa3wF86ljVZh4='))
+"
+```
+
+Then `git add appcast.xml && git commit -m "chore: publish sparkle appcast for <version>" && git push`
+(the feed serves from main).
+
 ## Expected Output
 
 - electron-builder logs: `notarization successful`
@@ -111,7 +145,7 @@ gh release create <version> \
 
 ## First-Release Checklist
 
-Nothing extra needed — no appcast, no separate update feed. Just confirm:
+Confirm:
 
 1. `resources/icon.icns` exists (it does) — used as the DMG/app icon.
 2. `electron-builder.yml`'s `publish.owner`/`publish.repo` match the GitHub repo
