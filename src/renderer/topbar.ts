@@ -70,16 +70,23 @@ export function initTopbar(): Topbar {
   const extMenuToggle = document.getElementById('ext-menu-toggle') as HTMLButtonElement
   const extMenu = document.getElementById('ext-menu') as HTMLDivElement
 
+  // the canvas frame's top padding must track the page view's overlay shift,
+  // so both are driven from this one origin
+  function setOverlay(px: number): void {
+    document.getElementById('app')!.style.setProperty('--overlay-shift', `${px}px`)
+    window.synapse.ui.setOverlayHeight(px)
+  }
+
   function hideExtMenu(): void {
     extMenu.hidden = true
-    window.synapse.ui.setOverlayHeight(0)
+    setOverlay(0)
   }
 
   extMenuToggle.addEventListener('click', (e) => {
     e.stopPropagation()
     if (extMenu.hidden) {
       extMenu.hidden = false
-      window.synapse.ui.setOverlayHeight(extMenu.offsetHeight + 4)
+      setOverlay(extMenu.offsetHeight + 4)
     } else {
       hideExtMenu()
     }
@@ -98,7 +105,7 @@ export function initTopbar(): Topbar {
     selected = -1
     suggestionsEl.hidden = true
     suggestionsEl.innerHTML = ''
-    window.synapse.ui.setOverlayHeight(0)
+    setOverlay(0)
   }
 
   function renderSuggestions(): void {
@@ -121,7 +128,7 @@ export function initTopbar(): Topbar {
       suggestionsEl.append(item)
     })
     suggestionsEl.hidden = suggestions.length === 0
-    window.synapse.ui.setOverlayHeight(suggestionsEl.hidden ? 0 : suggestionsEl.offsetHeight + 4)
+    setOverlay(suggestionsEl.hidden ? 0 : suggestionsEl.offsetHeight + 4)
   }
 
   function pick(i: number): void {

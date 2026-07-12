@@ -1,4 +1,5 @@
 import './style.css'
+import { CANVAS_GAP } from '../shared/canvas-layout'
 import type { BookmarksData, TabsSnapshot } from '../shared/ipc'
 import { renderBookmarks, startItemEdit } from './bookmarks-section'
 import { PanelMode, renderPanel } from './panel'
@@ -22,6 +23,7 @@ const loadingBar = initLoadingBar()
 const aiSidebar = initAiSidebar()
 const aiResizeEl = document.getElementById('ai-resize')!
 const aiToggleEl = document.getElementById('ai-toggle')!
+appEl.style.setProperty('--gap', `${CANVAS_GAP}px`)
 
 let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], bookmarkTabs: {}, activeId: null }
 let bookmarks: BookmarksData = { folders: [], bookmarks: [] }
@@ -94,6 +96,10 @@ function setPanel(mode: PanelMode): void {
 }
 
 function render(): void {
+  // chrome-aware accents (urlbar focus ring, canvas ring) follow the active
+  // tab's profile
+  const activeProfile = snap.activeId ? snap.tabs[snap.activeId]?.profile : undefined
+  document.body.classList.toggle('profile-work', activeProfile === 'work')
   renderPins(pinGridEl, snap)
   renderBookmarks(bookmarksEl, bookmarks, snap, render)
   renderTabList(tabListEl, snap)

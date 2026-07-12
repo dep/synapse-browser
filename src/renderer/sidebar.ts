@@ -55,7 +55,8 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
   snap.order.forEach((id, i) => {
     const tab = snap.tabs[id]!
     const item = document.createElement('div')
-    item.className = 'tab' + (id === snap.activeId ? ' active' : '')
+    item.className =
+      'tab' + (id === snap.activeId ? ' active' : '') + (tab.profile === 'work' ? ' work' : '')
 
     let icon: HTMLElement
     if (tab.isLoading) {

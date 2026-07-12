@@ -94,7 +94,8 @@ function bookmarkRow(
     'tab bookmark' +
     (tabId && tabId === snap.activeId ? ' active' : '') +
     (tab ? '' : ' asleep') +
-    (indented ? ' indent' : '')
+    (indented ? ' indent' : '') +
+    ((tab?.profile ?? bm.profile) === 'work' ? ' work' : '')
 
   let icon: HTMLElement
   if (tab?.isLoading) {
