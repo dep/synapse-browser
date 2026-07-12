@@ -1,5 +1,6 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput } from '../shared/url-classifier'
+import { CANVAS_RADIUS, computeCanvasBounds } from '../shared/canvas-layout'
 import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
 import { ClosedTabsStack } from './closed-tabs'
 import { CycleList, Direction, TabModel } from './tab-model'
@@ -82,6 +83,7 @@ export class TabManager {
         ...(profile === 'work' ? { partition: WORK_PARTITION } : {}),
       },
     })
+    view.setBorderRadius(CANVAS_RADIUS)
     this.views.set(id, view)
     this.favicons.set(id, null)
     this.wireEvents(id, view.webContents)
@@ -618,15 +620,14 @@ export class TabManager {
   private layout(): void {
     if (!this.attached) return
     const [w, h] = this.win.getContentSize()
-    const top = TOPBAR_HEIGHT + this.overlayHeight
-    const left = this.sidebarVisible ? this.sidebarWidth : 0
-    const right = this.aiSidebarVisible ? this.aiSidebarWidth : 0
-    this.attached.setBounds({
-      x: left,
-      y: top,
-      width: Math.max(0, w - left - right),
-      height: Math.max(0, h - top),
-    })
+    this.attached.setBounds(
+      computeCanvasBounds(w, h, {
+        topbar: TOPBAR_HEIGHT,
+        overlay: this.overlayHeight,
+        sidebar: this.sidebarVisible ? this.sidebarWidth : 0,
+        ai: this.aiSidebarVisible ? this.aiSidebarWidth : 0,
+      }),
+    )
   }
 
   private wireEvents(id: string, wc: WebContents): void {
