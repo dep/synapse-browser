@@ -516,16 +516,12 @@ export class TabManager {
     this.attached?.webContents.stopFindInPage('clearSelection')
   }
 
-  // immediate prev/next in sidebar order with wraparound — unlike Ctrl+Tab MRU
-  // cycling there is no preview/commit phase. Pins and bookmark slots are not
-  // in `order`; when one is active, dir 1 starts at the first order tab and
-  // dir -1 at the last.
+  // immediate prev/next in full sidebar order (awake pins, awake bookmark
+  // slots, then tabs) with wraparound — unlike Ctrl+Tab MRU cycling there is
+  // no preview/commit phase
   activateSibling(dir: 1 | -1): void {
-    const order = this.model.order
-    if (order.length === 0) return
-    const i = this.model.activeId ? order.indexOf(this.model.activeId) : -1
-    const next = i === -1 ? (dir === 1 ? 0 : order.length - 1) : (i + dir + order.length) % order.length
-    this.activateTab(order[next]!)
+    const next = this.model.sibling(dir)
+    if (next) this.activateTab(next)
   }
 
   refresh(): void {

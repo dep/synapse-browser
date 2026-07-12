@@ -197,15 +197,28 @@ export class TabModel {
     return [...this.pinned, ...this.order].at(index) ?? null
   }
 
+  // full sidebar traversal order: awake pins, then awake bookmark slots, then
+  // the tab list — asleep slots wake via click/Cmd+1..9, never in passing
+  private orderCycleIds(): string[] {
+    return [
+      ...this.pinned.filter((t) => this.mru.includes(t)),
+      ...this.bookmarks.filter((t) => this.mru.includes(t)),
+      ...this.order,
+    ]
+  }
+
+  // immediate prev/next in full sidebar order with wraparound — the
+  // no-preview counterpart of cycleStep('order')
+  sibling(dir: 1 | -1): string | null {
+    const ids = this.orderCycleIds()
+    if (ids.length === 0) return null
+    const i = this.activeId ? ids.indexOf(this.activeId) : -1
+    if (i === -1) return (dir === 1 ? ids[0] : ids[ids.length - 1]) ?? null
+    return ids[(i + dir + ids.length) % ids.length] ?? null
+  }
+
   cycleStep(list: CycleList, dir: Direction): string | null {
-    const ids =
-      list === 'mru'
-        ? this.mru
-        : [
-            ...this.pinned.filter((t) => this.mru.includes(t)),
-            ...this.bookmarks.filter((t) => this.mru.includes(t)),
-            ...this.order,
-          ]
+    const ids = list === 'mru' ? this.mru : this.orderCycleIds()
     if (ids.length < 2 || !this.activeId) return null
     if (!this.cycling) this.cycleOrigin = this.activeId
     const idx = ids.indexOf(this.activeId)

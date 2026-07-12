@@ -694,3 +694,58 @@ describe('TabModel pin/bookmark cross-conversion guards', () => {
     expect(m.mru).toEqual(['c', 'b', 'a'])
   })
 })
+
+describe('TabModel sibling traversal', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    m.add('a')
+    m.add('b')
+    m.add('c') // order [a, b, c], mru [c, b, a], active c
+  })
+
+  it('steps through sidebar order with wraparound', () => {
+    expect(m.sibling(1)).toBe('a') // c is last → wraps to first
+    m.activate('a')
+    expect(m.sibling(1)).toBe('b')
+    expect(m.sibling(-1)).toBe('c') // a is first → wraps to last
+  })
+
+  it('traverses awake pins and bookmark slots in sidebar order', () => {
+    m.add('p')
+    m.pin('p') // pinned [p], awake
+    m.add('bm')
+    m.bookmark('bm') // bookmarks [bm], awake, active
+    // composite sidebar order: [p, bm, a, b, c]
+    expect(m.sibling(1)).toBe('a') // from bm forward into the tab list
+    expect(m.sibling(-1)).toBe('p') // from bm back onto the pin
+    m.activate('a')
+    expect(m.sibling(-1)).toBe('bm') // from first order tab back onto the slot
+    m.activate('c')
+    expect(m.sibling(1)).toBe('p') // last tab wraps to the first pin
+  })
+
+  it('skips asleep slots, matching Alt+Tab order cycling', () => {
+    m.addPin('sleepy-pin')
+    m.addBookmark('sleepy-bm')
+    expect(m.sibling(1)).toBe('a') // c wraps past both asleep slots
+    m.activate('a')
+    expect(m.sibling(-1)).toBe('c')
+  })
+
+  it('returns null on an empty model', () => {
+    const empty = new TabModel()
+    expect(empty.sibling(1)).toBeNull()
+    expect(empty.sibling(-1)).toBeNull()
+  })
+
+  it('with no active tab, lands on the first or last tab', () => {
+    const fresh = new TabModel()
+    fresh.add('x', false)
+    fresh.add('y', false) // background adds: order [x, y], no active tab
+    expect(fresh.activeId).toBeNull()
+    expect(fresh.sibling(1)).toBe('x')
+    expect(fresh.sibling(-1)).toBe('y')
+  })
+})
