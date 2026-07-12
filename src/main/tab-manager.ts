@@ -40,6 +40,7 @@ export class TabManager {
   private closed = new ClosedTabsStack()
   private attached: WebContentsView | null = null
   private overlayHeight = 0
+  private htmlFullscreenId: string | null = null
   private findText = ''
   private sidebarWidth = SIDEBAR_WIDTH_DEFAULT
   private sidebarVisible = true
@@ -620,6 +621,10 @@ export class TabManager {
   private layout(): void {
     if (!this.attached) return
     const [w, h] = this.win.getContentSize()
+    if (this.htmlFullscreenId && this.htmlFullscreenId === this.model.activeId) {
+      this.attached.setBounds({ x: 0, y: 0, width: w, height: h })
+      return
+    }
     this.attached.setBounds(
       computeCanvasBounds(w, h, {
         topbar: TOPBAR_HEIGHT,
@@ -632,6 +637,18 @@ export class TabManager {
 
   private wireEvents(id: string, wc: WebContents): void {
     const refresh = () => this.refresh()
+    // HTML fullscreen (video players) must escape the carved canvas: drop the
+    // rounded mask and fill the window, then restore the inset on leave
+    wc.on('enter-html-full-screen', () => {
+      this.htmlFullscreenId = id
+      this.views.get(id)?.setBorderRadius(0)
+      this.layout()
+    })
+    wc.on('leave-html-full-screen', () => {
+      if (this.htmlFullscreenId === id) this.htmlFullscreenId = null
+      this.views.get(id)?.setBorderRadius(CANVAS_RADIUS)
+      this.layout()
+    })
     wc.on('page-title-updated', refresh)
     wc.on('did-start-loading', refresh)
     wc.on('did-stop-loading', refresh)

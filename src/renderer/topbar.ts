@@ -222,9 +222,13 @@ export function initTopbar(): Topbar {
       back.disabled = !tab?.canGoBack
       forward.disabled = !tab?.canGoForward
       reload.disabled = !tab
-      activeLoading = !!tab?.isLoading
-      reload.innerHTML = activeLoading ? ICON_STOP : ICON_RELOAD
-      reload.title = activeLoading ? 'Stop' : 'Reload'
+      const nowLoading = !!tab?.isLoading
+      if (nowLoading !== activeLoading) {
+        // snapshots stream constantly; only reparse the SVG on a real flip
+        reload.innerHTML = nowLoading ? ICON_STOP : ICON_RELOAD
+        reload.title = nowLoading ? 'Stop' : 'Reload'
+      }
+      activeLoading = nowLoading
       if (document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
       const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || /^https?:\/\//.test(tab.url))
       star.disabled = !canBookmark

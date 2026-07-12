@@ -1,5 +1,5 @@
 import './style.css'
-import { CANVAS_GAP } from '../shared/canvas-layout'
+import { CANVAS_GAP, CANVAS_RADIUS } from '../shared/canvas-layout'
 import type { BookmarksData, TabsSnapshot } from '../shared/ipc'
 import { renderBookmarks, startItemEdit } from './bookmarks-section'
 import { PanelMode, renderPanel } from './panel'
@@ -24,6 +24,7 @@ const aiSidebar = initAiSidebar()
 const aiResizeEl = document.getElementById('ai-resize')!
 const aiToggleEl = document.getElementById('ai-toggle')!
 appEl.style.setProperty('--gap', `${CANVAS_GAP}px`)
+appEl.style.setProperty('--canvas-radius', `${CANVAS_RADIUS}px`)
 
 let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], bookmarkTabs: {}, activeId: null }
 let bookmarks: BookmarksData = { folders: [], bookmarks: [] }

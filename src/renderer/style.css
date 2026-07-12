@@ -106,7 +106,8 @@ body {
 }
 #canvas-well {
   height: 100%;
-  border-radius: var(--r-m);
+  /* must match the native view mask (CANVAS_RADIUS); main.ts syncs the var */
+  border-radius: var(--canvas-radius, 8px);
   background: var(--well);
   box-shadow:
     0 0 0 1px var(--canvas-ring),
@@ -676,7 +677,7 @@ browser-action-list {
 }
 .shortcut-chip.recording {
   border-color: var(--focus-ring);
-  color: var(--accent);
+  color: var(--focus-ring);
 }
 .shortcut-chip.fixed {
   color: var(--fg-dim);
