@@ -5,12 +5,31 @@
 }
 :root {
   color-scheme: dark;
-  --bg: #1e1f24;
-  --bg-raised: #2a2b31;
+  --shell: #26272d;
+  --shell-raised: #31323a;
+  --well: #1c1d22;
+  --line: rgba(255, 255, 255, 0.07);
   --fg: #e6e6ea;
   --fg-dim: #9a9aa3;
   --accent: #7aa2f7;
   --work: #e0af68;
+  --accent-wash: rgba(122, 162, 247, 0.14);
+  --work-wash: rgba(224, 175, 104, 0.15);
+  --active-fg: #cdd9f7;
+  --work-active-fg: #edd9b8;
+  --focus-ring: var(--accent);
+  --focus-glow: rgba(122, 162, 247, 0.18);
+  --canvas-ring: rgba(122, 162, 247, 0.25);
+  --r-s: 6px;
+  --r-m: 8px;
+  --t-fast: 120ms ease-out;
+  --t-med: 160ms ease-out;
+}
+/* chrome-aware accents: interactive rings follow the active tab's profile */
+body.profile-work {
+  --focus-ring: var(--work);
+  --focus-glow: rgba(224, 175, 104, 0.18);
+  --canvas-ring: rgba(224, 175, 104, 0.25);
 }
 /* macOS swaps overlay scrollbars for classic ones when "Show scroll bars" is
    Always (e.g. a mouse is attached); unstyled those render light. Style them
@@ -37,7 +56,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 13px;
   color: var(--fg);
-  background: var(--bg);
+  background: var(--shell);
   user-select: none;
 }
 #app {
@@ -65,6 +84,7 @@ body {
 #app.ai-hidden #ai-resize {
   display: none;
 }
+/* the shell is one continuous surface; the topbar has no seam of its own */
 #topbar {
   grid-column: 1 / 4;
   position: relative;
@@ -72,7 +92,26 @@ body {
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  background: var(--bg-raised);
+  background: transparent;
+}
+/* the page WebContentsView floats as a rounded canvas carved into the shell;
+   main sizes the view (shared/canvas-layout.ts) and this frame paints the
+   surround: ring + shadow. --overlay-shift tracks the dropdown page-shift. */
+#canvas-frame {
+  grid-row: 2;
+  grid-column: 2;
+  min-width: 0;
+  min-height: 0;
+  padding: calc(var(--overlay-shift, 0px) + var(--gap, 8px)) var(--gap, 8px) var(--gap, 8px);
+}
+#canvas-well {
+  height: 100%;
+  border-radius: var(--r-m);
+  background: var(--well);
+  box-shadow:
+    0 0 0 1px var(--canvas-ring),
+    0 2px 12px rgba(0, 0, 0, 0.35);
+  transition: box-shadow var(--t-med);
 }
 /* faux-progress hairline; JS drives scaleX each frame, CSS owns the fades */
 #loading-bar {
@@ -92,7 +131,7 @@ body {
 }
 #loading-bar.visible {
   opacity: 1;
-  transition: opacity 120ms ease-out;
+  transition: opacity var(--t-fast);
 }
 #loading-bar.finishing {
   transform: scaleX(1);
@@ -118,18 +157,6 @@ body {
     transform: rotate(360deg);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  #loading-bar {
-    box-shadow: none;
-  }
-  #loading-bar.visible,
-  #loading-bar.finishing {
-    transition: none;
-  }
-  .load-spinner {
-    animation-duration: 2400ms;
-  }
-}
 #topbar button {
   background: none;
   border: none;
@@ -137,11 +164,14 @@ body {
   font-size: 15px;
   width: 30px;
   height: 30px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   cursor: pointer;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
 }
 #topbar button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--shell-raised);
 }
 #topbar button:disabled {
   color: var(--fg-dim);
@@ -155,23 +185,40 @@ body {
   width: 100%;
   height: 32px;
   padding: 0 12px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--well);
   color: var(--fg);
   outline: none;
+  transition:
+    box-shadow var(--t-med),
+    border-color var(--t-med);
 }
 #urlbar:focus {
-  border-color: var(--accent);
+  border-color: transparent;
+  box-shadow:
+    0 0 0 1.5px var(--focus-ring),
+    0 0 12px var(--focus-glow);
+}
+/* floating panels share one language: shell body, hairline, soft shadow,
+   quiet fade-and-drop entry */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 #suggestions {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   right: 0;
-  background: var(--bg-raised);
-  border-radius: 8px;
+  background: var(--shell);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
   overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: panel-in var(--t-med);
 }
 #sidebar {
   grid-row: 2;
@@ -196,12 +243,15 @@ body {
   border: none;
   color: var(--fg-dim);
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   cursor: pointer;
   font-size: 13px;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
 }
 #sidebar-footer button:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--shell-raised);
   color: var(--fg);
 }
 #pin-grid {
@@ -219,15 +269,19 @@ body {
   justify-content: center;
   height: 36px;
   border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--r-s);
+  background: rgba(255, 255, 255, 0.05);
   cursor: pointer;
+  transition: background var(--t-fast);
 }
 .pin:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--shell-raised);
 }
 .pin.active {
-  background: var(--bg-raised);
+  background: var(--accent-wash);
+}
+.pin.active.work {
+  background: var(--work-wash);
 }
 .pin.asleep .favicon {
   opacity: 0.45;
@@ -250,15 +304,23 @@ body {
   align-items: center;
   gap: 8px;
   padding: 7px 8px;
-  border-radius: 8px;
+  border-radius: var(--r-s);
   cursor: pointer;
   margin-bottom: 2px;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
 }
 .tab:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--shell-raised);
 }
 .tab.active {
-  background: var(--bg-raised);
+  background: var(--accent-wash);
+  color: var(--active-fg);
+}
+.tab.active.work {
+  background: var(--work-wash);
+  color: var(--work-active-fg);
 }
 .favicon {
   width: 16px;
@@ -280,9 +342,12 @@ body {
   width: 18px;
   height: 18px;
   line-height: 1;
-  border-radius: 4px;
+  border-radius: var(--r-s);
   cursor: pointer;
   visibility: hidden;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
 }
 .tab:hover .tab-close {
   visibility: visible;
@@ -318,10 +383,13 @@ body {
   flex-direction: column;
   padding: 8px 12px;
   cursor: pointer;
+  transition: background var(--t-fast);
 }
-.suggestion:hover,
+.suggestion:hover {
+  background: var(--shell-raised);
+}
 .suggestion.selected {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--accent-wash);
 }
 .suggestion-title {
   overflow: hidden;
@@ -351,11 +419,12 @@ body {
   display: flex;
   flex-direction: column;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   cursor: pointer;
+  transition: background var(--t-fast);
 }
 .panel-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--shell-raised);
 }
 .panel-item-title {
   overflow: hidden;
@@ -385,9 +454,12 @@ browser-action-list {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: var(--bg-raised);
-  border-radius: 8px;
+  background: var(--shell);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
   padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: panel-in var(--t-med);
 }
 .panel-heading {
   display: flex;
@@ -399,12 +471,15 @@ browser-action-list {
   border: none;
   color: var(--fg-dim);
   font-size: 11px;
-  border-radius: 4px;
+  border-radius: var(--r-s);
   padding: 2px 6px;
   cursor: pointer;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
 }
 .panel-action:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--shell-raised);
   color: var(--fg);
 }
 .panel-item.folder {
@@ -429,9 +504,9 @@ browser-action-list {
 }
 .folder-input {
   flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
+  background: var(--well);
+  border: 1px solid var(--focus-ring);
+  border-radius: var(--r-s);
   color: var(--fg);
   padding: 3px 6px;
   outline: none;
@@ -455,7 +530,7 @@ browser-action-list {
   flex: none;
   margin-bottom: 6px;
   padding-bottom: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--line);
 }
 #bookmarks[hidden] {
   display: none;
@@ -500,7 +575,7 @@ browser-action-list {
   gap: 24px;
   padding: 24px;
   overflow-y: auto;
-  background: var(--bg);
+  background: var(--shell);
 }
 #settings[hidden] {
   display: none;
@@ -517,15 +592,19 @@ browser-action-list {
   border: none;
   color: var(--fg);
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   cursor: pointer;
   font-size: 13px;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
 }
 .settings-nav-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--shell-raised);
 }
 .settings-nav-item.active {
-  background: var(--bg-raised);
+  background: var(--accent-wash);
+  color: var(--active-fg);
 }
 #settings-body {
   flex: 1;
@@ -548,12 +627,15 @@ browser-action-list {
   border: none;
   color: var(--fg-dim);
   font-size: 12px;
-  border-radius: 4px;
+  border-radius: var(--r-s);
   padding: 3px 8px;
   cursor: pointer;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
 }
 .settings-action:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--shell-raised);
   color: var(--fg);
 }
 #shortcut-list {
@@ -565,29 +647,31 @@ browser-action-list {
   align-items: center;
   gap: 10px;
   padding: 7px 8px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
+  transition: background var(--t-fast);
 }
 .shortcut-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--shell-raised);
 }
 .shortcut-label {
   flex: 1;
 }
 .shortcut-chip {
-  background: var(--bg-raised);
-  border: 1px solid transparent;
+  background: var(--well);
+  border: 1px solid var(--line);
   color: var(--fg);
   font-family: ui-monospace, Menlo, monospace;
   font-size: 12px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   padding: 4px 10px;
   cursor: pointer;
+  transition: border-color var(--t-fast);
 }
 .shortcut-chip:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 .shortcut-chip.recording {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
   color: var(--accent);
 }
 .shortcut-chip.fixed {
@@ -602,9 +686,11 @@ browser-action-list {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: var(--bg);
-  border-radius: 8px;
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
   padding: 2px 6px;
+  animation: panel-in var(--t-med);
 }
 #find-bar[hidden] {
   display: none;
@@ -614,14 +700,14 @@ browser-action-list {
   height: 26px;
   padding: 0 8px;
   border: 1px solid transparent;
-  border-radius: 6px;
-  background: var(--bg-raised);
+  border-radius: var(--r-s);
+  background: transparent;
   color: var(--fg);
   outline: none;
   font-size: 12px;
 }
 #find-input:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 #find-count {
   color: var(--fg-dim);
@@ -640,7 +726,7 @@ browser-action-list {
 }
 #ai-toggle.active {
   color: var(--accent);
-  background: rgba(122, 162, 247, 0.12);
+  background: var(--accent-wash);
 }
 
 /* ---- AI sidebar ---- */
@@ -655,15 +741,15 @@ browser-action-list {
      #ai-messages must be the one that scrolls */
   min-height: 0;
   overflow: hidden;
-  background: var(--bg);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--shell);
+  border-left: 1px solid var(--line);
 }
 #ai-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--line);
 }
 #ai-title {
   font-size: 12px;
@@ -677,12 +763,15 @@ browser-action-list {
   border: none;
   color: var(--fg-dim);
   font-size: 11px;
-  border-radius: 4px;
+  border-radius: var(--r-s);
   padding: 3px 8px;
   cursor: pointer;
+  transition:
+    background var(--t-fast),
+    color var(--t-fast);
 }
 #ai-clear:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--shell-raised);
   color: var(--fg);
 }
 #ai-messages {
@@ -696,7 +785,7 @@ browser-action-list {
 .ai-msg {
   max-width: 92%;
   padding: 8px 11px;
-  border-radius: 12px;
+  border-radius: var(--r-m);
   font-size: 13px;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -710,7 +799,7 @@ browser-action-list {
 }
 .ai-msg.assistant {
   align-self: flex-start;
-  background: var(--bg-raised);
+  background: var(--shell-raised);
   border-bottom-left-radius: 4px;
 }
 .ai-msg.assistant.pending {
@@ -725,31 +814,27 @@ browser-action-list {
     opacity: 0.3;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .ai-msg.assistant.pending::after {
-    animation: none;
-  }
-}
 .ai-error {
   display: flex;
   flex-direction: column;
   gap: 6px;
   align-self: stretch;
   padding: 8px 11px;
-  border-radius: 8px;
+  border-radius: var(--r-m);
   font-size: 12px;
   color: #f7768e;
   background: rgba(247, 118, 142, 0.08);
 }
 .ai-error-action {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--shell-raised);
   border: none;
   color: var(--fg);
   font-size: 12px;
-  border-radius: 6px;
+  border-radius: var(--r-s);
   padding: 4px 10px;
   cursor: pointer;
+  transition: background var(--t-fast);
 }
 .ai-error-action:hover {
   background: rgba(255, 255, 255, 0.12);
@@ -769,8 +854,8 @@ browser-action-list {
   align-items: center;
   gap: 8px;
   padding: 12px;
-  border-radius: 10px;
-  background: var(--bg-raised);
+  border-radius: var(--r-m);
+  background: var(--shell-raised);
   color: var(--fg);
 }
 .ai-chips {
@@ -787,6 +872,9 @@ browser-action-list {
   border-radius: 999px;
   padding: 6px 14px;
   cursor: pointer;
+  transition:
+    border-color var(--t-fast),
+    color var(--t-fast);
 }
 .ai-chip:hover {
   border-color: var(--accent);
@@ -797,7 +885,7 @@ browser-action-list {
   align-items: flex-end;
   gap: 6px;
   padding: 10px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--line);
 }
 #ai-input {
   flex: 1;
@@ -805,25 +893,26 @@ browser-action-list {
   min-height: 34px;
   max-height: 120px;
   padding: 8px 10px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--well);
   color: var(--fg);
   outline: none;
   font-family: inherit;
   font-size: 13px;
   line-height: 1.4;
   user-select: text;
+  transition: border-color var(--t-fast);
 }
 #ai-input:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 #ai-send {
   flex: none;
   width: 34px;
   height: 34px;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--r-m);
   background: var(--accent);
   color: #16161e;
   font-size: 15px;
@@ -886,16 +975,17 @@ browser-action-list {
   flex: 1;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  background: var(--well);
   color: var(--fg);
   outline: none;
   font-size: 13px;
   user-select: text;
+  transition: border-color var(--t-fast);
 }
 .settings-input:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 select.settings-input {
   flex: none;
@@ -916,4 +1006,26 @@ select.settings-input {
 }
 .settings-link:hover {
   text-decoration: underline;
+}
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  #loading-bar {
+    box-shadow: none;
+  }
+  #loading-bar.visible,
+  #loading-bar.finishing {
+    transition: none;
+  }
+  .load-spinner {
+    animation-duration: 2400ms;
+  }
+  #suggestions,
+  #ext-menu,
+  #find-bar {
+    animation: none;
+  }
+  .ai-msg.assistant.pending::after {
+    animation: none;
+  }
 }
