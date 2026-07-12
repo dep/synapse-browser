@@ -12,6 +12,7 @@ import { BookmarksStore } from './bookmarks'
 import { SettingsStore } from './settings-store'
 import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
+import { searchSuggestions } from '../shared/history-search'
 import { HistoryStore } from './history'
 import { attachPermissionPrompts } from './media-permissions'
 import { PermissionsStore } from './permissions-store'
@@ -303,7 +304,14 @@ app.whenReady().then(async () => {
     Menu.buildFromTemplate(template).popup({ window: win })
   })
 
-  ipcMain.handle('history:search', (_e, q: string) => history.search(String(q)))
+  // suggestions blend shared history with the active tab's own profile's
+  // bookmarks — a Work bookmark suggested to a default tab would load the
+  // Work URL in the default session
+  ipcMain.handle('history:search', (_e, q: string) => {
+    const profile = tabs.activeId ? tabs.profileOf(tabs.activeId) : 'default'
+    const marks = bookmarks.ordered().filter((b) => (b.profile ?? 'default') === profile)
+    return searchSuggestions(history.entries(), marks, String(q))
+  })
   ipcMain.handle('history:list', () => history.list())
 
   const bookmarksChanged = (): void => {

@@ -35,6 +35,13 @@ describe('HistoryStore', () => {
     expect(store.list()).toHaveLength(1)
   })
 
+  it('keeps one entry per non-consecutive revisit — the frequency signal', () => {
+    store.add('https://a.com', 'A', 1)
+    store.add('https://b.com', 'B', 2)
+    store.add('https://a.com', 'A', 3)
+    expect(store.list().filter((e) => e.url === 'https://a.com')).toHaveLength(2)
+  })
+
   it('caps at 5000 entries', () => {
     for (let i = 0; i < 5001; i++) store.add(`https://site${i}.com`, `S${i}`, i)
     expect(store.list(6000)).toHaveLength(5000)

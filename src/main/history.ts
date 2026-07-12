@@ -1,5 +1,5 @@
 import * as path from 'node:path'
-import { searchHistory } from '../shared/history-search'
+import { searchSuggestions } from '../shared/history-search'
 import type { HistoryEntry } from '../shared/ipc'
 import { JsonStore } from './store'
 
@@ -17,6 +17,8 @@ export class HistoryStore {
     this.store = new JsonStore<HistoryFile>(path.join(dir, 'history.json'), { v: 1, entries: [] })
   }
 
+  // deliberately dedupes only the immediate head: repeat visits keep their own
+  // entries, and searchSuggestions counts them as the visit-frequency signal
   add(url: string, title: string, visitedAt: number): void {
     if (!/^https?:\/\//.test(url)) return
     const { entries } = this.store.get()
@@ -26,7 +28,11 @@ export class HistoryStore {
   }
 
   search(query: string, limit = 5): HistoryEntry[] {
-    return searchHistory(this.store.get().entries, query, limit)
+    return searchSuggestions(this.store.get().entries, [], query, limit)
+  }
+
+  entries(): HistoryEntry[] {
+    return this.store.get().entries
   }
 
   list(limit = 100): HistoryEntry[] {
