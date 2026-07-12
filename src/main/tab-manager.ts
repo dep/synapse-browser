@@ -1,6 +1,7 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput } from '../shared/url-classifier'
 import { CANVAS_RADIUS, computeCanvasBounds } from '../shared/canvas-layout'
+import { routeWindowOpen } from '../shared/popup-router'
 import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
 import { ClosedTabsStack } from './closed-tabs'
 import { CycleList, Direction, TabModel } from './tab-model'
@@ -75,6 +76,25 @@ export class TabManager {
     return id
   }
 
+  // featured popups (OAuth) stay real child windows: 'allow' preserves
+  // window.opener/window.name and inherits the opener's webPreferences and
+  // session, so Work-container isolation carries over for free. Links land
+  // in the opener's container; cmd+click ('background-tab') must not steal
+  // focus. Child windows get the same routing for anything they open.
+  private wirePopupRouting(wc: WebContents, openerId: string): void {
+    wc.setWindowOpenHandler(({ url: popupUrl, disposition }) => {
+      const route = routeWindowOpen(popupUrl, disposition)
+      if (route === 'popup') {
+        return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true } }
+      }
+      if (route !== 'deny') {
+        this.createTab(popupUrl, route === 'tab', this.profileOf(openerId), openerId)
+      }
+      return { action: 'deny' }
+    })
+    wc.on('did-create-window', (child) => this.wirePopupRouting(child.webContents, openerId))
+  }
+
   private createView(id: string): WebContentsView {
     const profile = this.profileOf(id)
     const view = new WebContentsView({
@@ -89,14 +109,7 @@ export class TabManager {
     this.favicons.set(id, null)
     this.wireEvents(id, view.webContents)
     this.opts.onTabCreated?.(view.webContents, profile)
-    view.webContents.setWindowOpenHandler(({ url: popupUrl, disposition }) => {
-      // popups (OAuth windows etc.) must land in the opener's container.
-      // cmd+click reports disposition 'background-tab' and must not steal focus
-      if (/^https?:\/\//.test(popupUrl)) {
-        this.createTab(popupUrl, disposition !== 'background-tab', this.profileOf(id), id)
-      }
-      return { action: 'deny' }
-    })
+    this.wirePopupRouting(view.webContents, id)
     return view
   }
 
