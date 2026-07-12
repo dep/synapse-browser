@@ -6,6 +6,25 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.5.3</title>
+            <pubDate>Sun, 12 Jul 2026 10:12:03 +0000</pubDate>
+            <sparkle:version>0.5.3</sparkle:version>
+            <sparkle:shortVersionString>0.5.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>The sidebar scrollbar now matches the dark theme instead of intermittently rendering as a white system scrollbar.</li>
+                    <li>Alt+Cmd+Up/Down now steps through pins, bookmarks, and tabs — the same order as Alt+Tab.</li>
+                    <li>Smarter address-bar suggestions: bookmarked and frequently-visited pages rank first, bookmarks match by their own names, and never-visited bookmarks are suggested too.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.5.3/Synapse.Browser-0.5.3-universal.dmg"
+              sparkle:edSignature="Im+6yOlWCxsIEGQLNu4NyCAXbvKQPKmmjEU/11TgAo5YwuNKqqI35VjpzKh00RmU2wW6WIrBHbWuCgu33a/NAg=="
+              length="219205283"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.5.2</title>
             <pubDate>Fri, 10 Jul 2026 13:20:34 +0000</pubDate>
             <sparkle:version>0.5.2</sparkle:version>
