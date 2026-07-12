@@ -4,12 +4,34 @@
   box-sizing: border-box;
 }
 :root {
+  color-scheme: dark;
   --bg: #1e1f24;
   --bg-raised: #2a2b31;
   --fg: #e6e6ea;
   --fg-dim: #9a9aa3;
   --accent: #7aa2f7;
   --work: #e0af68;
+}
+/* macOS swaps overlay scrollbars for classic ones when "Show scroll bars" is
+   Always (e.g. a mouse is attached); unstyled those render light. Style them
+   explicitly so every scroller matches the palette in both modes. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.14);
+  border-radius: 5px;
+  /* transparent border + padding-box clip = slim 6px pill with hover padding */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.28);
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
