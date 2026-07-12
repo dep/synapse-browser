@@ -177,6 +177,10 @@ body {
   color: var(--fg-dim);
   opacity: 0.4;
 }
+#topbar button svg {
+  display: block;
+  margin: auto;
+}
 #urlbar-wrap {
   flex: 1;
   position: relative;

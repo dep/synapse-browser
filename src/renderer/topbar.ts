@@ -1,4 +1,5 @@
 import type { HistoryEntry, TabsSnapshot } from '../shared/ipc'
+import { ICON_BACK, ICON_FORWARD, ICON_RELOAD, ICON_STOP } from './icons'
 
 export interface Topbar {
   update(snap: TabsSnapshot): void
@@ -8,6 +9,9 @@ export function initTopbar(): Topbar {
   const back = document.getElementById('nav-back') as HTMLButtonElement
   const forward = document.getElementById('nav-forward') as HTMLButtonElement
   const reload = document.getElementById('nav-reload') as HTMLButtonElement
+  back.innerHTML = ICON_BACK
+  forward.innerHTML = ICON_FORWARD
+  reload.innerHTML = ICON_RELOAD
   const star = document.getElementById('star') as HTMLButtonElement
   const pill = document.getElementById('download-pill') as HTMLButtonElement
   let latestDownload: import('../shared/ipc').DownloadInfo | null = null
@@ -219,7 +223,7 @@ export function initTopbar(): Topbar {
       forward.disabled = !tab?.canGoForward
       reload.disabled = !tab
       activeLoading = !!tab?.isLoading
-      reload.textContent = activeLoading ? '✕' : '⟳'
+      reload.innerHTML = activeLoading ? ICON_STOP : ICON_RELOAD
       reload.title = activeLoading ? 'Stop' : 'Reload'
       if (document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
       const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || /^https?:\/\//.test(tab.url))
