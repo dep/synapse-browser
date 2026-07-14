@@ -6,6 +6,25 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.6.2</title>
+            <pubDate>Tue, 14 Jul 2026 10:06:36 +0000</pubDate>
+            <sparkle:version>0.6.2</sparkle:version>
+            <sparkle:shortVersionString>0.6.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>URL bar autocomplete: typing a URL prefix completes it inline with the remainder selected.</li>
+                    <li>Smarter suggestions: ranked by visit frequency and recency, with a bookmark bonus; multi-word queries match across page title and URL together.</li>
+                    <li>Suggestion rows now show favicons, bold the matched text, and badge bookmarked entries with a star.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.6.2/Synapse.Browser-0.6.2-universal.dmg"
+              sparkle:edSignature="PFWekrHFCCgU6+FZyH9CpYozST5Uud/YV1dlx9tMJ97Vr1OOUdXvQO1NBtMCeAGBwieCHYkcVKgEYHFGVa84AQ=="
+              length="219233924"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.6.1</title>
             <pubDate>Sun, 12 Jul 2026 12:15:49 +0000</pubDate>
             <sparkle:version>0.6.1</sparkle:version>
