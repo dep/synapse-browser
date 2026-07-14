@@ -301,7 +301,8 @@ export function initTopbar(): Topbar {
 
   return {
     update(snap) {
-      if (snap.activeId !== activeId) hideSuggestions()
+      const tabChanged = snap.activeId !== activeId
+      if (tabChanged) hideSuggestions()
       activeId = snap.activeId
       const tab = activeId ? snap.tabs[activeId] : null
       back.disabled = !tab?.canGoBack
@@ -314,7 +315,13 @@ export function initTopbar(): Topbar {
         reload.title = nowLoading ? 'Stop' : 'Reload'
       }
       activeLoading = nowLoading
-      if (document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
+      // A tab switch always rewrites the bar: element focus survives native
+      // focus moving to a page view (clicking a page never blurs the chrome
+      // document), so the activeElement guard alone would suppress updates
+      // forever after any urlbar use. Same-tab snapshots still defer to the
+      // guard — activeElement can't distinguish a draft from a stale display,
+      // and clobbering a draft is the worse failure.
+      if (tabChanged || document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
       const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || /^https?:\/\//.test(tab.url))
       star.disabled = !canBookmark
       star.textContent = tab?.isBookmarked ? '★' : '☆'
