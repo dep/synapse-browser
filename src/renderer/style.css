@@ -385,7 +385,8 @@ body {
 }
 .suggestion {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   padding: 8px 12px;
   cursor: pointer;
   transition: background var(--t-fast);
@@ -407,6 +408,38 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.suggestion-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-dim);
+}
+.suggestion-icon img {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+.suggestion-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.suggestion-title b,
+.suggestion-url b {
+  font-weight: 700;
+}
+.suggestion-url b {
+  color: var(--fg);
+}
+.suggestion-star {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--fg-dim);
 }
 .panel-heading {
   font-size: 11px;

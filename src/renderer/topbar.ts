@@ -1,5 +1,6 @@
-import type { HistoryEntry, TabsSnapshot } from '../shared/ipc'
-import { ICON_BACK, ICON_FORWARD, ICON_RELOAD, ICON_STOP } from './icons'
+import { stripUrl } from '../shared/history-search'
+import type { Suggestion, TabsSnapshot } from '../shared/ipc'
+import { ICON_BACK, ICON_FORWARD, ICON_GLOBE, ICON_RELOAD, ICON_STOP } from './icons'
 
 export interface Topbar {
   update(snap: TabsSnapshot): void
@@ -58,8 +59,10 @@ export function initTopbar(): Topbar {
   const suggestionsEl = document.getElementById('suggestions') as HTMLDivElement
   let activeId: string | null = null
   let activeLoading = false
-  let suggestions: HistoryEntry[] = []
+  let suggestions: Suggestion[] = []
   let selected = -1
+  let autoSelected = false // row 0 highlighted by inline autofill, not by the user
+  let lastQuery = ''
 
   back.addEventListener('click', () => activeId && window.synapse.tabs.back(activeId))
   forward.addEventListener('click', () => activeId && window.synapse.tabs.forward(activeId))
@@ -107,23 +110,76 @@ export function initTopbar(): Topbar {
   function hideSuggestions(): void {
     suggestions = []
     selected = -1
+    autoSelected = false
     suggestionsEl.hidden = true
     suggestionsEl.innerHTML = ''
     setOverlay(0)
   }
 
+  // wrap each query token's first match in <b>, building text nodes only —
+  // titles and urls are page-controlled strings
+  function highlightInto(parent: HTMLElement, text: string, tokens: string[]): void {
+    const lower = text.toLowerCase()
+    const ranges: [number, number][] = []
+    for (const t of tokens) {
+      const i = lower.indexOf(t)
+      if (i !== -1) ranges.push([i, i + t.length])
+    }
+    ranges.sort((a, b) => a[0] - b[0])
+    const merged: [number, number][] = []
+    for (const r of ranges) {
+      const last = merged[merged.length - 1]
+      if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1])
+      else merged.push([r[0], r[1]])
+    }
+    let pos = 0
+    for (const [start, end] of merged) {
+      if (start > pos) parent.append(text.slice(pos, start))
+      const b = document.createElement('b')
+      b.textContent = text.slice(start, end)
+      parent.append(b)
+      pos = end
+    }
+    parent.append(text.slice(pos))
+  }
+
   function renderSuggestions(): void {
     suggestionsEl.innerHTML = ''
-    suggestions.forEach((entry, i) => {
+    const tokens = lastQuery.toLowerCase().split(/\s+/).filter(Boolean)
+    suggestions.forEach((s, i) => {
       const item = document.createElement('div')
       item.className = 'suggestion' + (i === selected ? ' selected' : '')
+
+      const icon = document.createElement('span')
+      icon.className = 'suggestion-icon'
+      if (s.favicon) {
+        const img = document.createElement('img')
+        img.onerror = () => {
+          icon.innerHTML = ICON_GLOBE
+        }
+        img.src = s.favicon
+        icon.append(img)
+      } else {
+        icon.innerHTML = ICON_GLOBE
+      }
+
+      const text = document.createElement('span')
+      text.className = 'suggestion-text'
       const title = document.createElement('span')
       title.className = 'suggestion-title'
-      title.textContent = entry.title
+      highlightInto(title, s.title, tokens)
+      if (s.isBookmark) {
+        const star = document.createElement('span')
+        star.className = 'suggestion-star'
+        star.textContent = '★'
+        title.append(star)
+      }
       const url = document.createElement('span')
       url.className = 'suggestion-url'
-      url.textContent = entry.url
-      item.append(title, url)
+      highlightInto(url, stripUrl(s.url), tokens)
+      text.append(title, url)
+
+      item.append(icon, text)
       // mousedown, not click: it fires before the input's blur hides the dropdown
       item.addEventListener('mousedown', (e) => {
         e.preventDefault()
@@ -152,7 +208,8 @@ export function initTopbar(): Topbar {
     urlbar.setSelectionRange(value.length, value.length)
   }
 
-  urlbar.addEventListener('input', async () => {
+  urlbar.addEventListener('input', async (e) => {
+    const deletion = e instanceof InputEvent && !!e.inputType?.startsWith('delete')
     const q = urlbar.value.trim()
     if (!q) {
       hideSuggestions()
@@ -161,7 +218,24 @@ export function initTopbar(): Topbar {
     const results = await window.synapse.history.search(q)
     if (urlbar.value.trim() !== q || document.activeElement !== urlbar) return // stale response
     suggestions = results
+    lastQuery = q
     selected = -1
+    autoSelected = false
+    const auto = results[0]?.autocomplete
+    // inline autofill: complete in place with the remainder selected — but
+    // never while deleting, or backspace would fight the user
+    if (
+      auto &&
+      !deletion &&
+      urlbar.value === q &&
+      auto.toLowerCase().startsWith(q.toLowerCase()) &&
+      auto.length > q.length
+    ) {
+      urlbar.value = q + auto.slice(q.length)
+      urlbar.setSelectionRange(q.length, urlbar.value.length)
+      selected = 0
+      autoSelected = true
+    }
     renderSuggestions()
   })
 
@@ -185,23 +259,32 @@ export function initTopbar(): Topbar {
     if (e.key === 'ArrowDown' && suggestions.length > 0) {
       e.preventDefault()
       selected = (selected + 1) % suggestions.length
+      autoSelected = false
       renderSuggestions()
       applySelection()
     } else if (e.key === 'ArrowUp' && suggestions.length > 0) {
       e.preventDefault()
       selected = (selected - 1 + suggestions.length) % suggestions.length
+      autoSelected = false
       renderSuggestions()
       applySelection()
     } else if (e.key === 'Escape') {
+      // an autofilled remainder the user never asked to keep goes away with the dropdown
+      const start = urlbar.selectionStart
+      if (autoSelected && start !== null && urlbar.selectionEnd === urlbar.value.length)
+        urlbar.value = urlbar.value.slice(0, start)
       hideSuggestions()
     } else if (e.key === 'Enter' && activeId && urlbar.value.trim()) {
+      const userPicked = selected >= 0 && !autoSelected
       if (e.altKey) {
-        window.synapse.tabs.create(selected >= 0 ? suggestions[selected].url : urlbar.value)
+        window.synapse.tabs.create(userPicked ? suggestions[selected].url : urlbar.value)
         urlbar.blur()
         hideSuggestions()
-      } else if (selected >= 0) {
+      } else if (userPicked) {
         pick(selected)
       } else {
+        // autofilled text goes through classifyInput in main, so
+        // "feedback.limitless.ai/" loads https://feedback.limitless.ai/
         window.synapse.tabs.navigate(activeId, urlbar.value)
         urlbar.blur()
         hideSuggestions()
