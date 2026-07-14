@@ -1,4 +1,4 @@
-import { stripUrl } from '../shared/history-search'
+import { queryTokens, stripUrl } from '../shared/history-search'
 import type { Suggestion, TabsSnapshot } from '../shared/ipc'
 import { ICON_BACK, ICON_FORWARD, ICON_GLOBE, ICON_RELOAD, ICON_STOP } from './icons'
 
@@ -145,7 +145,7 @@ export function initTopbar(): Topbar {
 
   function renderSuggestions(): void {
     suggestionsEl.innerHTML = ''
-    const tokens = lastQuery.toLowerCase().split(/\s+/).filter(Boolean)
+    const tokens = queryTokens(lastQuery)
     suggestions.forEach((s, i) => {
       const item = document.createElement('div')
       item.className = 'suggestion' + (i === selected ? ' selected' : '')
@@ -231,7 +231,9 @@ export function initTopbar(): Topbar {
       auto.toLowerCase().startsWith(q.toLowerCase()) &&
       auto.length > q.length
     ) {
-      urlbar.value = q + auto.slice(q.length)
+      // take the candidate's own casing wholesale: echoing the typed prefix
+      // verbatim would silently lowercase mixed-case path segments
+      urlbar.value = auto
       urlbar.setSelectionRange(q.length, urlbar.value.length)
       selected = 0
       autoSelected = true

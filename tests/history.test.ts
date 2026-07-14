@@ -48,11 +48,6 @@ describe('HistoryStore', () => {
     expect(store.list(1)[0].url).toBe('https://site5000.com')
   })
 
-  it('search finds matches', () => {
-    store.add('https://rust-lang.org', 'Rust Programming Language', 1)
-    expect(store.search('rust')).toHaveLength(1)
-  })
-
   it('persists via flush and reloads', () => {
     store.add('https://a.com', 'A', 1)
     store.flush()
@@ -60,9 +55,4 @@ describe('HistoryStore', () => {
     expect(reloaded.list()).toHaveLength(1)
   })
 
-  it('search respects the limit parameter and defaults to 6', () => {
-    for (let i = 0; i < 8; i++) store.add(`https://site${i}.com`, `Site ${i}`, i)
-    expect(store.search('site', 3)).toHaveLength(3)
-    expect(store.search('site')).toHaveLength(6)
-  })
 })

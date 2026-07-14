@@ -56,6 +56,13 @@ describe('token matching', () => {
     expect(searchSuggestions(entries, [], 'gp', NOW)).toEqual([])
   })
 
+  it('matches when the query includes the scheme or www.', () => {
+    const entries = [e('https://feedback.limitless.ai/', 'Limitless')]
+    expect(searchSuggestions(entries, [], 'https://feed', NOW)).toHaveLength(1)
+    expect(searchSuggestions(entries, [], 'WWW.feedback', NOW)).toHaveLength(1)
+    expect(searchSuggestions(entries, [], 'https://', NOW)).toEqual([])
+  })
+
   it('returns [] for empty or whitespace query', () => {
     expect(searchSuggestions([e('https://a.com', 'A')], [], '', NOW)).toEqual([])
     expect(searchSuggestions([e('https://a.com', 'A')], [], '  ', NOW)).toEqual([])
@@ -210,6 +217,18 @@ describe('inline autocomplete', () => {
     ]
     const [top] = searchSuggestions(entries, [], 'fee', NOW)
     expect(top.autocomplete).toBe('feedback.limitless.ai/')
+  })
+
+  it('still offers host completion when the stored url has no trailing slash', () => {
+    const entries = [e('https://a.com', 'A')]
+    expect(searchSuggestions(entries, [], 'a.co', NOW)[0].autocomplete).toBe('a.com/')
+    expect(searchSuggestions(entries, [], 'a.com/', NOW)[0].autocomplete).toBe('a.com/')
+  })
+
+  it('keeps the candidate url casing in the completion', () => {
+    const entries = [e('https://github.com/User/Repo', 'Repo')]
+    const [top] = searchSuggestions(entries, [], 'github.com/us', NOW)
+    expect(top.autocomplete).toBe('github.com/User/Repo')
   })
 
   it('never offers autocomplete for multi-word queries', () => {

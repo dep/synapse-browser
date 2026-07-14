@@ -1,4 +1,5 @@
 import type { Bookmark, HistoryEntry, Suggestion } from './ipc'
+import { FULL_URL_RE } from './url-classifier'
 
 export type SuggestionBookmark = Pick<Bookmark, 'url' | 'title' | 'createdAt'> & {
   favicon?: string | null
@@ -27,7 +28,22 @@ interface Candidate {
 }
 
 export function stripUrl(url: string): string {
-  return url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^www\./i, '')
+  return url.replace(FULL_URL_RE, '').replace(/^www\./i, '')
+}
+
+// One tokenizer for matching (scorer) and highlighting (renderer): the query
+// is scheme/www-stripped like the haystack, so "https://fee" still finds
+// feedback.* rows
+export function queryTokens(query: string): string[] {
+  const q = stripUrl(query.trim().toLowerCase())
+  return q ? q.split(/\s+/) : []
+}
+
+// candidates match and autocomplete against this form; host-only URLs gain a
+// trailing slash so "a.com/" typed by the user still matches https://a.com
+function strippedForMatch(url: string): string {
+  const s = stripUrl(url)
+  return s.includes('/') ? s : `${s}/`
 }
 
 function visitWeight(age: number): number {
@@ -64,9 +80,8 @@ export function searchSuggestions(
   now: number,
   limit = 6,
 ): Suggestion[] {
-  const q = query.trim().toLowerCase()
-  if (!q) return []
-  const tokens = q.split(/\s+/)
+  const tokens = queryTokens(query)
+  if (tokens.length === 0) return []
 
   const byUrl = new Map<string, Candidate>()
   for (const entry of entries) {
@@ -78,7 +93,7 @@ export function searchSuggestions(
     } else {
       byUrl.set(entry.url, {
         url: entry.url,
-        stripped: stripUrl(entry.url),
+        stripped: strippedForMatch(entry.url),
         title: entry.title,
         bookmarkTitle: null,
         favicon: null,
@@ -99,7 +114,7 @@ export function searchSuggestions(
     } else {
       byUrl.set(b.url, {
         url: b.url,
-        stripped: stripUrl(b.url),
+        stripped: strippedForMatch(b.url),
         title: b.title,
         bookmarkTitle: b.title,
         favicon: b.favicon ?? null,
@@ -123,12 +138,12 @@ export function searchSuggestions(
   let results = scored.slice(0, limit)
   let autocomplete: string | null = null
   if (tokens.length === 1) {
+    const q = tokens[0]
     const match = scored.find((s) => s.c.stripped.toLowerCase().startsWith(q))
     if (match) {
       const stripped = match.c.stripped
-      const slash = stripped.indexOf('/')
-      const hostEnd = slash === -1 ? stripped.length : slash
-      autocomplete = q.length <= hostEnd ? `${stripped.slice(0, hostEnd)}/` : stripped
+      const hostEnd = stripped.indexOf('/') // strippedForMatch guarantees a slash
+      autocomplete = q.length <= hostEnd ? stripped.slice(0, hostEnd + 1) : stripped
       results = [match, ...results.filter((s) => s !== match)].slice(0, limit)
     }
   }
