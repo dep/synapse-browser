@@ -1,6 +1,6 @@
 import * as path from 'node:path'
 import { searchSuggestions } from '../shared/history-search'
-import type { HistoryEntry } from '../shared/ipc'
+import type { HistoryEntry, Suggestion } from '../shared/ipc'
 import { JsonStore } from './store'
 
 const MAX_ENTRIES = 5000
@@ -27,8 +27,8 @@ export class HistoryStore {
     this.store.set({ v: 1, entries: next })
   }
 
-  search(query: string, limit = 5): HistoryEntry[] {
-    return searchSuggestions(this.store.get().entries, [], query, limit)
+  search(query: string, limit = 6): Suggestion[] {
+    return searchSuggestions(this.store.get().entries, [], query, Date.now(), limit)
   }
 
   entries(): HistoryEntry[] {

@@ -1,65 +1,143 @@
-import type { Bookmark, HistoryEntry } from './ipc'
+import type { Bookmark, HistoryEntry, Suggestion } from './ipc'
 
-export type SuggestionBookmark = Pick<Bookmark, 'url' | 'title' | 'createdAt'>
-
-interface Candidate {
-  entry: HistoryEntry
-  visits: number
-  bookmarkTitle: string | null
+export type SuggestionBookmark = Pick<Bookmark, 'url' | 'title' | 'createdAt'> & {
+  favicon?: string | null
 }
 
-// Candidates are unique history URLs (visits = occurrence count in the
-// retained window; the store keeps one entry per visit) plus never-visited
-// bookmarks. Rank: match quality, then bookmarked, then visit count; ties keep
-// insertion order (history newest-first, bookmark-only last) via stable sort.
+const DAY = 86_400_000
+// Firefox-style frecency buckets: a visit's weight decays with age
+const BUCKETS: [maxAgeDays: number, weight: number][] = [
+  [4, 100],
+  [14, 70],
+  [31, 50],
+  [90, 30],
+]
+const OLD_WEIGHT = 10
+const BOOKMARK_BONUS = 150
+
+interface Candidate {
+  url: string
+  stripped: string
+  title: string
+  bookmarkTitle: string | null
+  favicon: string | null
+  isBookmark: boolean
+  visits: number[]
+  lastVisit: number
+}
+
+export function stripUrl(url: string): string {
+  return url.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '').replace(/^www\./i, '')
+}
+
+function visitWeight(age: number): number {
+  for (const [days, weight] of BUCKETS) if (age <= days * DAY) return weight
+  return OLD_WEIGHT
+}
+
+function hasBoundaryMatch(hay: string, token: string): boolean {
+  for (let i = hay.indexOf(token); i !== -1; i = hay.indexOf(token, i + 1)) {
+    if (i === 0 || !/[a-z0-9]/.test(hay[i - 1])) return true
+  }
+  return false
+}
+
+// 2 = every token starts at a word boundary, 1 = every token a substring, 0 = miss
+function matchTier(tokens: string[], hay: string): number {
+  let tier = 2
+  for (const token of tokens) {
+    if (!hay.includes(token)) return 0
+    if (!hasBoundaryMatch(hay, token)) tier = 1
+  }
+  return tier
+}
+
+// Candidates are unique history URLs (all visit timestamps collected — the
+// frecency signal) plus never-visited bookmarks. Rank: match tier, then
+// frecency + bookmark bonus, then last visit. A single-token query that
+// prefixes a candidate's scheme-less URL yields an inline autocomplete,
+// promoted to rank 1.
 export function searchSuggestions(
   entries: HistoryEntry[],
   bookmarks: SuggestionBookmark[],
   query: string,
-  limit = 5,
-): HistoryEntry[] {
+  now: number,
+  limit = 6,
+): Suggestion[] {
   const q = query.trim().toLowerCase()
   if (!q) return []
+  const tokens = q.split(/\s+/)
 
   const byUrl = new Map<string, Candidate>()
   for (const entry of entries) {
-    const seen = byUrl.get(entry.url)
-    if (seen) seen.visits++
-    else byUrl.set(entry.url, { entry, visits: 1, bookmarkTitle: null })
+    const c = byUrl.get(entry.url)
+    if (c) {
+      // entries are newest-first, so the first occurrence already holds the freshest title
+      c.visits.push(entry.visitedAt)
+      c.lastVisit = Math.max(c.lastVisit, entry.visitedAt)
+    } else {
+      byUrl.set(entry.url, {
+        url: entry.url,
+        stripped: stripUrl(entry.url),
+        title: entry.title,
+        bookmarkTitle: null,
+        favicon: null,
+        isBookmark: false,
+        visits: [entry.visitedAt],
+        lastVisit: entry.visitedAt,
+      })
+    }
   }
   for (const b of bookmarks) {
-    const seen = byUrl.get(b.url)
-    if (seen) seen.bookmarkTitle = b.title
-    else
+    const c = byUrl.get(b.url)
+    if (c) {
+      // a visited bookmark stays findable by its user-chosen name, not just
+      // the page title its history entries carry
+      c.bookmarkTitle = b.title
+      c.isBookmark = true
+      c.favicon = b.favicon ?? null
+    } else {
       byUrl.set(b.url, {
-        entry: { url: b.url, title: b.title, visitedAt: b.createdAt },
-        visits: 0,
+        url: b.url,
+        stripped: stripUrl(b.url),
+        title: b.title,
         bookmarkTitle: b.title,
+        favicon: b.favicon ?? null,
+        isBookmark: true,
+        visits: [],
+        lastVisit: b.createdAt,
       })
+    }
   }
 
-  const scored: { c: Candidate; match: number }[] = []
+  const scored: { c: Candidate; tier: number; score: number }[] = []
   for (const c of byUrl.values()) {
-    // a visited bookmark stays findable by its user-chosen name, not just
-    // the page title its history entries carry
-    const hay = `${c.entry.title} ${c.bookmarkTitle ?? ''} ${c.entry.url}`.toLowerCase()
-    const match = hay.includes(q) ? 2 : isSubsequence(q, hay) ? 1 : 0
-    if (match > 0) scored.push({ c, match })
+    const hay = `${c.title} ${c.bookmarkTitle ?? ''} ${c.stripped}`.toLowerCase()
+    const tier = matchTier(tokens, hay)
+    if (tier === 0) continue
+    const frecency = c.visits.reduce((sum, v) => sum + visitWeight(now - v), 0)
+    scored.push({ c, tier, score: frecency + (c.isBookmark ? BOOKMARK_BONUS : 0) })
   }
-  scored.sort(
-    (a, b) =>
-      b.match - a.match ||
-      Number(b.c.bookmarkTitle !== null) - Number(a.c.bookmarkTitle !== null) ||
-      b.c.visits - a.c.visits,
-  )
-  return scored.slice(0, limit).map((s) => s.c.entry)
-}
+  scored.sort((a, b) => b.tier - a.tier || b.score - a.score || b.c.lastVisit - a.c.lastVisit)
 
-function isSubsequence(needle: string, hay: string): boolean {
-  let i = 0
-  for (const ch of hay) {
-    if (ch === needle[i]) i++
-    if (i === needle.length) return true
+  let results = scored.slice(0, limit)
+  let autocomplete: string | null = null
+  if (tokens.length === 1) {
+    const match = scored.find((s) => s.c.stripped.toLowerCase().startsWith(q))
+    if (match) {
+      const stripped = match.c.stripped
+      const slash = stripped.indexOf('/')
+      const hostEnd = slash === -1 ? stripped.length : slash
+      autocomplete = q.length <= hostEnd ? `${stripped.slice(0, hostEnd)}/` : stripped
+      results = [match, ...results.filter((s) => s !== match)].slice(0, limit)
+    }
   }
-  return needle.length === 0
+
+  return results.map(({ c }, i) => ({
+    url: c.url,
+    title: c.title,
+    favicon: c.favicon,
+    isBookmark: c.isBookmark,
+    autocomplete: i === 0 ? autocomplete : null,
+  }))
 }

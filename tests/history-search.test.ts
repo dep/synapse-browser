@@ -1,126 +1,226 @@
 import { describe, expect, it } from 'vitest'
 import { searchSuggestions } from '../src/shared/history-search'
-import type { HistoryEntry } from '../src/shared/ipc'
+import type { HistoryEntry, Suggestion } from '../src/shared/ipc'
 
-const e = (url: string, title: string): HistoryEntry => ({ url, title, visitedAt: 0 })
-const bm = (url: string, title: string) => ({ url, title, createdAt: 0 })
+const DAY = 86_400_000
+const NOW = 1_000 * DAY // fixed clock, larger than any visit age used below
 
-describe('searchSuggestions over history', () => {
-  it('matches substrings in title or url', () => {
-    const entries = [e('https://a.com', 'Alpha Site'), e('https://b.com/rust-book', 'Learn')]
-    expect(searchSuggestions(entries, [], 'alpha').map((x) => x.url)).toEqual(['https://a.com'])
-    expect(searchSuggestions(entries, [], 'rust').map((x) => x.url)).toEqual([
-      'https://b.com/rust-book',
-    ])
+const e = (url: string, title: string, visitedAt = NOW - DAY): HistoryEntry => ({
+  url,
+  title,
+  visitedAt,
+})
+const bm = (url: string, title: string, favicon: string | null = null) => ({
+  url,
+  title,
+  createdAt: NOW - DAY,
+  favicon,
+})
+const urls = (results: Suggestion[]): string[] => results.map((s) => s.url)
+
+describe('token matching', () => {
+  it('requires every token to match (AND)', () => {
+    const entries = [e('https://a.com', 'Alpha Site'), e('https://b.com', 'Beta Site')]
+    expect(urls(searchSuggestions(entries, [], 'alpha site', NOW))).toEqual(['https://a.com'])
+    expect(searchSuggestions(entries, [], 'alpha beta', NOW)).toEqual([])
   })
 
-  it('ranks substring matches above subsequence matches', () => {
+  it('matches tokens across title and url together — "play Daily" regression', () => {
     const entries = [
-      e('https://sub-sequence.com', 'x grep y'), // 'gp' only as subsequence
-      e('https://gp.com', 'GP direct'), // 'gp' substring
+      e('https://play.google.com/books', 'My Daily Briefing'),
+      e('https://example.com/other', 'Some Daily Thing'),
     ]
-    expect(searchSuggestions(entries, [], 'gp').map((x) => x.url)).toEqual([
-      'https://gp.com',
-      'https://sub-sequence.com',
+    expect(urls(searchSuggestions(entries, [], 'play Daily', NOW))).toEqual([
+      'https://play.google.com/books',
     ])
   })
 
-  it('excludes non-matches', () => {
+  it('is case-insensitive', () => {
     const entries = [e('https://a.com', 'Alpha')]
-    expect(searchSuggestions(entries, [], 'zzz')).toEqual([])
+    expect(searchSuggestions(entries, [], 'ALPHA', NOW)).toHaveLength(1)
   })
 
-  it('dedupes by url keeping the most recent entry', () => {
-    const entries = [e('https://a.com', 'Newest'), e('https://a.com', 'Older')]
-    const results = searchSuggestions(entries, [], 'a.com')
+  it('ranks word-boundary matches above mid-string matches', () => {
+    const entries = [
+      e('https://concatenate.com', 'String utils'), // 'cat' mid-word
+      e('https://cat-pictures.com', 'Cats'), // 'cat' at a boundary
+    ]
+    expect(urls(searchSuggestions(entries, [], 'cat', NOW))).toEqual([
+      'https://cat-pictures.com',
+      'https://concatenate.com',
+    ])
+  })
+
+  it('does not match char subsequences', () => {
+    const entries = [e('https://sub-sequence.com', 'x grep y')]
+    expect(searchSuggestions(entries, [], 'gp', NOW)).toEqual([])
+  })
+
+  it('returns [] for empty or whitespace query', () => {
+    expect(searchSuggestions([e('https://a.com', 'A')], [], '', NOW)).toEqual([])
+    expect(searchSuggestions([e('https://a.com', 'A')], [], '  ', NOW)).toEqual([])
+  })
+})
+
+describe('frecency ranking', () => {
+  it('a recent visit outweighs many ancient visits', () => {
+    const entries = [
+      e('https://old.com/page', 'Old', NOW - 200 * DAY),
+      e('https://old.com/page', 'Old', NOW - 201 * DAY),
+      e('https://old.com/page', 'Old', NOW - 202 * DAY),
+      e('https://old.com/page', 'Old', NOW - 203 * DAY),
+      e('https://fresh.com/page', 'Fresh', NOW - DAY),
+    ]
+    // old: 4 visits x 10 = 40; fresh: 1 visit x 100
+    expect(urls(searchSuggestions(entries, [], 'page', NOW))[0]).toBe('https://fresh.com/page')
+  })
+
+  it('more visits win at equal recency', () => {
+    const entries = [
+      e('https://rare.com/page', 'Rare'),
+      e('https://often.com/page', 'Often'),
+      e('https://often.com/page', 'Often'),
+    ]
+    expect(urls(searchSuggestions(entries, [], 'page', NOW))).toEqual([
+      'https://often.com/page',
+      'https://rare.com/page',
+    ])
+  })
+
+  it('bookmark bonus beats a modest visit edge', () => {
+    // both old: kept = 10 + 150; busy = 3 x 10
+    const entries = [
+      e('https://busy.com/page', 'Busy', NOW - 100 * DAY),
+      e('https://busy.com/page', 'Busy', NOW - 101 * DAY),
+      e('https://busy.com/page', 'Busy', NOW - 102 * DAY),
+      e('https://kept.com/page', 'Kept', NOW - 100 * DAY),
+    ]
+    expect(
+      urls(searchSuggestions(entries, [bm('https://kept.com/page', 'Kept')], 'page', NOW)),
+    ).toEqual(['https://kept.com/page', 'https://busy.com/page'])
+  })
+
+  it('a heavily-used site outranks a never-visited bookmark', () => {
+    // daily: 2 x 100 = 200 > bookmark-only 150
+    const entries = [
+      e('https://daily.com/page', 'Daily', NOW - DAY),
+      e('https://daily.com/page', 'Daily', NOW - 2 * DAY),
+    ]
+    expect(
+      urls(searchSuggestions(entries, [bm('https://saved.com/page', 'Saved page')], 'page', NOW)),
+    ).toEqual(['https://daily.com/page', 'https://saved.com/page'])
+  })
+
+  it('dedupes by url; newest title wins; all visits count', () => {
+    const entries = [
+      e('https://a.com', 'Newest', NOW - DAY),
+      e('https://a.com', 'Older', NOW - 2 * DAY),
+    ]
+    const results = searchSuggestions(entries, [], 'a.com', NOW)
     expect(results).toHaveLength(1)
     expect(results[0].title).toBe('Newest')
   })
 
-  it('limits results to 5 by default, preserving recency order', () => {
+  it('limits to 6 by default', () => {
     const entries = Array.from({ length: 10 }, (_, i) => e(`https://site${i}.com`, `Site ${i}`))
-    const results = searchSuggestions(entries, [], 'site')
-    expect(results).toHaveLength(5)
-    expect(results[0].url).toBe('https://site0.com')
-  })
-
-  it('returns [] for empty query', () => {
-    expect(searchSuggestions([e('https://a.com', 'A')], [], '')).toEqual([])
-    expect(searchSuggestions([e('https://a.com', 'A')], [], '  ')).toEqual([])
+    expect(searchSuggestions(entries, [], 'site', NOW)).toHaveLength(6)
   })
 })
 
-describe('searchSuggestions boosts', () => {
-  it('ranks bookmarked urls above plain history at equal match quality', () => {
-    const entries = [e('https://plain.com/site', 'Site A'), e('https://marked.com/site', 'Site B')]
-    const urls = searchSuggestions(entries, [bm('https://marked.com/site', 'Site B')], 'site').map(
-      (x) => x.url,
+describe('bookmarks', () => {
+  it('surfaces never-visited bookmarks by bookmark title', () => {
+    const results = searchSuggestions(
+      [],
+      [bm('https://docs.example.com', 'Example Docs')],
+      'docs',
+      NOW,
     )
-    expect(urls).toEqual(['https://marked.com/site', 'https://plain.com/site'])
-  })
-
-  it('ranks more-visited urls higher within a tier', () => {
-    // one visit to often.com per entry occurrence; rare.com is more recent
-    const entries = [
-      e('https://rare.com/page', 'Rare'),
-      e('https://often.com/page', 'Often'),
-      e('https://other.com', 'Filler'),
-      e('https://often.com/page', 'Often'),
-      e('https://elsewhere.com', 'Filler'),
-      e('https://often.com/page', 'Often'),
-    ]
-    const urls = searchSuggestions(entries, [], 'page').map((x) => x.url)
-    expect(urls).toEqual(['https://often.com/page', 'https://rare.com/page'])
-  })
-
-  it('match quality still beats bookmark and frequency boosts', () => {
-    // 'gp' is a substring for gp.com, only a subsequence for the boosted ones
-    const entries = [
-      e('https://grep.com', 'x grep y'),
-      e('https://grep.com', 'x grep y'),
-      e('https://grep.com', 'x grep y'),
-      e('https://gp.com', 'GP direct'),
-    ]
-    const urls = searchSuggestions(entries, [bm('https://grep.com', 'x grep y')], 'gp').map(
-      (x) => x.url,
-    )
-    expect(urls).toEqual(['https://gp.com', 'https://grep.com'])
-  })
-
-  it('surfaces bookmarks that were never visited', () => {
-    const results = searchSuggestions([], [bm('https://docs.example.com', 'Example Docs')], 'docs')
     expect(results).toHaveLength(1)
     expect(results[0].url).toBe('https://docs.example.com')
     expect(results[0].title).toBe('Example Docs')
+    expect(results[0].isBookmark).toBe(true)
   })
 
-  it('merges a visited bookmark into one suggestion with the history title', () => {
-    const entries = [e('https://a.com', 'Fresh page title')]
+  it('a visited bookmark keeps the history title but matches its bookmark title', () => {
+    const entries = [e('https://chase.com/login', 'Sign In')]
     const results = searchSuggestions(
       entries,
-      [bm('https://a.com', 'Stale bookmark title')],
+      [bm('https://chase.com/login', 'Banking')],
+      'banking',
+      NOW,
+    )
+    expect(results).toHaveLength(1)
+    expect(results[0].title).toBe('Sign In')
+    expect(results[0].isBookmark).toBe(true)
+  })
+
+  it('carries the bookmark favicon', () => {
+    const results = searchSuggestions(
+      [],
+      [bm('https://a.com', 'A', 'https://a.com/i.png')],
       'a.com',
+      NOW,
     )
-    expect(results).toHaveLength(1)
-    expect(results[0].title).toBe('Fresh page title')
+    expect(results[0].favicon).toBe('https://a.com/i.png')
   })
 
-  it('a visited bookmark still matches on its own bookmark title', () => {
-    const entries = [e('https://chase.com/login', 'Sign In')]
-    const results = searchSuggestions(entries, [bm('https://chase.com/login', 'Banking')], 'banking')
-    expect(results).toHaveLength(1)
-    expect(results[0].url).toBe('https://chase.com/login')
+  it('plain history rows have favicon null and isBookmark false', () => {
+    const results = searchSuggestions([e('https://a.com', 'A')], [], 'a.com', NOW)
+    expect(results[0].favicon).toBeNull()
+    expect(results[0].isBookmark).toBe(false)
+  })
+})
+
+describe('inline autocomplete', () => {
+  it('offers host completion when typed text is a host prefix', () => {
+    const entries = [e('https://feedback.limitless.ai/posts/1', 'Limitless feature requests')]
+    const [top] = searchSuggestions(entries, [], 'fe', NOW)
+    expect(top.autocomplete).toBe('feedback.limitless.ai/')
   })
 
-  it('bookmark beats a higher visit count', () => {
+  it('ignores scheme and www. for the prefix', () => {
+    const entries = [e('https://www.nytimes.com/section/food', 'Food')]
+    const [top] = searchSuggestions(entries, [], 'nyt', NOW)
+    expect(top.autocomplete).toBe('nytimes.com/')
+  })
+
+  it('completes the full url once typing extends into the path', () => {
+    const entries = [e('https://a.com/deep/page', 'Deep')]
+    const [top] = searchSuggestions(entries, [], 'a.com/de', NOW)
+    expect(top.autocomplete).toBe('a.com/deep/page')
+  })
+
+  it('promotes the autofill candidate to rank 1 with autocomplete set only there', () => {
     const entries = [
-      e('https://busy.com/page', 'Busy'),
-      e('https://kept.com/page', 'Kept'),
-      e('https://busy.com/page', 'Busy'),
+      e('https://news.ycombinator.com', 'Hacker News feed', NOW - DAY),
+      e('https://news.ycombinator.com', 'Hacker News feed', NOW - DAY),
+      e('https://feedback.limitless.ai/', 'Limitless feature requests', NOW - 100 * DAY),
     ]
-    const urls = searchSuggestions(entries, [bm('https://kept.com/page', 'Kept')], 'page').map(
-      (x) => x.url,
-    )
-    expect(urls).toEqual(['https://kept.com/page', 'https://busy.com/page'])
+    // 'fee' matches the HN title ('feed') with higher frecency, but only prefixes feedback.*
+    const results = searchSuggestions(entries, [], 'fee', NOW)
+    expect(results[0].url).toBe('https://feedback.limitless.ai/')
+    expect(results[0].autocomplete).toBe('feedback.limitless.ai/')
+    expect(results.slice(1).every((s) => s.autocomplete === null)).toBe(true)
+  })
+
+  it('picks the highest-frecency prefix candidate', () => {
+    const entries = [
+      e('https://feedly.com', 'Feedly', NOW - 100 * DAY),
+      e('https://feedback.limitless.ai/', 'Limitless', NOW - DAY),
+    ]
+    const [top] = searchSuggestions(entries, [], 'fee', NOW)
+    expect(top.autocomplete).toBe('feedback.limitless.ai/')
+  })
+
+  it('never offers autocomplete for multi-word queries', () => {
+    const entries = [e('https://play.google.com/books', 'My Daily Briefing')]
+    const [top] = searchSuggestions(entries, [], 'play Daily', NOW)
+    expect(top.autocomplete).toBeNull()
+  })
+
+  it('offers nothing when no result prefixes the typed text', () => {
+    const entries = [e('https://a.com', 'Feedback hub')]
+    const [top] = searchSuggestions(entries, [], 'fee', NOW)
+    expect(top.autocomplete).toBeNull()
   })
 })

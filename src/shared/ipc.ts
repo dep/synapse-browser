@@ -43,6 +43,14 @@ export interface HistoryEntry {
   visitedAt: number
 }
 
+export interface Suggestion {
+  url: string
+  title: string
+  favicon: string | null
+  isBookmark: boolean
+  autocomplete: string | null // set only on row 0, when it can complete the typed text
+}
+
 export interface BookmarkFolder {
   id: string
   name: string
@@ -94,7 +102,7 @@ export interface SynapseApi {
   }
   onTabsUpdated(cb: (snap: TabsSnapshot) => void): void
   history: {
-    search(q: string): Promise<HistoryEntry[]>
+    search(q: string): Promise<Suggestion[]>
     list(): Promise<HistoryEntry[]>
   }
   bookmarks: {
