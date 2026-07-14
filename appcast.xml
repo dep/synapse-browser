@@ -6,6 +6,23 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.6.3</title>
+            <pubDate>Tue, 14 Jul 2026 10:28:07 +0000</pubDate>
+            <sparkle:version>0.6.3</sparkle:version>
+            <sparkle:shortVersionString>0.6.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Fixed: the URL bar now updates when switching tabs with keyboard shortcuts (Ctrl+Tab, Option+Tab, Cmd+1&#8211;9) after the address bar had been used.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.6.3/Synapse.Browser-0.6.3-universal.dmg"
+              sparkle:edSignature="9btoe9Lh0GNLlQRa3tMuYJtKIetpqZlne2Kjhh+PhPBFEt0m5lOW+z7PIpVZ1td9ecGFBub2OAQaACGOvNoBBA=="
+              length="219232205"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.6.2</title>
             <pubDate>Tue, 14 Jul 2026 10:06:36 +0000</pubDate>
             <sparkle:version>0.6.2</sparkle:version>
