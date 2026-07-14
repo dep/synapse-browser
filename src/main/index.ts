@@ -13,6 +13,7 @@ import { SettingsStore } from './settings-store'
 import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
 import { searchSuggestions } from '../shared/history-search'
+import { FaviconStore } from './favicons'
 import { HistoryStore } from './history'
 import { attachPermissionPrompts } from './media-permissions'
 import { PermissionsStore } from './permissions-store'
@@ -78,6 +79,7 @@ app.whenReady().then(async () => {
     if (src !== dst && existsSync(src) && !existsSync(dst)) copyFileSync(src, dst)
   }
   const history = new HistoryStore(userData)
+  const favicons = new FaviconStore(userData)
   const bookmarks = new BookmarksStore(userData)
   const tabsStore = new TabsStore(userData)
   const pinsStore = new PinsStore(userData)
@@ -131,6 +133,7 @@ app.whenReady().then(async () => {
       win.webContents.send('ui:bookmarks-changed')
     },
     onNavigated: (url, title) => history.add(url, title, Date.now()),
+    onPageFavicon: (url, favicon) => favicons.set(url, favicon),
     onSnapshot: (snap) => {
       win.webContents.send('tabs:updated', snap)
       // the renderer's did-finish-load can fire a snapshot while startup is
@@ -310,7 +313,9 @@ app.whenReady().then(async () => {
   ipcMain.handle('history:search', (_e, q: string) => {
     const profile = tabs.activeId ? tabs.profileOf(tabs.activeId) : 'default'
     const marks = bookmarks.ordered().filter((b) => (b.profile ?? 'default') === profile)
-    return searchSuggestions(history.entries(), marks, String(q))
+    return searchSuggestions(history.entries(), marks, String(q), Date.now()).map((s) =>
+      s.favicon ? s : { ...s, favicon: favicons.get(s.url) },
+    )
   })
   ipcMain.handle('history:list', () => history.list())
 
@@ -686,6 +691,7 @@ app.whenReady().then(async () => {
 
   app.on('before-quit', () => {
     history.flush()
+    favicons.flush()
     bookmarks.flush()
     tabsStore.flush()
     pinsStore.flush()

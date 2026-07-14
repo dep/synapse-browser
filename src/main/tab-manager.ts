@@ -23,6 +23,7 @@ function isDeadView(view: WebContentsView): boolean {
 export interface TabManagerOptions {
   getBookmark(id: string): Bookmark | undefined
   onBookmarkFavicon(id: string, favicon: string | null): void
+  onPageFavicon(url: string, favicon: string | null): void
   onNavigated(url: string, title: string): void
   onSnapshot(snap: TabsSnapshot): void
   onTabCreated?(wc: WebContents, profile: ProfileId): void
@@ -673,6 +674,7 @@ export class TabManager {
       this.favicons.set(id, favicons[0] ?? null)
       const bid = this.bookmarkIdOf(id)
       if (bid) this.opts.onBookmarkFavicon(bid, favicons[0] ?? null)
+      this.opts.onPageFavicon(wc.getURL(), favicons[0] ?? null)
       this.refresh()
     })
     wc.on('did-finish-load', () => {
