@@ -1,6 +1,6 @@
-import type { Bookmark, BookmarkFolder, BookmarksData, TabsSnapshot } from '../shared/ipc'
+import type { Bookmark, BookmarkFolder, BookmarksData, ProfileId, TabsSnapshot } from '../shared/ipc'
 import { wireDragItem, wireDropZone } from './drag-list'
-import { loadSpinner } from './load-spinner'
+import { rowIcon } from './row-icon'
 
 const collapsed = new Set<string>()
 // all folders start collapsed on the first render after launch; folders
@@ -54,7 +54,9 @@ export function renderBookmarks(
     if (!collapsed.has(folder.id)) {
       members.forEach((bm, j) =>
         el.append(
-          editing === bm.id ? bookmarkEditor(bm, true) : bookmarkRow(bm, j, members, true, snap),
+          editing === bm.id
+            ? bookmarkEditor(bm, true)
+            : bookmarkRow(bm, j, members, true, snap, folder.profile ?? 'default'),
         ),
       )
     }
@@ -67,7 +69,9 @@ export function renderBookmarks(
   loose.className = 'bookmarks-loose'
   topLevel.forEach((bm, j) =>
     loose.append(
-      editing === bm.id ? bookmarkEditor(bm, false) : bookmarkRow(bm, j, topLevel, false, snap),
+      editing === bm.id
+        ? bookmarkEditor(bm, false)
+        : bookmarkRow(bm, j, topLevel, false, snap, 'default'),
     ),
   )
   wireDropZone(loose, {
@@ -86,6 +90,7 @@ function bookmarkRow(
   siblings: Bookmark[],
   indented: boolean,
   snap: TabsSnapshot,
+  containerProfile: ProfileId,
 ): HTMLDivElement {
   const tabId = snap.bookmarkTabs[bm.id]
   const tab = tabId ? snap.tabs[tabId] : undefined
@@ -97,30 +102,15 @@ function bookmarkRow(
     (indented ? ' indent' : '') +
     ((tab?.profile ?? bm.profile) === 'work' ? ' work' : '')
 
-  let icon: HTMLElement
-  if (tab?.isLoading) {
-    icon = loadSpinner()
-  } else {
-    const img = document.createElement('img')
-    img.className = 'favicon'
-    img.onerror = () => (img.style.visibility = 'hidden')
-    const src = tab?.favicon ?? bm.favicon
-    if (src) img.src = src
-    else img.style.visibility = 'hidden'
-    icon = img
-  }
+  // main hydrates bm.profile to the effective profile, so a mark is only
+  // needed where it disambiguates: profile differs from the container's
+  const marked = (bm.profile ?? 'default') !== containerProfile
+  const icon = rowIcon(tab?.favicon ?? bm.favicon, tab?.isLoading ?? false, marked)
 
   const title = document.createElement('span')
   title.className = 'tab-title'
   title.textContent = bm.title
   row.append(icon, title)
-
-  if ((bm.profile ?? 'default') === 'work') {
-    const dot = document.createElement('span')
-    dot.className = 'profile-dot'
-    dot.title = 'Work profile'
-    row.append(dot)
-  }
 
   if (tab) {
     const close = document.createElement('button')
@@ -188,10 +178,8 @@ function folderRow(
   countEl.textContent = String(count)
   row.append(twist, name, countEl)
   if (folder.profile === 'work') {
-    const dot = document.createElement('span')
-    dot.className = 'profile-dot'
-    dot.title = 'Work profile'
-    row.append(dot)
+    row.classList.add('work')
+    countEl.title = 'Work profile'
   }
   row.addEventListener('click', () => {
     if (collapsed.has(folder.id)) collapsed.delete(folder.id)

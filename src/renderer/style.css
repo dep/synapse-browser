@@ -344,13 +344,6 @@ body {
 .pin.drop-after {
   box-shadow: 2px 0 0 0 var(--accent);
 }
-.profile-dot {
-  flex: none;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--work);
-}
 .pin.work {
   box-shadow: inset 0 0 0 1.5px var(--work);
 }
@@ -452,6 +445,9 @@ browser-action-list {
 .folder-count {
   color: var(--fg-dim);
   font-size: 11px;
+}
+.folder.work .folder-count {
+  color: var(--work);
 }
 .folder-input {
   flex: 1;
