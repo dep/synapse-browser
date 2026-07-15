@@ -46,7 +46,7 @@ function strippedForMatch(url: string): string {
   return s.includes('/') ? s : `${s}/`
 }
 
-function visitWeight(age: number): number {
+export function visitWeight(age: number): number {
   for (const [days, weight] of BUCKETS) if (age <= days * DAY) return weight
   return OLD_WEIGHT
 }

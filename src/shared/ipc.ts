@@ -43,6 +43,11 @@ export interface HistoryEntry {
   visitedAt: number
 }
 
+export interface TopSite {
+  host: string
+  url: string
+}
+
 export interface Suggestion {
   url: string
   title: string
