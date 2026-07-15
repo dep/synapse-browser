@@ -49,6 +49,8 @@ export function initNewTab(el: HTMLElement): NewTabController {
   let rendered = 0
   let lastLabel = ''
   let loadGen = 0
+  let listNow = Date.now()
+  let shownTabId: string | null = null
   let timer: ReturnType<typeof setInterval> | undefined
 
   const navigate = (url: string): void => {
@@ -74,12 +76,14 @@ export function initNewTab(el: HTMLElement): NewTabController {
     if (fav) {
       const img = document.createElement('img')
       img.className = 'newtab-icon'
+      img.onerror = () => (img.style.visibility = 'hidden')
       img.src = fav
       return img
     }
     const mono = document.createElement('div')
     mono.className = 'newtab-icon newtab-monogram'
-    mono.textContent = (host?.[0] ?? '?').toUpperCase()
+    const name = host?.replace(/^www\./, '') ?? '?'
+    mono.textContent = name[0]!.toUpperCase()
     return mono
   }
 
@@ -114,10 +118,9 @@ export function initNewTab(el: HTMLElement): NewTabController {
   const appendRows = (): void => {
     const list = currentList()
     const searching = !!searchEl.value.trim()
-    const now = Date.now()
     for (const entry of list.slice(rendered, rendered + PAGE_SIZE)) {
       if (!searching) {
-        const label = dayLabel(entry.visitedAt, now)
+        const label = dayLabel(entry.visitedAt, listNow)
         if (label !== lastLabel) {
           lastLabel = label
           const heading = document.createElement('div')
@@ -152,6 +155,7 @@ export function initNewTab(el: HTMLElement): NewTabController {
     listEl.innerHTML = ''
     rendered = 0
     lastLabel = ''
+    listNow = Date.now()
     searchEl.hidden = deduped.length === 0
     appendRows()
   }
@@ -182,15 +186,28 @@ export function initNewTab(el: HTMLElement): NewTabController {
       const active = snap.activeId ? snap.tabs[snap.activeId] : undefined
       activeId = snap.activeId
       const show = !settingsOpen && !!active && isBlankUrl(active.url)
-      if (show === visible) return
+      if (show === visible) {
+        // a second blank tab must not inherit the previous one's search
+        // text, filter, or scroll position
+        if (visible && activeId !== shownTabId) {
+          shownTabId = activeId
+          searchEl.value = ''
+          well.scrollTop = 0
+          resetList()
+        }
+        return
+      }
       visible = show
       el.hidden = !show
       if (show) {
+        shownTabId = activeId
         tickClock()
         timer = setInterval(tickClock, 1000)
         searchEl.value = ''
+        well.scrollTop = 0
         void load()
       } else {
+        shownTabId = null
         clearInterval(timer)
       }
     },

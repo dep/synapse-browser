@@ -121,6 +121,11 @@ describe('dayLabel', () => {
     expect(label).not.toBe('Yesterday')
     expect(label).toMatch(/\d/)
   })
+  it('treats the exact midnight boundary correctly', () => {
+    const startOfToday = new Date(2026, 6, 15, 0, 0, 0, 0).getTime()
+    expect(dayLabel(startOfToday, NOON)).toBe('Today')
+    expect(dayLabel(startOfToday - 1, NOON)).toBe('Yesterday')
+  })
 })
 
 describe('filterEntries', () => {
