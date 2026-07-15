@@ -9,6 +9,7 @@ import { initTopbar } from './topbar'
 import { initFindBar } from './find-bar'
 import { initLoadingBar } from './loading-bar'
 import { initAiSidebar } from './ai-sidebar'
+import { initNewTab } from './newtab'
 
 const pinGridEl = document.getElementById('pin-grid')!
 const bookmarksEl = document.getElementById('bookmarks')!
@@ -17,6 +18,8 @@ const panelEl = document.getElementById('panel')!
 const appEl = document.getElementById('app')!
 const sidebarResizeEl = document.getElementById('sidebar-resize')!
 const settingsEl = document.getElementById('settings')!
+const newtab = initNewTab(document.getElementById('newtab')!)
+let settingsOpen = false
 const topbar = initTopbar()
 const findBar = initFindBar()
 const loadingBar = initLoadingBar()
@@ -60,10 +63,12 @@ aiResizeEl.addEventListener('mousedown', (e) => {
   window.synapse.ui.startAiSidebarDrag()
 })
 window.synapse.ui.onSettings((open) => {
+  settingsOpen = open
   findBar.close()
   settingsEl.hidden = !open
   if (open) renderSettings(settingsEl, 'general')
   else cancelRecording()
+  render()
 })
 sidebarResizeEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return
@@ -112,4 +117,5 @@ function render(): void {
   bookmarksEl.hidden = !showSidebar
   tabListEl.hidden = !showSidebar
   panelEl.hidden = showSidebar
+  newtab.update(snap, settingsOpen)
 }
