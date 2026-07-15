@@ -6,6 +6,23 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.6.5</title>
+            <pubDate>Wed, 15 Jul 2026 10:52:46 +0000</pubDate>
+            <sparkle:version>0.6.5</sparkle:version>
+            <sparkle:shortVersionString>0.6.5</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>New: a sleek new-tab page &#8212; current time and date, local weather, your 10 most-visited sites, and a searchable history list (grouped by day, duplicate titles hidden). Shown whenever a tab is blank.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.6.5/Synapse.Browser-0.6.5-universal.dmg"
+              sparkle:edSignature="VftuQSF5pLDptZCfjI1J7MOOtod87HTxtERbEyIx5RkfYz2V09OD+YkPOfn2gXVH/23heipzpy63sd1IfNYrCw=="
+              length="219214283"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.6.4</title>
             <pubDate>Wed, 15 Jul 2026 09:23:45 +0000</pubDate>
             <sparkle:version>0.6.4</sparkle:version>
