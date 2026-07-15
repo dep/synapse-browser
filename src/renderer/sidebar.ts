@@ -1,6 +1,6 @@
 import type { TabsSnapshot } from '../shared/ipc'
 import { wireDragItem, wireDropZone } from './drag-list'
-import { loadSpinner } from './load-spinner'
+import { rowIcon } from './row-icon'
 
 // the tab-list container is wired once but order changes every render
 let lastOrder: string[] = []
@@ -58,17 +58,7 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     item.className =
       'tab' + (id === snap.activeId ? ' active' : '') + (tab.profile === 'work' ? ' work' : '')
 
-    let icon: HTMLElement
-    if (tab.isLoading) {
-      icon = loadSpinner()
-    } else {
-      const img = document.createElement('img')
-      img.className = 'favicon'
-      img.onerror = () => (img.style.visibility = 'hidden')
-      if (tab.favicon) img.src = tab.favicon
-      else img.style.visibility = 'hidden'
-      icon = img
-    }
+    const icon = rowIcon(tab.favicon, tab.isLoading, tab.profile === 'work')
 
     const title = document.createElement('span')
     title.className = 'tab-title'
@@ -83,14 +73,7 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
       window.synapse.tabs.close(id)
     })
 
-    if (tab.profile === 'work') {
-      const dot = document.createElement('span')
-      dot.className = 'profile-dot'
-      dot.title = 'Work profile'
-      item.append(icon, title, dot, close)
-    } else {
-      item.append(icon, title, close)
-    }
+    item.append(icon, title, close)
     item.addEventListener('click', () => window.synapse.tabs.activate(id))
     // middle click doesn't fire 'click' in browsers; it's reported via auxclick
     item.addEventListener('auxclick', (e) => {
