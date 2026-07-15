@@ -1,6 +1,7 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput } from '../shared/url-classifier'
 import { CANVAS_RADIUS, computeCanvasBounds } from '../shared/canvas-layout'
+import { isBlankUrl } from '../shared/newtab'
 import { routeWindowOpen } from '../shared/popup-router'
 import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
 import { ClosedTabsStack } from './closed-tabs'
@@ -614,10 +615,14 @@ export class TabManager {
     for (const [id, view] of [...this.views]) {
       if (isDeadView(view)) this.dropDeadView(id)
     }
-    const active =
+    // a blank active tab attaches no view, leaving the chrome renderer's
+    // new-tab page visible in the page cell (same mechanism as settings)
+    const activeView =
       !this.settingsOpen && this.model.activeId
         ? (this.views.get(this.model.activeId) ?? null)
         : null
+    const active =
+      activeView && !isBlankUrl(activeView.webContents.getURL()) ? activeView : null
     if (this.attached !== active) {
       if (this.attached && this.findText) {
         this.attached.webContents.stopFindInPage('clearSelection')
@@ -664,7 +669,9 @@ export class TabManager {
       this.layout()
     })
     wc.on('page-title-updated', refresh)
-    wc.on('did-start-loading', refresh)
+    // a blank (detached) tab that starts navigating must get its view
+    // attached; syncViews ends with refresh(), so this is a superset
+    wc.on('did-start-loading', () => this.syncViews())
     wc.on('did-stop-loading', refresh)
     wc.on('did-navigate', () => {
       this.favicons.set(id, null)
