@@ -37,6 +37,10 @@ export class FaviconStore {
     return host ? (this.store.get().hosts[host] ?? null) : null
   }
 
+  all(): Record<string, string> {
+    return this.store.get().hosts
+  }
+
   flush(): void {
     this.store.flush()
   }

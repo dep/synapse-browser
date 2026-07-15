@@ -22,6 +22,10 @@ const api: SynapseApi = {
     search: (q) => ipcRenderer.invoke('history:search', q),
     list: () => ipcRenderer.invoke('history:list'),
   },
+  newtab: {
+    data: () => ipcRenderer.invoke('newtab:data'),
+    weather: () => ipcRenderer.invoke('newtab:weather'),
+  },
   bookmarks: {
     toggleActive: () => ipcRenderer.invoke('bookmarks:toggle-active'),
     list: () => ipcRenderer.invoke('bookmarks:list'),

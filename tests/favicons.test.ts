@@ -68,4 +68,13 @@ describe('FaviconStore', () => {
     expect(s2.get('https://a.com/')).toBeNull()
     expect(fs.existsSync(path.join(dir, 'favicons.json.bad'))).toBe(true)
   })
+
+  it('all() returns the host → favicon map', () => {
+    store.set('https://a.com/page', 'https://a.com/icon.png')
+    store.set('https://b.com/x', 'https://b.com/fav.ico')
+    expect(store.all()).toEqual({
+      'a.com': 'https://a.com/icon.png',
+      'b.com': 'https://b.com/fav.ico',
+    })
+  })
 })

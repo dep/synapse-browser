@@ -48,6 +48,20 @@ export interface TopSite {
   url: string
 }
 
+export interface WeatherInfo {
+  tempC: number
+  code: number
+  city: string
+  useFahrenheit: boolean
+}
+
+export interface NewTabData {
+  entries: HistoryEntry[] // full history, newest first
+  topSites: TopSite[]
+  favicons: Record<string, string> // host → favicon URL
+  weather: WeatherInfo | null // cached only; newtab.weather() fetches fresh
+}
+
 export interface Suggestion {
   url: string
   title: string
@@ -110,6 +124,10 @@ export interface SynapseApi {
   history: {
     search(q: string): Promise<Suggestion[]>
     list(): Promise<HistoryEntry[]>
+  }
+  newtab: {
+    data(): Promise<NewTabData>
+    weather(): Promise<WeatherInfo | null>
   }
   bookmarks: {
     toggleActive(): Promise<void>
