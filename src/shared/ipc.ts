@@ -54,6 +54,7 @@ export interface Suggestion {
 export interface BookmarkFolder {
   id: string
   name: string
+  profile?: ProfileId // absent = default; members without their own profile inherit it
 }
 
 export interface Bookmark {

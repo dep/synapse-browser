@@ -187,6 +187,12 @@ function folderRow(
   countEl.className = 'folder-count'
   countEl.textContent = String(count)
   row.append(twist, name, countEl)
+  if (folder.profile === 'work') {
+    const dot = document.createElement('span')
+    dot.className = 'profile-dot'
+    dot.title = 'Work profile'
+    row.append(dot)
+  }
   row.addEventListener('click', () => {
     if (collapsed.has(folder.id)) collapsed.delete(folder.id)
     else collapsed.add(folder.id)

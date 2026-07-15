@@ -375,7 +375,7 @@ app.whenReady().then(async () => {
     }
     const plan = planImport(bookmarks.list(), incoming)
     const folderIds = new Map(bookmarks.list().folders.map((f) => [f.name, f.id]))
-    for (const name of plan.folders) folderIds.set(name, bookmarks.addFolder(name).id)
+    for (const f of plan.folders) folderIds.set(f.name, bookmarks.addFolder(f.name, f.profile).id)
     for (const item of plan.bookmarks) {
       const created = bookmarks.add(item.url, item.title, Date.now(), item.profile)
       if (item.folderName) {
@@ -480,8 +480,39 @@ app.whenReady().then(async () => {
   ipcMain.on('bookmarks:context-menu', (_e, kind: string, id: string) => {
     if (typeof id !== 'string') return
     if (kind === 'folder') {
+      const folder = bookmarks.list().folders.find((f) => f.id === id)
+      if (!folder) return
+      const setFolderProfile = (profile: ProfileId) => () => {
+        bookmarks.setFolderProfile(id, profile)
+        // members inherit through the store; awake member tabs must move
+        // partitions now, asleep slots re-read the store on wake — setProfile
+        // handles both (an asleep slot just updates its profile map entry)
+        for (const b of bookmarks.list().bookmarks) {
+          if (b.folderId !== id) continue
+          const tid = tabs.bookmarkTabIdOf(b.id)
+          if (tid) tabs.setProfile(tid, b.profile ?? 'default')
+        }
+        bookmarksChanged()
+      }
       Menu.buildFromTemplate([
         { label: 'Rename', click: () => win.webContents.send('ui:edit-folder', id) },
+        {
+          label: 'Profile',
+          submenu: [
+            {
+              label: 'Default',
+              type: 'radio',
+              checked: (folder.profile ?? 'default') === 'default',
+              click: setFolderProfile('default'),
+            },
+            {
+              label: 'Work',
+              type: 'radio',
+              checked: folder.profile === 'work',
+              click: setFolderProfile('work'),
+            },
+          ],
+        },
         { label: 'Delete Folder…', click: () => void removeFolderWithConfirm(id) },
       ]).popup({ window: win })
     } else if (kind === 'bookmark') {
@@ -498,8 +529,10 @@ app.whenReady().then(async () => {
       const setProfile = (profile: ProfileId) => () => {
         bookmarks.setProfile(id, profile)
         // an awake tab must move partitions now; asleep slots pick the
-        // profile up from the store on wake
-        if (awake) tabs.setProfile(tid!, profile)
+        // profile up from the store on wake. The tab follows the effective
+        // profile — a folder's profile still applies when the bookmark's own
+        // setting is cleared back to default
+        if (awake) tabs.setProfile(tid!, bookmarks.get(id)?.profile ?? 'default')
         bookmarksChanged()
       }
       const template: Electron.MenuItemConstructorOptions[] = [

@@ -29,6 +29,20 @@ describe('parseBookmarksExport', () => {
     expect(parsed?.bookmarks[0]?.profile).toBe('work')
   })
 
+  it('keeps a work profile on folders and drops junk profile values', () => {
+    const text = JSON.stringify({
+      v: 1,
+      folders: [
+        { id: 'f1', name: 'Work', profile: 'work' },
+        { id: 'f2', name: 'Play', profile: 'bogus' },
+      ],
+      bookmarks: [],
+    })
+    const parsed = parseBookmarksExport(text)
+    expect(parsed?.folders[0]?.profile).toBe('work')
+    expect(parsed?.folders[1]?.profile).toBeUndefined()
+  })
+
   it('rejects malformed JSON, wrong version, and non-object shapes', () => {
     expect(parseBookmarksExport('{nope')).toBeNull()
     expect(parseBookmarksExport(JSON.stringify({ v: 2, folders: [], bookmarks: [] }))).toBeNull()
@@ -54,11 +68,20 @@ describe('planImport', () => {
       bookmarks: [bm('b1', 'https://a.com', { folderId: 'f1' })],
     })
     const plan = planImport(data(), incoming)
-    expect(plan.folders).toEqual(['Work'])
+    expect(plan.folders).toEqual([{ name: 'Work', profile: 'default' }])
     expect(plan.bookmarks).toEqual([
       { url: 'https://a.com', title: 'https://a.com', profile: 'default', folderName: 'Work' },
     ])
     expect(plan.skipped).toBe(0)
+  })
+
+  it('carries the folder profile for folders it plans to create', () => {
+    const incoming = data({
+      folders: [{ id: 'f1', name: 'Work', profile: 'work' }],
+      bookmarks: [bm('b1', 'https://a.com', { folderId: 'f1' })],
+    })
+    const plan = planImport(data(), incoming)
+    expect(plan.folders).toEqual([{ name: 'Work', profile: 'work' }])
   })
 
   it('matches existing folders by name instead of recreating', () => {

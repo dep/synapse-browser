@@ -231,3 +231,73 @@ describe('BookmarksStore', () => {
     expect(store.ordered().map((x) => x.title)).toEqual(['a', 'b', 'c'])
   })
 })
+
+describe('BookmarksStore folder profiles', () => {
+  let dir: string
+  let store: BookmarksStore
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bookmarks-'))
+    store = new BookmarksStore(dir)
+  })
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('addFolder stores a work profile; default stays absent', () => {
+    const w = store.addFolder('W', 'work')
+    const d = store.addFolder('D')
+    expect(store.list().folders.find((f) => f.id === w.id)!.profile).toBe('work')
+    expect(store.list().folders.find((f) => f.id === d.id)!.profile).toBeUndefined()
+  })
+
+  it('setFolderProfile flips between work and default (default = field absent)', () => {
+    const f = store.addFolder('F')
+    store.setFolderProfile(f.id, 'work')
+    expect(store.list().folders[0]!.profile).toBe('work')
+    store.setFolderProfile(f.id, 'default')
+    expect(store.list().folders[0]!.profile).toBeUndefined()
+  })
+
+  it('setFolderProfile on an unknown id is a no-op', () => {
+    store.addFolder('F')
+    store.setFolderProfile('nope', 'work')
+    expect(store.list().folders[0]!.profile).toBeUndefined()
+  })
+
+  it('members inherit the folder profile in get/list/ordered when they have none', () => {
+    const f = store.addFolder('F', 'work')
+    const a = store.add('https://a.com', 'a', 1)
+    store.moveToFolder(a.id, f.id)
+    expect(store.get(a.id)!.profile).toBe('work')
+    expect(store.list().bookmarks.find((b) => b.id === a.id)!.profile).toBe('work')
+    expect(store.ordered().find((b) => b.id === a.id)!.profile).toBe('work')
+  })
+
+  it('a bookmark with its own profile keeps it regardless of folder', () => {
+    const f = store.addFolder('F')
+    const a = store.add('https://a.com', 'a', 1, 'work')
+    store.moveToFolder(a.id, f.id)
+    expect(store.get(a.id)!.profile).toBe('work')
+  })
+
+  it('top-level bookmarks are unaffected by folder profiles', () => {
+    store.addFolder('F', 'work')
+    const a = store.add('https://a.com', 'a', 1)
+    expect(store.get(a.id)!.profile).toBeUndefined()
+  })
+
+  it('inheritance is resolution-only: the stored bookmark stays profile-free', () => {
+    const f = store.addFolder('F')
+    const a = store.add('https://a.com', 'a', 1)
+    store.moveToFolder(a.id, f.id)
+    store.setFolderProfile(f.id, 'work')
+    store.flush()
+    const raw = JSON.parse(fs.readFileSync(path.join(dir, 'bookmarks.json'), 'utf8'))
+    expect(raw.folders[0].profile).toBe('work')
+    expect(raw.bookmarks[0].profile).toBeUndefined()
+    const reloaded = new BookmarksStore(dir)
+    expect(reloaded.get(a.id)!.profile).toBe('work')
+  })
+})

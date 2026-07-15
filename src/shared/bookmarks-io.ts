@@ -18,7 +18,11 @@ export function parseBookmarksExport(text: string): BookmarksData | null {
   for (const f of obj['folders']) {
     if (f && typeof f === 'object' && typeof (f as BookmarkFolder).id === 'string' &&
         typeof (f as BookmarkFolder).name === 'string') {
-      folders.push({ id: (f as BookmarkFolder).id, name: (f as BookmarkFolder).name })
+      folders.push({
+        id: (f as BookmarkFolder).id,
+        name: (f as BookmarkFolder).name,
+        ...((f as BookmarkFolder).profile === 'work' ? { profile: 'work' as ProfileId } : {}),
+      })
     }
   }
   const bookmarks: Bookmark[] = []
@@ -40,7 +44,7 @@ export function parseBookmarksExport(text: string): BookmarksData | null {
 }
 
 export interface ImportPlan {
-  folders: string[]
+  folders: Array<{ name: string; profile: ProfileId }>
   bookmarks: Array<{ url: string; title: string; profile: ProfileId; folderName: string | null }>
   skipped: number
 }
@@ -66,8 +70,11 @@ export function planImport(existing: BookmarksData, incoming: BookmarksData): Im
     ),
   )
 
-  const folders: string[] = []
+  const folders: ImportPlan['folders'] = []
   const neededFolders = new Set<string>()
+  const incomingFolderProfile = new Map(
+    incoming.folders.map((f) => [f.name, f.profile === 'work' ? f.profile : ('default' as ProfileId)]),
+  )
   const bookmarks: ImportPlan['bookmarks'] = []
   let skipped = 0
 
@@ -89,7 +96,9 @@ export function planImport(existing: BookmarksData, incoming: BookmarksData): Im
   }
 
   for (const name of neededFolders) {
-    if (!existingNames.has(name)) folders.push(name)
+    if (!existingNames.has(name)) {
+      folders.push({ name, profile: incomingFolderProfile.get(name) ?? 'default' })
+    }
   }
 
   return { folders, bookmarks, skipped }

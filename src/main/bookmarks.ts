@@ -54,8 +54,20 @@ export class BookmarksStore {
     return bm
   }
 
+  // a bookmark without its own profile inherits its folder's; resolution
+  // happens at every read boundary so the stored data stays normalized
+  // (profile fields only where explicitly set) while all consumers — slot
+  // seeding, wake, suggestions, the renderer — see the effective profile
+  private resolve(bm: Bookmark, folders: BookmarkFolder[]): Bookmark {
+    if (bm.profile || !bm.folderId) return bm
+    const inherited = folders.find((f) => f.id === bm.folderId)?.profile
+    return inherited ? { ...bm, profile: inherited } : bm
+  }
+
   get(id: string): Bookmark | undefined {
-    return this.data.bookmarks.find((b) => b.id === id)
+    const { folders, bookmarks } = this.data
+    const bm = bookmarks.find((b) => b.id === id)
+    return bm && this.resolve(bm, folders)
   }
 
   setProfile(id: string, profile: ProfileId): void {
@@ -90,7 +102,9 @@ export class BookmarksStore {
   ordered(): Bookmark[] {
     const { folders, bookmarks } = this.data
     return [
-      ...folders.flatMap((f) => bookmarks.filter((b) => b.folderId === f.id)),
+      ...folders.flatMap((f) =>
+        bookmarks.filter((b) => b.folderId === f.id).map((b) => this.resolve(b, folders)),
+      ),
       ...bookmarks.filter((b) => !b.folderId),
     ]
   }
@@ -106,11 +120,30 @@ export class BookmarksStore {
     })
   }
 
-  addFolder(name: string): BookmarkFolder {
+  addFolder(name: string, profile: ProfileId = 'default'): BookmarkFolder {
     const { folders, bookmarks } = this.data
-    const folder = { id: randomUUID(), name }
+    const folder: BookmarkFolder = {
+      id: randomUUID(),
+      name,
+      ...(profile !== 'default' ? { profile } : {}),
+    }
     this.store.set({ v: 2, folders: [...folders, folder], bookmarks })
     return folder
+  }
+
+  setFolderProfile(id: string, profile: ProfileId): void {
+    const { folders, bookmarks } = this.data
+    this.store.set({
+      v: 2,
+      folders: folders.map((f) => {
+        if (f.id !== id) return f
+        const next = { ...f }
+        if (profile === 'default') delete next.profile
+        else next.profile = profile
+        return next
+      }),
+      bookmarks,
+    })
   }
 
   renameFolder(id: string, name: string): void {
@@ -177,7 +210,7 @@ export class BookmarksStore {
 
   list(): BookmarksData {
     const { folders, bookmarks } = this.data
-    return { folders, bookmarks }
+    return { folders, bookmarks: bookmarks.map((b) => this.resolve(b, folders)) }
   }
 
   flush(): void {
