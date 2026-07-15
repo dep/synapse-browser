@@ -1,5 +1,5 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
-import { classifyInput } from '../shared/url-classifier'
+import { classifyInput, isHttpUrl } from '../shared/url-classifier'
 import { CANVAS_RADIUS, computeCanvasBounds } from '../shared/canvas-layout'
 import { isBlankUrl } from '../shared/newtab'
 import { routeWindowOpen } from '../shared/popup-router'
@@ -65,7 +65,8 @@ export class TabManager {
   }
 
   createTab(url?: string, activate = true, profile: ProfileId = 'default', opener?: string | null): string {
-    if (this.settingsOpen) {
+    // background tabs must not dismiss the settings screen
+    if (activate && this.settingsOpen) {
       this.settingsOpen = false
       this.opts.onSettingsClosed?.()
     }
@@ -266,7 +267,7 @@ export class TabManager {
       const wc = this.views.get(id)?.webContents
       if (!wc) return
       const url = wc.getURL()
-      if (!/^https?:\/\//.test(url)) return // blank/error tabs have no url to pin
+      if (!isHttpUrl(url)) return // blank/error tabs have no url to pin
       if (!this.model.pin(id)) return // bookmark slots aren't convertible to pins
       this.pins.set(id, {
         url,
@@ -308,7 +309,7 @@ export class TabManager {
     const wasAttached = this.attached === view
     this.destroyView(id, view, wasAttached)
     const next = this.createView(id)
-    if (/^https?:\/\//.test(url)) next.webContents.loadURL(url)
+    if (isHttpUrl(url)) next.webContents.loadURL(url)
     else if (id === this.model.activeId) this.focusUrlBar()
     this.syncViews()
     if (wasAttached) this.attached?.webContents.focus()
@@ -424,6 +425,16 @@ export class TabManager {
 
   reload(id: string): void {
     this.views.get(id)?.webContents.reload()
+  }
+
+  // cmd-click back/forward/reload: open the entry the plain click would show
+  // (offset from the active history index; 0 = current page) in a new
+  // background tab in the same container. Blank/error entries have no URL
+  // worth duplicating.
+  openNavInNewTab(id: string, offset: -1 | 0 | 1): void {
+    const nh = this.views.get(id)?.webContents.navigationHistory
+    const url = nh?.getEntryAtIndex(nh.getActiveIndex() + offset)?.url
+    if (url && isHttpUrl(url)) this.createTab(url, false, this.profileOf(id), id)
   }
 
   stop(id: string): void {

@@ -11,6 +11,7 @@ const api: SynapseApi = {
     back: (id) => ipcRenderer.send('tabs:back', id),
     forward: (id) => ipcRenderer.send('tabs:forward', id),
     reload: (id) => ipcRenderer.send('tabs:reload', id),
+    openNavInNewTab: (id, offset) => ipcRenderer.send('tabs:nav-new-tab', id, offset),
     stop: (id) => ipcRenderer.send('tabs:stop', id),
     reorder: (id, toIndex) => ipcRenderer.send('tabs:reorder', id, toIndex),
     showContextMenu: (id) => ipcRenderer.send('tabs:context-menu', id),

@@ -116,6 +116,9 @@ export interface SynapseApi {
     back(id: string): void
     forward(id: string): void
     reload(id: string): void
+    // cmd-click on back (-1), reload (0), forward (+1): that entry's URL
+    // opens in a new background tab instead of navigating this one
+    openNavInNewTab(id: string, offset: -1 | 0 | 1): void
     stop(id: string): void
     reorder(id: string, toIndex: number): void
     showContextMenu(id: string): void

@@ -1,4 +1,5 @@
 import { queryTokens, stripUrl } from '../shared/history-search'
+import { isHttpUrl } from '../shared/url-classifier'
 import type { Suggestion, TabsSnapshot } from '../shared/ipc'
 import { ICON_BACK, ICON_FORWARD, ICON_GLOBE, ICON_RELOAD, ICON_STOP } from './icons'
 
@@ -64,11 +65,19 @@ export function initTopbar(): Topbar {
   let autoSelected = false // row 0 highlighted by inline autofill, not by the user
   let lastQuery = ''
 
-  back.addEventListener('click', () => activeId && window.synapse.tabs.back(activeId))
-  forward.addEventListener('click', () => activeId && window.synapse.tabs.forward(activeId))
-  reload.addEventListener('click', () => {
+  // cmd-click opens the target in a new background tab (issue #22)
+  const navClick = (offset: -1 | 0 | 1, plain: (id: string) => void) => (e: MouseEvent) => {
     if (!activeId) return
+    if (e.metaKey) window.synapse.tabs.openNavInNewTab(activeId, offset)
+    else plain(activeId)
+  }
+  back.addEventListener('click', navClick(-1, (id) => window.synapse.tabs.back(id)))
+  forward.addEventListener('click', navClick(1, (id) => window.synapse.tabs.forward(id)))
+  reload.addEventListener('click', (e) => {
+    if (!activeId) return
+    // while loading the button IS the stop button — cmd must not reroute it
     if (activeLoading) window.synapse.tabs.stop(activeId)
+    else if (e.metaKey) window.synapse.tabs.openNavInNewTab(activeId, 0)
     else window.synapse.tabs.reload(activeId)
   })
   star.addEventListener('click', () => void window.synapse.bookmarks.toggleActive())
@@ -322,7 +331,7 @@ export function initTopbar(): Topbar {
       // guard — activeElement can't distinguish a draft from a stale display,
       // and clobbering a draft is the worse failure.
       if (tabChanged || document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
-      const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || /^https?:\/\//.test(tab.url))
+      const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || isHttpUrl(tab.url))
       star.disabled = !canBookmark
       star.textContent = tab?.isBookmarked ? '★' : '☆'
       star.classList.toggle('starred', !!tab?.isBookmarked)

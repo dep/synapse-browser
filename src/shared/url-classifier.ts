@@ -1,4 +1,8 @@
 export const FULL_URL_RE = /^[a-z][a-z0-9+.-]*:\/\//i
+
+// blank/error/internal pages fail this — they have no URL worth
+// pinning, bookmarking, or duplicating
+export const isHttpUrl = (url: string): boolean => /^https?:\/\//.test(url)
 const HOST_RE = /^(localhost|\d{1,3}(\.\d{1,3}){3}|[\w-]+(\.[a-z0-9-]+)+)(:\d+)?(\/\S*)?$/i
 
 export function classifyInput(raw: string): string {
