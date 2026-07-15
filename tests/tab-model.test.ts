@@ -17,10 +17,32 @@ describe('TabModel', () => {
     expect(m.activeId).toBe('c')
   })
 
-  it('adds background tabs at the MRU tail without activating', () => {
+  it('adds background tabs right behind the active tab in MRU without activating', () => {
     m.add('d', false)
     expect(m.activeId).toBe('c')
-    expect(m.mru).toEqual(['c', 'b', 'a', 'd'])
+    expect(m.mru).toEqual(['c', 'd', 'b', 'a'])
+  })
+
+  it('a just-opened background tab is the first Ctrl+Tab target', () => {
+    m.add('d', false)
+    expect(m.cycleStep('mru', 'forward')).toBe('d')
+    m.cycleCommit()
+    expect(m.activeId).toBe('d')
+    expect(m.mru).toEqual(['d', 'c', 'b', 'a'])
+  })
+
+  it('stacks multiple background tabs newest-first behind the active tab', () => {
+    m.add('d', false)
+    m.add('e', false)
+    expect(m.mru).toEqual(['c', 'e', 'd', 'b', 'a'])
+  })
+
+  it('background add with no active tab appends to the MRU tail', () => {
+    const t = new TabModel()
+    t.add('x', false)
+    t.add('y', false)
+    expect(t.activeId).toBeNull()
+    expect(t.mru).toEqual(['x', 'y'])
   })
 
   it('activate promotes in MRU', () => {

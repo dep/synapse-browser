@@ -39,7 +39,11 @@ export class TabModel {
       if (this.cycling) this.cycleCommit()
       this.switchTo(id)
     } else {
-      this.mru.push(id)
+      // slot in right behind the active tab so a fresh cmd+click tab is the
+      // first Ctrl+Tab target (not the least-recently-used)
+      const anchor = this.activeId ? this.mru.indexOf(this.activeId) : -1
+      if (anchor === -1) this.mru.push(id)
+      else this.mru.splice(anchor + 1, 0, id)
     }
   }
 
