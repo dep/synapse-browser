@@ -6,6 +6,25 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.6.6</title>
+            <pubDate>Wed, 15 Jul 2026 14:32:48 +0000</pubDate>
+            <sparkle:version>0.6.6</sparkle:version>
+            <sparkle:shortVersionString>0.6.6</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Fixed: opening a URL in a new tab (Alt+Enter from the address bar) could show a blank page until manual reload.</li>
+                    <li>Fixed: the address bar suggestions dropdown no longer pushes the new-tab page down.</li>
+                    <li>New: Cmd+click on back, forward, or reload opens that page in a new background tab.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.6.6/Synapse.Browser-0.6.6-universal.dmg"
+              sparkle:edSignature="2dVZRWIbN8N/pMGSaQNpM5fmghCtROieHKdB7GJNyGvhsPysJaE56rQESoFw3ugXd7MO3An9z1eILGuGM2GKAw=="
+              length="219217229"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.6.5</title>
             <pubDate>Wed, 15 Jul 2026 10:52:46 +0000</pubDate>
             <sparkle:version>0.6.5</sparkle:version>
