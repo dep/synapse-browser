@@ -29,6 +29,12 @@ others.
 **Gotcha:** `Runtime.evaluate` hangs forever on a fresh empty tab (no document,
 so no execution context). `Page.navigate` first, then evaluate.
 
+**Gotcha:** `document.visibilityState` tracks window occlusion, not view
+attachment — every target reports `hidden` when the dev window is covered.
+To check whether a tab's WebContentsView is attached, read
+`innerWidth`/`innerHeight` in the page target: a never-attached view keeps its
+default 0×0 bounds; an attached one gets the canvas size from main's layout().
+
 The chrome UI target exposes `window.synapse` (SynapseApi) — `tabs.create(url)`
 etc. Work-profile tab creation is native-menu only, not reachable over CDP.
 
