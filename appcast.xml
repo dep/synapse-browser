@@ -6,6 +6,23 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.6.7</title>
+            <pubDate>Wed, 15 Jul 2026 15:35:14 +0000</pubDate>
+            <sparkle:version>0.6.7</sparkle:version>
+            <sparkle:shortVersionString>0.6.7</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Fixed: the address bar suggestions dropdown now floats over the page instead of pushing it down &#8212; on every page, not just the new-tab page.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.6.7/Synapse.Browser-0.6.7-universal.dmg"
+              sparkle:edSignature="3wQnNEEg0W3zH4XuWs3P+4cQFt7XhBQlej9pYCMwVcMS9ilYfiMFhi3Zk2tubAWv0BJ0cG+5QEAs0OX/48wbBw=="
+              length="219221952"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.6.6</title>
             <pubDate>Wed, 15 Jul 2026 14:32:48 +0000</pubDate>
             <sparkle:version>0.6.6</sparkle:version>
