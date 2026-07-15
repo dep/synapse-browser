@@ -6,6 +6,23 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.6.8</title>
+            <pubDate>Wed, 15 Jul 2026 17:39:05 +0000</pubDate>
+            <sparkle:version>0.6.8</sparkle:version>
+            <sparkle:shortVersionString>0.6.8</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Improved: quieter Work-profile indicators &#8212; the floating orange dots are replaced by a subtle ring around the favicon, Work folders tint their count badge, and bookmarks inside a Work folder no longer repeat the mark.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.6.8/Synapse.Browser-0.6.8-universal.dmg"
+              sparkle:edSignature="o7dhTozqhn30HAnyGUBFAzmPP/X+pGffIkDCOLpUwZTgxEJONyj1ZwdImUVdVYkU+5T/TR/XsjNrE+cOl6gCCQ=="
+              length="219226885"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.6.7</title>
             <pubDate>Wed, 15 Jul 2026 15:35:14 +0000</pubDate>
             <sparkle:version>0.6.7</sparkle:version>
