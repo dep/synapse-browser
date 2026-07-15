@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, session } from 'electron'
 import type { WebContents } from 'electron'
 import { appendFileSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ProfileId, ShortcutRow } from '../shared/ipc'
+import type { ProfileId, ShortcutRow, SuggestionsPayload } from '../shared/ipc'
 import { normalizeAccelerator } from '../shared/accelerator'
 import { FIXED_SHORTCUTS, RESERVED_ACCELERATORS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
 import { parseBookmarksExport, planImport } from '../shared/bookmarks-io'
@@ -21,6 +21,7 @@ import { attachPermissionPrompts } from './media-permissions'
 import { PermissionsStore } from './permissions-store'
 import { PinsStore } from './pins-store'
 import { SidebarResizeController } from './sidebar-resize'
+import { SuggestionsOverlay } from './suggestions-overlay'
 import { ShortcutsStore } from './shortcuts-store'
 import { TabManager, WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
@@ -680,7 +681,25 @@ app.whenReady().then(async () => {
     win.webContents.setIgnoreMenuShortcuts(active === true)
   })
 
+  // ext menu only; the suggestions dropdown is a native overlay view (sugg:*)
   ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
+
+  const suggestions = new SuggestionsOverlay(win)
+  ipcMain.on('sugg:update', (_e, p: SuggestionsPayload) => {
+    if (!p || !Array.isArray(p.items) || !p.anchor) return
+    suggestions.update(p)
+  })
+  ipcMain.on('sugg:height', (_e, px: number, gen: number) =>
+    suggestions.setHeight(Number(px) || 0, Number(gen) || 0),
+  )
+  ipcMain.on('sugg:pick', (_e, url: string) => {
+    // chrome blurs and clears first — the dropdown must never stay stuck open
+    win.webContents.send('sugg:picked')
+    if (typeof url !== 'string' || !tabs.activeId) return
+    tabs.navigate(tabs.activeId, url)
+    // clicking the overlay focused its webContents; hand focus to the page
+    tabs.webContentsFor(tabs.activeId)?.focus()
+  })
   ipcMain.on('ui:sidebar-drag-start', () => sidebarResize.start())
   ipcMain.on('ui:sidebar-drag-end', () => sidebarResize.end())
   ipcMain.on('ui:ai-drag-start', () => aiSidebarResize.start())

@@ -1,8 +1,9 @@
-import type { SynapseApi } from '../shared/ipc'
+import type { SuggestionsOverlayApi, SynapseApi } from '../shared/ipc'
 
 declare global {
   interface Window {
-    synapse: SynapseApi
+    synapse: SynapseApi // chrome document only
+    suggestionsOverlay: SuggestionsOverlayApi // suggestions.html only
   }
 }
 

@@ -70,6 +70,29 @@ export interface Suggestion {
   autocomplete: string | null // set only on row 0, when it can complete the typed text
 }
 
+// chrome → main → suggestions overlay; empty items = dropdown closed.
+// anchor is the urlbar-wrap rect in window coordinates (the overlay is a
+// native view, positioned by main).
+export interface SuggestionsPayload {
+  anchor: { x: number; y: number; width: number }
+  items: Suggestion[]
+  selected: number // -1 = none
+  query: string
+}
+
+// main stamps each forwarded render with a generation; the overlay echoes it
+// with its measured height so main can drop replies for superseded renders
+export interface SuggestionsRender extends SuggestionsPayload {
+  gen: number
+}
+
+// the overlay document's whole world — deliberately not SynapseApi
+export interface SuggestionsOverlayApi {
+  onUpdate(cb: (p: SuggestionsRender) => void): void
+  height(px: number, gen: number): void
+  pick(url: string): void
+}
+
 export interface BookmarkFolder {
   id: string
   name: string
@@ -124,6 +147,10 @@ export interface SynapseApi {
     showContextMenu(id: string): void
   }
   onTabsUpdated(cb: (snap: TabsSnapshot) => void): void
+  suggestions: {
+    update(p: SuggestionsPayload): void // push dropdown state; empty items = close
+    onPicked(cb: () => void): void // a row was clicked in the overlay
+  }
   history: {
     search(q: string): Promise<Suggestion[]>
     list(): Promise<HistoryEntry[]>

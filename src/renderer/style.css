@@ -1,29 +1,8 @@
+@import './tokens.css';
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-}
-:root {
-  color-scheme: dark;
-  --shell: #26272d;
-  --shell-raised: #31323a;
-  --well: #1c1d22;
-  --line: rgba(255, 255, 255, 0.07);
-  --fg: #e6e6ea;
-  --fg-dim: #9a9aa3;
-  --accent: #7aa2f7;
-  --work: #e0af68;
-  --accent-wash: rgba(122, 162, 247, 0.14);
-  --work-wash: rgba(224, 175, 104, 0.15);
-  --active-fg: #cdd9f7;
-  --work-active-fg: #edd9b8;
-  --focus-ring: var(--accent);
-  --focus-glow: rgba(122, 162, 247, 0.18);
-  --canvas-ring: rgba(122, 162, 247, 0.25);
-  --r-s: 6px;
-  --r-m: 8px;
-  --t-fast: 120ms ease-out;
-  --t-med: 160ms ease-out;
 }
 /* chrome-aware accents: interactive rings follow the active tab's profile */
 body.profile-work {
@@ -213,18 +192,6 @@ body {
     transform: translateY(-4px);
   }
 }
-#suggestions {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: var(--shell);
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  animation: panel-in var(--t-med);
-}
 #sidebar {
   grid-row: 2;
   grid-column: 1;
@@ -382,64 +349,6 @@ body {
 }
 .pin.work {
   box-shadow: inset 0 0 0 1.5px var(--work);
-}
-.suggestion {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background var(--t-fast);
-}
-.suggestion:hover {
-  background: var(--shell-raised);
-}
-.suggestion.selected {
-  background: var(--accent-wash);
-}
-.suggestion-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.suggestion-url {
-  color: var(--fg-dim);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.suggestion-icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--fg-dim);
-}
-.suggestion-icon img {
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-}
-.suggestion-text {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-}
-.suggestion-title b,
-.suggestion-url b {
-  font-weight: 700;
-}
-.suggestion-url b {
-  color: var(--fg);
-}
-.suggestion-star {
-  margin-left: 6px;
-  font-size: 11px;
-  color: var(--fg-dim);
 }
 .panel-heading {
   font-size: 11px;
@@ -1058,7 +967,6 @@ select.settings-input {
   .load-spinner {
     animation-duration: 2400ms;
   }
-  #suggestions,
   #ext-menu,
   #find-bar {
     animation: none;

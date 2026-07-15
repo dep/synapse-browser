@@ -19,6 +19,12 @@ const api: SynapseApi = {
   onTabsUpdated: (cb) => {
     ipcRenderer.on('tabs:updated', (_e, snap) => cb(snap))
   },
+  suggestions: {
+    update: (p) => ipcRenderer.send('sugg:update', p),
+    onPicked: (cb) => {
+      ipcRenderer.on('sugg:picked', () => cb())
+    },
+  },
   history: {
     search: (q) => ipcRenderer.invoke('history:search', q),
     list: () => ipcRenderer.invoke('history:list'),

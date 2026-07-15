@@ -1,0 +1,23 @@
+/* design tokens shared by the chrome document and the suggestions overlay */
+:root {
+  color-scheme: dark;
+  --shell: #26272d;
+  --shell-raised: #31323a;
+  --well: #1c1d22;
+  --line: rgba(255, 255, 255, 0.07);
+  --fg: #e6e6ea;
+  --fg-dim: #9a9aa3;
+  --accent: #7aa2f7;
+  --work: #e0af68;
+  --accent-wash: rgba(122, 162, 247, 0.14);
+  --work-wash: rgba(224, 175, 104, 0.15);
+  --active-fg: #cdd9f7;
+  --work-active-fg: #edd9b8;
+  --focus-ring: var(--accent);
+  --focus-glow: rgba(122, 162, 247, 0.18);
+  --canvas-ring: rgba(122, 162, 247, 0.25);
+  --r-s: 6px;
+  --r-m: 8px;
+  --t-fast: 120ms ease-out;
+  --t-med: 160ms ease-out;
+}

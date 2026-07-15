@@ -1,0 +1,85 @@
+/* the urlbar dropdown lives in its own WebContentsView (it must draw above
+   the page view, which the chrome document cannot); main masks the view to
+   --r-m, so the ring is painted inset here */
+@import './tokens.css';
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+  color: var(--fg);
+  background: var(--shell);
+  user-select: none;
+  /* when main clamps the view to the window bottom, rows must stay reachable */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  pointer-events: none;
+}
+.suggestion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background var(--t-fast);
+}
+.suggestion:hover {
+  background: var(--shell-raised);
+}
+.suggestion.selected {
+  background: var(--accent-wash);
+}
+.suggestion-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggestion-url {
+  color: var(--fg-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggestion-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-dim);
+}
+.suggestion-icon img {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+.suggestion-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.suggestion-title b,
+.suggestion-url b {
+  font-weight: 700;
+}
+.suggestion-url b {
+  color: var(--fg);
+}
+.suggestion-star {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--fg-dim);
+}

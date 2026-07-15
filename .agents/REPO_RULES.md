@@ -18,10 +18,13 @@ Electron + electron-vite + TypeScript. No native build steps.
 - Tab cycling (Ctrl+Tab = MRU, Option+Tab = sidebar order) is captured via
   `before-input-event` in main, NOT menu accelerators — commit-on-modifier-release needs
   key-up events, which accelerators can't see.
-- The suggestions dropdown can't overlap the page (`WebContentsView`s always draw above
-  the window's own renderer), so the renderer reports the dropdown height over
-  `ui:set-overlay-height` and main shifts the page view down. Reset to 0 on close or the
-  page stays shifted.
+- Chrome-document UI can't overlap the page (`WebContentsView`s always draw above the
+  window's own renderer). The suggestions dropdown is therefore its own native view
+  (`src/main/suggestions-overlay.ts`, document `src/renderer/suggestions.html`): the
+  chrome renderer owns all suggestion state and streams rows over `sugg:*` IPC; main
+  positions and shows the view above the page. The extensions menu still uses the old
+  workaround — the renderer reports its height over `ui:set-overlay-height` and main
+  shifts the page view down; reset to 0 on close or the page stays shifted.
 - Web page tabs are sandboxed, get **no preload** and zero IPC exposure. Only the chrome
   UI gets `window.synapse` (typed as `SynapseApi` in `src/shared/ipc.ts`).
 - Stores are debounced JSON (`history.json`, `bookmarks.json`) in `userData`; corrupt
