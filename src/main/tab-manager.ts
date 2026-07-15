@@ -617,13 +617,19 @@ export class TabManager {
       if (isDeadView(view)) this.dropDeadView(id)
     }
     // a blank active tab attaches no view, leaving the chrome renderer's
-    // new-tab page visible in the page cell (same mechanism as settings)
+    // new-tab page visible in the page cell (same mechanism as settings).
+    // A loading tab counts as a page tab even while getURL() is still '' —
+    // a fresh view's first navigation hasn't committed yet, and waiting for
+    // the URL would leave the view detached (and steal focus to the urlbar).
     const activeView =
       !this.settingsOpen && this.model.activeId
         ? (this.views.get(this.model.activeId) ?? null)
         : null
     const active =
-      activeView && !isBlankUrl(activeView.webContents.getURL()) ? activeView : null
+      activeView &&
+      (!isBlankUrl(activeView.webContents.getURL()) || activeView.webContents.isLoading())
+        ? activeView
+        : null
     if (this.attached !== active) {
       if (this.attached && this.findText) {
         this.attached.webContents.stopFindInPage('clearSelection')
@@ -681,13 +687,16 @@ export class TabManager {
       this.layout()
     })
     wc.on('page-title-updated', refresh)
-    // a blank (detached) tab that starts navigating must get its view
-    // attached; syncViews ends with refresh(), so this is a superset
+    // attach/detach must be re-evaluated at every loading transition and at
+    // commit, not just load start: a fresh view reports a blank getURL()
+    // until its first navigation commits, so any single check can race and
+    // leave an active tab's view detached — a blank page (issue #24).
+    // syncViews ends with refresh(), so these are supersets of refresh.
     wc.on('did-start-loading', () => this.syncViews())
-    wc.on('did-stop-loading', refresh)
+    wc.on('did-stop-loading', () => this.syncViews())
     wc.on('did-navigate', () => {
       this.favicons.set(id, null)
-      this.refresh()
+      this.syncViews()
     })
     wc.on('page-favicon-updated', (_e, favicons) => {
       this.favicons.set(id, favicons[0] ?? null)
