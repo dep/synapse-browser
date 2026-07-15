@@ -50,8 +50,9 @@ grays, canvas radius). All styles in `style.css` under a `.newtab-` prefix.
 2. **Weather** — one quiet line: condition glyph, rounded temperature, city
    (e.g. "☀️ 74° Los Angeles"). Absent (no reserved space) until data resolves; absent
    on failure. No error states.
-3. **Top sites** — 2×5 grid of tiles: favicon + hostname label. The favicon comes from
-   the bookmark store when a bookmark's URL is on that host, else a lettered monogram. Clicking navigates the
+3. **Top sites** — 2×5 grid of tiles: favicon + hostname label. Favicons come from the
+   existing `favicons.json` host→URL store (the same join suggestions use), else a
+   lettered monogram. Clicking navigates the
    current (blank) tab via `tabs.navigate`.
 4. **Search field** — minimal underline input, placeholder "Search history…". Filters
    the history list live; also filters flat (no day groups) while a query is active.
@@ -75,7 +76,9 @@ interface NewTabData {
   topSites: TopSite[]            // ranked in main via shared helper
   weather: WeatherInfo | null    // null until fetched / on failure
 }
-interface TopSite { host: string; url: string; favicon: string | null }
+interface TopSite { host: string; url: string }
+// NewTabData also carries favicons: Record<string, string> (host → favicon URL,
+// from FaviconStore) — the renderer joins tiles and history rows against it
 interface WeatherInfo { tempC: number; code: number; city: string; useFahrenheit: boolean }
 ```
 
@@ -86,14 +89,15 @@ page becomes visible and fills the weather line in when the second resolves.
 
 ### Pure helpers — `src/shared/newtab.ts` (Vitest-covered)
 
-- `topSitesFrom(entries, favicons, now): TopSite[]` — group visits by hostname, score
-  each visit with the frecency bucket weights from `history-search.ts` (export/reuse
+- `topSitesFrom(entries, now): TopSite[]` — group visits by hostname, score each visit
+  with the frecency bucket weights from `history-search.ts` (export/reuse
   `visitWeight`), rank hosts by total score, take 10. A host's tile URL is its
-  most-visited exact URL (ties → most recent). Favicon lookup from bookmark data.
+  most-visited exact URL (ties → most recent).
 - `dedupeByTitle(entries): HistoryEntry[]` — newest-first scan keeps the first
   occurrence of each non-empty title; entries with empty titles dedupe by URL instead.
-- `groupByDay(entries, now): { label: string; entries: HistoryEntry[] }[]` — "Today",
-  "Yesterday", then locale month-day labels, using local midnight boundaries.
+- `dayLabel(visitedAt, now): string` — "Today", "Yesterday", then locale month-day
+  labels, using local midnight boundaries; the renderer streams rows and inserts a
+  header whenever the label changes (equivalent to grouping, but lazy-render friendly).
 - `filterEntries(entries, query): HistoryEntry[]` — reuses `queryTokens` +
   substring/boundary matching over title + stripped URL.
 
