@@ -51,6 +51,7 @@ export class TabManager {
   private aiSidebarVisible = false
   private settingsOpen = false
   private counter = 0
+  private blankActivatedId: string | null = null
 
   constructor(
     private win: BrowserWindow,
@@ -632,6 +633,18 @@ export class TabManager {
       if (active) this.win.contentView.addChildView(active)
       this.attached = active
       if (active) this.opts.onTabActivated?.(active.webContents, this.profileOf(this.model.activeId!))
+    }
+    // Blank active tabs attach no view, so the attach block above never runs
+    // for them: keep extensions' active-tab state and native keyboard focus
+    // honest anyway (chords are captured on the focused webContents, and the
+    // chrome webContents has the same cycle hooks as page tabs).
+    if (activeView && !active && this.model.activeId !== this.blankActivatedId) {
+      this.blankActivatedId = this.model.activeId
+      this.opts.onTabActivated?.(activeView.webContents, this.profileOf(this.model.activeId!))
+      this.win.webContents.focus()
+      this.focusUrlBar()
+    } else if (active || !activeView) {
+      this.blankActivatedId = null
     }
     this.layout()
     this.refresh()
