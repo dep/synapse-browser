@@ -13,6 +13,8 @@ import { SettingsStore } from './settings-store'
 import { DownloadManager } from './downloads'
 import { ExtensionManager } from './extensions'
 import { searchSuggestions } from '../shared/history-search'
+import { topSitesFrom } from '../shared/newtab'
+import { WeatherService } from './weather'
 import { FaviconStore } from './favicons'
 import { HistoryStore } from './history'
 import { attachPermissionPrompts } from './media-permissions'
@@ -87,6 +89,7 @@ app.whenReady().then(async () => {
   const shortcutsStore = new ShortcutsStore(userData)
   const permissionsStore = new PermissionsStore(userData)
   const settingsStore = new SettingsStore(userData)
+  const weather = new WeatherService()
 
   function attachCycleHooks(wc: WebContents): void {
     wc.on('before-input-event', (event, input) => {
@@ -318,6 +321,16 @@ app.whenReady().then(async () => {
     )
   })
   ipcMain.handle('history:list', () => history.list())
+  ipcMain.handle('newtab:data', () => {
+    const entries = history.entries()
+    return {
+      entries,
+      topSites: topSitesFrom(entries, Date.now()),
+      favicons: favicons.all(),
+      weather: weather.cached(),
+    }
+  })
+  ipcMain.handle('newtab:weather', () => weather.get())
 
   const bookmarksChanged = (): void => {
     tabs.syncBookmarks(bookmarks.ordered())
