@@ -40,6 +40,7 @@ export class WeatherService {
   private async fetch(): Promise<WeatherInfo | null> {
     const geoRes = await net.fetch(
       'http://ip-api.com/json/?fields=status,lat,lon,city,countryCode',
+      { signal: AbortSignal.timeout(10_000) },
     )
     const geo = (await geoRes.json()) as {
       status?: string
@@ -52,6 +53,7 @@ export class WeatherService {
       return null
     const wxRes = await net.fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${geo.lat}&longitude=${geo.lon}&current_weather=true`,
+      { signal: AbortSignal.timeout(10_000) },
     )
     const wx = (await wxRes.json()) as {
       current_weather?: { temperature?: number; weathercode?: number }
