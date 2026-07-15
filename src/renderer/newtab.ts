@@ -48,6 +48,7 @@ export function initNewTab(el: HTMLElement): NewTabController {
   let deduped: HistoryEntry[] = []
   let rendered = 0
   let lastLabel = ''
+  let loadGen = 0
   let timer: ReturnType<typeof setInterval> | undefined
 
   const navigate = (url: string): void => {
@@ -164,14 +165,16 @@ export function initNewTab(el: HTMLElement): NewTabController {
   io.observe(sentinel)
 
   const load = async (): Promise<void> => {
-    data = await window.synapse.newtab.data()
-    if (!visible) return
+    const gen = ++loadGen
+    const d = await window.synapse.newtab.data()
+    if (!visible || gen !== loadGen) return
+    data = d
     deduped = dedupeByTitle(data.entries)
     renderTiles()
     resetList()
     renderWeather(data.weather)
     const w = await window.synapse.newtab.weather()
-    if (visible) renderWeather(w)
+    if (visible && gen === loadGen) renderWeather(w)
   }
 
   return {
