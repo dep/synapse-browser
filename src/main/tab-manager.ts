@@ -641,8 +641,7 @@ export class TabManager {
     if (activeView && !active && this.model.activeId !== this.blankActivatedId) {
       this.blankActivatedId = this.model.activeId
       this.opts.onTabActivated?.(activeView.webContents, this.profileOf(this.model.activeId!))
-      this.win.webContents.focus()
-      this.focusUrlBar()
+      this.focusUrlBar() // focuses the chrome webContents first, keeping chords alive
     } else if (active || !activeView) {
       this.blankActivatedId = null
     }

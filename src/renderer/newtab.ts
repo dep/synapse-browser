@@ -82,8 +82,8 @@ export function initNewTab(el: HTMLElement): NewTabController {
     }
     const mono = document.createElement('div')
     mono.className = 'newtab-icon newtab-monogram'
-    const name = host?.replace(/^www\./, '') ?? '?'
-    mono.textContent = name[0]!.toUpperCase()
+    const name = host?.replace(/^www\./, '') ?? ''
+    mono.textContent = (name[0] ?? '?').toUpperCase()
     return mono
   }
 

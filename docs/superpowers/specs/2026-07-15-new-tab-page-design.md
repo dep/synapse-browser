@@ -121,6 +121,15 @@ source the UI renders from).
   `.bad` rename): sections render from whatever entries exist.
 - Blank-tab view detachment must not break find-in-page/zoom paths: those already
   no-op when `attached` is null (same as settings mode).
+- Detach-mode checklist (learned from the final review — check these for any future
+  feature that leaves the page cell view-less):
+  - **Native keyboard focus**: with no view attached, focus must land on the chrome
+    webContents (which carries the same Ctrl/Option+Tab cycle hooks), or chords die
+    and keystrokes can leak into the invisible detached page. `syncViews()` handles
+    this for blank tabs via `focusUrlBar()` on activation.
+  - **Extension tab-activation**: `extensions.selectTab` normally fires on view
+    attach; a resting detached state must fire `onTabActivated` explicitly or
+    `chrome.tabs.query({active: true})` reports the previous tab.
 
 ## Testing
 
