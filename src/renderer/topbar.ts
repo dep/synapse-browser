@@ -6,6 +6,20 @@ export interface Topbar {
   update(snap: TabsSnapshot): void
 }
 
+export function shouldSyncUrlbar({
+  tabChanged,
+  urlbarFocused,
+  loadingStarted,
+  value,
+}: {
+  tabChanged: boolean
+  urlbarFocused: boolean
+  loadingStarted: boolean
+  value: string
+}): boolean {
+  return tabChanged || !urlbarFocused || (loadingStarted && value.trim() === '')
+}
+
 export function initTopbar(): Topbar {
   const back = document.getElementById('nav-back') as HTMLButtonElement
   const forward = document.getElementById('nav-forward') as HTMLButtonElement
@@ -264,6 +278,7 @@ export function initTopbar(): Topbar {
       forward.disabled = !tab?.canGoForward
       reload.disabled = !tab
       const nowLoading = !!tab?.isLoading
+      const loadingStarted = !activeLoading && nowLoading
       if (nowLoading !== activeLoading) {
         // snapshots stream constantly; only reparse the SVG on a real flip
         reload.innerHTML = nowLoading ? ICON_STOP : ICON_RELOAD
@@ -275,8 +290,18 @@ export function initTopbar(): Topbar {
       // document), so the activeElement guard alone would suppress updates
       // forever after any urlbar use. Same-tab snapshots still defer to the
       // guard — activeElement can't distinguish a draft from a stale display,
-      // and clobbering a draft is the worse failure.
-      if (tabChanged || document.activeElement !== urlbar) urlbar.value = tab?.url ?? ''
+      // and clobbering a draft is the worse failure. A newly loading page is
+      // the exception when the focused bar is blank: reload must restore the
+      // current URL rather than preserving an empty stale display.
+      if (
+        shouldSyncUrlbar({
+          tabChanged,
+          urlbarFocused: document.activeElement === urlbar,
+          loadingStarted,
+          value: urlbar.value,
+        })
+      )
+        urlbar.value = tab?.url ?? ''
       const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || isHttpUrl(tab.url))
       star.disabled = !canBookmark
       star.textContent = tab?.isBookmarked ? '★' : '☆'
