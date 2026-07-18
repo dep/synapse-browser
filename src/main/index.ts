@@ -1,12 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, session } from 'electron'
-import type { WebContents } from 'electron'
-import { appendFileSync, copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { app, dialog, ipcMain, Menu, session } from 'electron'
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ProfileId, ShortcutRow, SuggestionsPayload } from '../shared/ipc'
 import { normalizeAccelerator } from '../shared/accelerator'
 import { FIXED_SHORTCUTS, RESERVED_ACCELERATORS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
 import { parseBookmarksExport, planImport } from '../shared/bookmarks-io'
-import { clampAiSidebarWidth, sanitizeMessages } from '../shared/ai'
+import { sanitizeMessages } from '../shared/ai'
 import { AiChatController } from './ai'
 import { BookmarksStore } from './bookmarks'
 import { SettingsStore } from './settings-store'
@@ -20,16 +19,22 @@ import { HistoryStore } from './history'
 import { attachPermissionPrompts } from './media-permissions'
 import { PermissionsStore } from './permissions-store'
 import { PinsStore } from './pins-store'
-import { SidebarResizeController } from './sidebar-resize'
-import { SuggestionsOverlay } from './suggestions-overlay'
 import { ShortcutsStore } from './shortcuts-store'
-import { TabManager, WORK_PARTITION } from './tab-manager'
+import { WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { UiStore } from './ui-store'
 import { Updater } from './updater'
 import { buildMenu } from './menu'
-import { attachPageContextMenu } from './page-context-menu-host'
 import { toChromeUserAgent } from '../shared/user-agent'
+import {
+  allBundles,
+  bundleFor,
+  bundleOwningTab,
+  createWindow,
+  focusedBundle,
+  primaryBundle,
+} from './window'
+import type { WindowBundle, WindowDeps } from './window'
 
 // must run before any session exists so every partition inherits it
 app.userAgentFallback = toChromeUserAgent(app.userAgentFallback, app.getName(), app.getVersion())
@@ -92,202 +97,133 @@ app.whenReady().then(async () => {
   const settingsStore = new SettingsStore(userData)
   const weather = new WeatherService()
 
-  function attachCycleHooks(wc: WebContents): void {
-    wc.on('before-input-event', (event, input) => {
-      if (input.key === 'Tab' && (input.control || input.alt)) {
-        // Swallow every event type of the chord: Blink moves focus on the
-        // '\t' char (keypress) event, not the keyDown, so preventing only
-        // keyDown lets Ctrl/Option+Tab walk focus through the chrome UI.
-        event.preventDefault()
-        if (input.type === 'keyDown') {
-          tabs.cycleStep(input.control ? 'mru' : 'order', input.shift ? 'back' : 'forward')
-        }
-      } else if (input.key === 'Control' || input.key === 'Alt') {
-        // macOS never delivers the modifier keyUp once the Tab chord is
-        // consumed (verified via before-input-event capture), so a cycle is
-        // committed by the NEXT modifier keyDown instead of its own release.
-        // The keyUp case stays for platforms/paths where it does arrive;
-        // commit is idempotent. Held modifiers don't autorepeat, so a
-        // hold-and-walk never sees a second keyDown.
-        tabs.cycleCommit()
-      }
-      if (process.env['CYCLE_DEBUG']) {
-        appendFileSync(
-          process.env['CYCLE_DEBUG'],
-          `wc=${wc.id} ${input.type} key=${input.key} ctrl=${input.control} alt=${input.alt} -> active=${tabs.activeId}\n`,
-        )
-      }
-    })
-  }
+  // IPC only ever arrives from a window's chrome renderer or its suggestions
+  // overlay; the registry maps either back to the owning window's bundle
+  const forSender = (
+    e: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent,
+  ): WindowBundle | null => bundleFor(e.sender)
+  const targetBundle = (): WindowBundle | null => focusedBundle() ?? primaryBundle()
+
+  const extensions = new ExtensionManager({
+    forTabWc: (wc) => bundleOwningTab(wc)?.tabs ?? null,
+    target: () => {
+      const b = targetBundle()
+      return b && { tabs: b.tabs, win: b.win }
+    },
+  })
 
   let sessionRestored = false
-  const win = new BrowserWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 700,
-    minHeight: 400,
-    title: 'Synapse Browser',
-    webPreferences: { preload: join(__dirname, '../preload/index.js') },
-  })
+  const bookmarksChanged = (): void => {
+    const p = primaryBundle()
+    if (!p) return
+    p.tabs.syncBookmarks(bookmarks.ordered())
+    p.win.webContents.send('ui:bookmarks-changed')
+  }
+  const deps: WindowDeps = {
+    history,
+    favicons,
+    bookmarks,
+    tabsStore,
+    pinsStore,
+    uiStore,
+    extensions,
+    bookmarksChanged,
+    isSessionRestored: () => sessionRestored,
+  }
 
-  const tabs = new TabManager(win, {
-    getBookmark: (id) => bookmarks.get(id),
-    onBookmarkFavicon: (id, favicon) => {
-      bookmarks.setFavicon(id, favicon)
-      win.webContents.send('ui:bookmarks-changed')
-    },
-    onNavigated: (url, title) => history.add(url, title, Date.now()),
-    onPageFavicon: (url, favicon) => favicons.set(url, favicon),
-    onSnapshot: (snap) => {
-      win.webContents.send('tabs:updated', snap)
-      // the renderer's did-finish-load can fire a snapshot while startup is
-      // still awaiting extensions.init(); persisting that empty state would
-      // wipe the stores before restorePins/restoreTabs read them
-      if (!sessionRestored) return
-      tabsStore.save(
-        snap.order.map((id) => {
-          const t = snap.tabs[id]!
-          return { url: t.url, profile: t.profile }
-        }),
-        snap.activeId ? snap.order.indexOf(snap.activeId) : -1,
-      )
-      pinsStore.save(
-        snap.pinned.map((id) => ({
-          url: snap.tabs[id]!.anchorUrl ?? snap.tabs[id]!.url,
-          title: snap.tabs[id]!.title,
-          favicon: snap.tabs[id]!.favicon,
-          profile: snap.tabs[id]!.profile,
-        })),
-      )
-    },
-    // `extensions` is declared below; safe because tabs are only created
-    // after it exists (restoreTabs runs at the end of startup)
-    // Work tabs are deliberately invisible to ElectronChromeExtensions —
-    // registering them would expose Work-container URLs to default-session
-    // extensions through chrome.tabs
-    onTabCreated: (wc, profile) => {
-      attachCycleHooks(wc)
-      // `bookmarksChanged` is declared below; safe for the same reason as
-      // `extensions` — no tab exists until startup wiring completes
-      attachPageContextMenu(wc, win, {
-        openLinkInNewTab: (url) => tabs.createTab(url, false, profile, tabs.idFor(wc)),
-        bookmarkLink: (url, title) => {
-          bookmarks.add(url, title, Date.now(), profile)
-          bookmarksChanged()
-        },
-      })
-      if (profile === 'default') extensions.addTab(wc)
-    },
-    onTabActivated: (wc, profile) => {
-      if (profile === 'default') extensions.selectTab(wc)
-    },
-    onSettingsClosed: () => win.webContents.send('ui:settings', false),
-    onFindResult: (r) => win.webContents.send('ui:find-result', r),
-  })
-  const extensions = new ExtensionManager(win, tabs)
-  tabs.setSidebarWidth(uiStore.sidebarWidth())
-  const sidebarResize = new SidebarResizeController(
-    {
-      win,
-      getPageWebContents: () => (tabs.activeId ? tabs.webContentsFor(tabs.activeId) : null),
-      onWidth: (px) => {
-        tabs.setSidebarWidth(px)
-        win.webContents.send('ui:sidebar-width', px)
-      },
-      onCommit: (px) => uiStore.setSidebarWidth(px),
-    },
-    uiStore.sidebarWidth(),
-  )
-  tabs.setAiSidebarWidth(uiStore.aiSidebarWidth())
-  tabs.setAiSidebarVisible(uiStore.aiSidebarVisible())
-  const aiSidebarResize = new SidebarResizeController(
-    {
-      win,
-      side: 'right',
-      clamp: clampAiSidebarWidth,
-      getPageWebContents: () => (tabs.activeId ? tabs.webContentsFor(tabs.activeId) : null),
-      onWidth: (px) => {
-        tabs.setAiSidebarWidth(px)
-        win.webContents.send('ui:ai-width', px)
-      },
-      onCommit: (px) => uiStore.setAiSidebarWidth(px),
-    },
-    uiStore.aiSidebarWidth(),
-  )
-  const ai = new AiChatController({
-    getSettings: () => ({ apiKey: settingsStore.aiApiKey(), model: settingsStore.aiModel() }),
-    getActivePage: () => (tabs.activeId ? tabs.webContentsFor(tabs.activeId) : null),
-    send: (channel, payload) => win.webContents.send(channel, payload),
-  })
-  const updater = new Updater(win)
+  const primary = createWindow('primary', deps)
+
+  const updater = new Updater(primary.win)
   // silent launch check; dev builds check only via the menu
   if (app.isPackaged) setTimeout(() => void updater.check(false), 10_000)
-  const toggleSidebar = (): void => {
-    const visible = !uiStore.sidebarVisible()
-    uiStore.setSidebarVisible(visible)
-    tabs.setSidebarVisible(visible)
-    win.webContents.send('ui:sidebar-visible', visible)
+
+  const toggleSidebar = (b: WindowBundle): void => {
+    b.sidebarVisible = !b.sidebarVisible
+    uiStore.setSidebarVisible(b.sidebarVisible)
+    b.tabs.setSidebarVisible(b.sidebarVisible)
+    b.win.webContents.send('ui:sidebar-visible', b.sidebarVisible)
   }
-  const toggleAiSidebar = (): void => {
-    const visible = !uiStore.aiSidebarVisible()
-    uiStore.setAiSidebarVisible(visible)
-    tabs.setAiSidebarVisible(visible)
-    win.webContents.send('ui:ai-visible', visible)
+  const toggleAiSidebar = (b: WindowBundle): void => {
+    if (b.role !== 'primary') return // secondaries have no AI sidebar
+    b.aiVisible = !b.aiVisible
+    uiStore.setAiSidebarVisible(b.aiVisible)
+    b.tabs.setAiSidebarVisible(b.aiVisible)
+    b.win.webContents.send('ui:ai-visible', b.aiVisible)
   }
-  tabs.setSidebarVisible(uiStore.sidebarVisible())
-  attachCycleHooks(win.webContents)
+  const toggleSettings = (b: WindowBundle): void => {
+    b.win.webContents.send('ui:settings', b.tabs.toggleSettings())
+  }
+
+  const ai = new AiChatController({
+    getSettings: () => ({ apiKey: settingsStore.aiApiKey(), model: settingsStore.aiModel() }),
+    // the AI sidebar lives in the primary window only
+    getActivePage: () => {
+      const b = primaryBundle()
+      return b?.tabs.activeId ? b.tabs.webContentsFor(b.tabs.activeId) : null
+    },
+    send: (channel, payload) => primaryBundle()?.win.webContents.send(channel, payload),
+  })
 
   openUrlInExistingWindow = (url) => {
-    tabs.createTab(url)
-    if (win.isMinimized()) win.restore()
-    win.focus()
+    const b = targetBundle()
+    if (!b) return
+    b.tabs.createTab(url)
+    if (b.win.isMinimized()) b.win.restore()
+    b.win.focus()
   }
   for (const url of pendingUrls.splice(0)) openUrlInExistingWindow(url)
-  // losing window focus mid-cycle means the modifier keyUp will never arrive
-  win.on('blur', () => tabs.cycleCommit())
 
-  const downloads = new DownloadManager((list) => win.webContents.send('downloads:updated', list))
+  // the downloads shelf list is app-global, so every window's chrome renders it
+  const downloads = new DownloadManager((list) => {
+    for (const b of allBundles()) b.win.webContents.send('downloads:updated', list)
+  })
   downloads.attach(session.defaultSession)
   // the Work container: isolated cookies/storage/cache, persisted across runs.
   // No extensions are loaded into it and no webRequest handlers are registered
   // (repo rule). Created eagerly so downloads work before any Work tab exists.
   const workSession = session.fromPartition(WORK_PARTITION)
   downloads.attach(workSession)
-  // mic/camera requests prompt per origin (persisted); both containers
-  attachPermissionPrompts(session.defaultSession, win, permissionsStore)
-  attachPermissionPrompts(workSession, win, permissionsStore)
+  // mic/camera requests prompt per origin (persisted); both containers.
+  // The dialog parents to the window owning the requesting tab.
+  const promptParent = (wc: Electron.WebContents): Electron.BrowserWindow | null =>
+    bundleOwningTab(wc)?.win ?? primaryBundle()?.win ?? null
+  attachPermissionPrompts(session.defaultSession, promptParent, permissionsStore)
+  attachPermissionPrompts(workSession, promptParent, permissionsStore)
   ipcMain.on('downloads:reveal', (_e, id: string) => downloads.reveal(id))
 
-  ipcMain.on('tabs:create', (_e, url?: string) => {
-    tabs.createTab(typeof url === 'string' ? url : undefined)
+  ipcMain.on('tabs:create', (e, url?: string) => {
+    forSender(e)?.tabs.createTab(typeof url === 'string' ? url : undefined)
   })
-  ipcMain.on('tabs:close', (_e, id: string) => tabs.closeTab(id))
-  ipcMain.on('tabs:activate', (_e, id: string) => tabs.activateTab(id))
-  ipcMain.on('tabs:navigate', (_e, id: string, input: string) => tabs.navigate(id, String(input)))
-  ipcMain.on('tabs:back', (_e, id: string) => tabs.back(id))
-  ipcMain.on('tabs:forward', (_e, id: string) => tabs.forward(id))
-  ipcMain.on('tabs:reload', (_e, id: string) => tabs.reload(id))
-  ipcMain.on('tabs:nav-new-tab', (_e, id: string, offset: number) => {
+  ipcMain.on('tabs:close', (e, id: string) => forSender(e)?.tabs.closeTab(id))
+  ipcMain.on('tabs:activate', (e, id: string) => forSender(e)?.tabs.activateTab(id))
+  ipcMain.on('tabs:navigate', (e, id: string, input: string) =>
+    forSender(e)?.tabs.navigate(id, String(input)),
+  )
+  ipcMain.on('tabs:back', (e, id: string) => forSender(e)?.tabs.back(id))
+  ipcMain.on('tabs:forward', (e, id: string) => forSender(e)?.tabs.forward(id))
+  ipcMain.on('tabs:reload', (e, id: string) => forSender(e)?.tabs.reload(id))
+  ipcMain.on('tabs:nav-new-tab', (e, id: string, offset: number) => {
     if (typeof id === 'string' && (offset === -1 || offset === 0 || offset === 1))
-      tabs.openNavInNewTab(id, offset)
+      forSender(e)?.tabs.openNavInNewTab(id, offset)
   })
-  ipcMain.on('tabs:stop', (_e, id: string) => tabs.stop(id))
-  ipcMain.on('tabs:reorder', (_e, id: string, toIndex: number) => {
-    if (typeof id === 'string') tabs.reorderTab(id, Number(toIndex))
+  ipcMain.on('tabs:stop', (e, id: string) => forSender(e)?.tabs.stop(id))
+  ipcMain.on('tabs:reorder', (e, id: string, toIndex: number) => {
+    if (typeof id === 'string') forSender(e)?.tabs.reorderTab(id, Number(toIndex))
   })
 
-  ipcMain.on('tabs:context-menu', (_e, id: string) => {
-    if (typeof id !== 'string') return
-    const pinned = tabs.isPinned(id)
-    const profile = tabs.profileOf(id)
+  ipcMain.on('tabs:context-menu', (e, id: string) => {
+    const b = forSender(e)
+    if (!b || typeof id !== 'string') return
+    const pinned = b.tabs.isPinned(id)
+    const profile = b.tabs.profileOf(id)
     const template: Electron.MenuItemConstructorOptions[] = [
       {
         label: pinned ? 'Unpin Tab' : 'Pin Tab',
-        click: () => tabs.togglePin(id),
+        click: () => b.tabs.togglePin(id),
       },
     ]
-    if (pinned && tabs.isAwake(id)) {
-      template.push({ label: 'Restore Pinned URL', click: () => tabs.restoreAnchor(id) })
+    if (pinned && b.tabs.isAwake(id)) {
+      template.push({ label: 'Restore Pinned URL', click: () => b.tabs.restoreAnchor(id) })
     }
     template.push(
       { type: 'separator' },
@@ -298,29 +234,30 @@ app.whenReady().then(async () => {
             label: 'Default',
             type: 'radio',
             checked: profile === 'default',
-            click: () => tabs.setProfile(id, 'default'),
+            click: () => b.tabs.setProfile(id, 'default'),
           },
           {
             label: 'Work',
             type: 'radio',
             checked: profile === 'work',
-            click: () => tabs.setProfile(id, 'work'),
+            click: () => b.tabs.setProfile(id, 'work'),
           },
         ],
       },
       { type: 'separator' },
       // closing a pin puts it to sleep; the slot stays in the row
-      { label: pinned ? 'Close' : 'Close Tab', click: () => tabs.closeTab(id) },
+      { label: pinned ? 'Close' : 'Close Tab', click: () => b.tabs.closeTab(id) },
     )
-    Menu.buildFromTemplate(template).popup({ window: win })
+    Menu.buildFromTemplate(template).popup({ window: b.win })
   })
 
   // suggestions blend shared history with the active tab's own profile's
   // bookmarks — a Work bookmark suggested to a default tab would load the
   // Work URL in the default session
-  ipcMain.handle('history:search', (_e, q: string) => {
-    const profile = tabs.activeId ? tabs.profileOf(tabs.activeId) : 'default'
-    const marks = bookmarks.ordered().filter((b) => (b.profile ?? 'default') === profile)
+  ipcMain.handle('history:search', (e, q: string) => {
+    const b = forSender(e)
+    const profile = b?.tabs.activeId ? b.tabs.profileOf(b.tabs.activeId) : 'default'
+    const marks = bookmarks.ordered().filter((bm) => (bm.profile ?? 'default') === profile)
     return searchSuggestions(history.entries(), marks, String(q), Date.now()).map((s) =>
       s.favicon ? s : { ...s, favicon: favicons.get(s.url) },
     )
@@ -337,58 +274,77 @@ app.whenReady().then(async () => {
   })
   ipcMain.handle('newtab:weather', () => weather.get())
 
-  const bookmarksChanged = (): void => {
-    tabs.syncBookmarks(bookmarks.ordered())
-    win.webContents.send('ui:bookmarks-changed')
-  }
-
   // ⌘D / ☆: convert the active tab into a bookmark, or a bookmark tab back
-  const toggleBookmark = (): void => {
-    const tid = tabs.activeId
+  const toggleBookmark = (b: WindowBundle): void => {
+    const tid = b.tabs.activeId
     if (!tid) return
-    const bid = tabs.bookmarkIdOf(tid)
+    if (b.role === 'secondary') {
+      // secondaries have no bookmark slots; ⌘D just files the page into the
+      // global store (rendered by the primary window)
+      const info = b.tabs.infoFor(tid)
+      if (!info || !/^https?:\/\//.test(info.url)) return
+      const profile = b.tabs.profileOf(tid)
+      const exists = bookmarks
+        .ordered()
+        .some((bm) => bm.url === info.url && (bm.profile ?? 'default') === profile)
+      if (exists) return
+      bookmarks.add(info.url, info.title, Date.now(), profile)
+      bookmarksChanged()
+      return
+    }
+    const bid = b.tabs.bookmarkIdOf(tid)
     if (bid) {
       bookmarks.remove(bid)
-      tabs.unbookmarkTab(bid)
+      b.tabs.unbookmarkTab(bid)
     } else {
-      if (tabs.isPinned(tid)) return // pins aren't convertible to bookmarks
-      const info = tabs.activeInfo()
+      if (b.tabs.isPinned(tid)) return // pins aren't convertible to bookmarks
+      const info = b.tabs.activeInfo()
       if (!info || !/^https?:\/\//.test(info.url)) return
-      const bm = bookmarks.add(info.url, info.title, Date.now(), tabs.profileOf(tid))
-      tabs.bookmarkTab(tid, bm.id)
+      const bm = bookmarks.add(info.url, info.title, Date.now(), b.tabs.profileOf(tid))
+      b.tabs.bookmarkTab(tid, bm.id)
     }
     bookmarksChanged()
   }
 
   const exportBookmarks = async (): Promise<void> => {
     const date = new Date().toISOString().slice(0, 10)
-    const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    const opts: Electron.SaveDialogOptions = {
       defaultPath: `synapse-bookmarks-${date}.json`,
       filters: [{ name: 'JSON', extensions: ['json'] }],
-    })
+    }
+    const parent = targetBundle()?.win
+    const { canceled, filePath } = parent
+      ? await dialog.showSaveDialog(parent, opts)
+      : await dialog.showSaveDialog(opts)
     if (canceled || !filePath) return
     writeFileSync(filePath, JSON.stringify({ v: 1, ...bookmarks.list() }, null, 2))
   }
 
+  const messageBox = (opts: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> => {
+    const parent = targetBundle()?.win
+    return parent ? dialog.showMessageBox(parent, opts) : dialog.showMessageBox(opts)
+  }
+
   const importBookmarks = async (): Promise<void> => {
-    const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    const opts: Electron.OpenDialogOptions = {
       properties: ['openFile'],
       filters: [{ name: 'JSON', extensions: ['json'] }],
-    })
+    }
+    const parent = targetBundle()?.win
+    const { canceled, filePaths } = parent
+      ? await dialog.showOpenDialog(parent, opts)
+      : await dialog.showOpenDialog(opts)
     if (canceled || !filePaths[0]) return
     let text: string
     try {
       text = readFileSync(filePaths[0], 'utf8')
     } catch {
-      void dialog.showMessageBox(win, { type: 'error', message: 'Could not read that file.' })
+      void messageBox({ type: 'error', message: 'Could not read that file.' })
       return
     }
     const incoming = parseBookmarksExport(text)
     if (!incoming) {
-      void dialog.showMessageBox(win, {
-        type: 'error',
-        message: 'Not a Synapse bookmarks export file.',
-      })
+      void messageBox({ type: 'error', message: 'Not a Synapse bookmarks export file.' })
       return
     }
     const plan = planImport(bookmarks.list(), incoming)
@@ -403,34 +359,35 @@ app.whenReady().then(async () => {
     }
     bookmarksChanged()
     const n = plan.bookmarks.length
-    void dialog.showMessageBox(win, {
+    void messageBox({
       type: 'info',
       message: `Imported ${n} bookmark${n === 1 ? '' : 's'}${
         plan.skipped ? ` (${plan.skipped} skipped as duplicates)` : ''
       }.`,
     })
   }
-  ipcMain.handle('bookmarks:toggle-active', () => toggleBookmark())
+  ipcMain.handle('bookmarks:toggle-active', (e) => {
+    const b = forSender(e)
+    if (b) toggleBookmark(b)
+  })
   ipcMain.handle('bookmarks:list', () => bookmarks.list())
 
   // drag a sidebar tab into the bookmarks panel or a folder
-  ipcMain.on(
-    'bookmarks:create-from-tab',
-    (_e, tabId: string, folderId: string | null) => {
-      if (typeof tabId !== 'string') return
-      if (folderId !== null && typeof folderId !== 'string') return
-      if (tabs.isPinned(tabId) || tabs.bookmarkIdOf(tabId)) return
-      const info = tabs.infoFor(tabId)
-      if (!info || !/^https?:\/\//.test(info.url)) return
-      const bm = bookmarks.add(info.url, info.title, Date.now(), tabs.profileOf(tabId))
-      tabs.bookmarkTab(tabId, bm.id)
-      if (folderId) bookmarks.moveToFolder(bm.id, folderId)
-      bookmarksChanged()
-    },
-  )
+  ipcMain.on('bookmarks:create-from-tab', (e, tabId: string, folderId: string | null) => {
+    const b = forSender(e)
+    if (!b || typeof tabId !== 'string') return
+    if (folderId !== null && typeof folderId !== 'string') return
+    if (b.tabs.isPinned(tabId) || b.tabs.bookmarkIdOf(tabId)) return
+    const info = b.tabs.infoFor(tabId)
+    if (!info || !/^https?:\/\//.test(info.url)) return
+    const bm = bookmarks.add(info.url, info.title, Date.now(), b.tabs.profileOf(tabId))
+    b.tabs.bookmarkTab(tabId, bm.id)
+    if (folderId) bookmarks.moveToFolder(bm.id, folderId)
+    bookmarksChanged()
+  })
 
-  ipcMain.on('bookmarks:open', (_e, id: string) => {
-    if (typeof id === 'string') tabs.openBookmark(id)
+  ipcMain.on('bookmarks:open', (e, id: string) => {
+    if (typeof id === 'string') forSender(e)?.tabs.openBookmark(id)
   })
   ipcMain.on('bookmarks:remove', (_e, id: string) => {
     if (typeof id !== 'string') return
@@ -479,7 +436,7 @@ app.whenReady().then(async () => {
     if (!folder) return
     const count = all.filter((b) => b.folderId === folderId).length
     if (count > 0) {
-      const { response } = await dialog.showMessageBox(win, {
+      const { response } = await messageBox({
         type: 'warning',
         buttons: ['Delete', 'Cancel'],
         defaultId: 1,
@@ -495,8 +452,9 @@ app.whenReady().then(async () => {
     if (typeof id === 'string') void removeFolderWithConfirm(id)
   })
 
-  ipcMain.on('bookmarks:context-menu', (_e, kind: string, id: string) => {
-    if (typeof id !== 'string') return
+  ipcMain.on('bookmarks:context-menu', (e, kind: string, id: string) => {
+    const b = forSender(e)
+    if (!b || typeof id !== 'string') return
     if (kind === 'folder') {
       const folder = bookmarks.list().folders.find((f) => f.id === id)
       if (!folder) return
@@ -505,15 +463,15 @@ app.whenReady().then(async () => {
         // members inherit through the store; awake member tabs must move
         // partitions now, asleep slots re-read the store on wake — setProfile
         // handles both (an asleep slot just updates its profile map entry)
-        for (const b of bookmarks.list().bookmarks) {
-          if (b.folderId !== id) continue
-          const tid = tabs.bookmarkTabIdOf(b.id)
-          if (tid) tabs.setProfile(tid, b.profile ?? 'default')
+        for (const bm of bookmarks.list().bookmarks) {
+          if (bm.folderId !== id) continue
+          const tid = b.tabs.bookmarkTabIdOf(bm.id)
+          if (tid) b.tabs.setProfile(tid, bm.profile ?? 'default')
         }
         bookmarksChanged()
       }
       Menu.buildFromTemplate([
-        { label: 'Rename', click: () => win.webContents.send('ui:edit-folder', id) },
+        { label: 'Rename', click: () => b.win.webContents.send('ui:edit-folder', id) },
         {
           label: 'Profile',
           submenu: [
@@ -532,14 +490,14 @@ app.whenReady().then(async () => {
           ],
         },
         { label: 'Delete Folder…', click: () => void removeFolderWithConfirm(id) },
-      ]).popup({ window: win })
+      ]).popup({ window: b.win })
     } else if (kind === 'bookmark') {
       const { folders, bookmarks: all } = bookmarks.list()
-      const bm = all.find((b) => b.id === id)
+      const bm = all.find((x) => x.id === id)
       if (!bm) return
-      const tid = tabs.bookmarkTabIdOf(id)
-      const awake = tid !== null && tabs.isAwake(tid)
-      const currentUrl = awake ? tabs.webContentsFor(tid!)?.getURL() : undefined
+      const tid = b.tabs.bookmarkTabIdOf(id)
+      const awake = tid !== null && b.tabs.isAwake(tid)
+      const currentUrl = awake ? b.tabs.webContentsFor(tid!)?.getURL() : undefined
       const moveTo = (folderId: string | null) => () => {
         bookmarks.moveToFolder(id, folderId)
         bookmarksChanged()
@@ -550,11 +508,11 @@ app.whenReady().then(async () => {
         // profile up from the store on wake. The tab follows the effective
         // profile — a folder's profile still applies when the bookmark's own
         // setting is cleared back to default
-        if (awake) tabs.setProfile(tid!, bookmarks.get(id)?.profile ?? 'default')
+        if (awake) b.tabs.setProfile(tid!, bookmarks.get(id)?.profile ?? 'default')
         bookmarksChanged()
       }
       const template: Electron.MenuItemConstructorOptions[] = [
-        { label: 'Rename', click: () => win.webContents.send('ui:edit-bookmark', id) },
+        { label: 'Rename', click: () => b.win.webContents.send('ui:edit-bookmark', id) },
         {
           label: 'Move to',
           submenu: [
@@ -589,10 +547,10 @@ app.whenReady().then(async () => {
         },
       ]
       if (awake && currentUrl !== bm.url) {
-        template.push({ label: 'Restore Bookmarked URL', click: () => tabs.restoreAnchor(tid) })
+        template.push({ label: 'Restore Bookmarked URL', click: () => b.tabs.restoreAnchor(tid) })
       }
       if (awake) {
-        template.push({ label: 'Put to Sleep', click: () => tabs.closeTab(tid!) })
+        template.push({ label: 'Put to Sleep', click: () => b.tabs.closeTab(tid!) })
       }
       template.push(
         { type: 'separator' },
@@ -604,19 +562,25 @@ app.whenReady().then(async () => {
           },
         },
       )
-      Menu.buildFromTemplate(template).popup({ window: win })
+      Menu.buildFromTemplate(template).popup({ window: b.win })
     }
   })
 
   const rebuildMenu = (): void =>
-    buildMenu(win, tabs, extensions, shortcutsStore.resolved(), {
-      toggleBookmark,
-      toggleSidebar,
-      toggleAiSidebar,
-      toggleSettings: () => win.webContents.send('ui:settings', tabs.toggleSettings()),
-      exportBookmarks: () => void exportBookmarks(),
-      importBookmarks: () => void importBookmarks(),
-      checkForUpdates: () => void updater.check(true),
+    buildMenu({
+      bundle: targetBundle,
+      extensions,
+      shortcuts: shortcutsStore.resolved(),
+      commands: {
+        newWindow: () => void createWindow('secondary', deps),
+        toggleBookmark,
+        toggleSidebar,
+        toggleAiSidebar,
+        toggleSettings,
+        exportBookmarks: () => void exportBookmarks(),
+        importBookmarks: () => void importBookmarks(),
+        checkForUpdates: () => void updater.check(true),
+      },
     })
   rebuildMenu()
   // the Tools → Extensions submenu lists installed extensions; rebuild it as they change
@@ -676,40 +640,48 @@ app.whenReady().then(async () => {
   })
   // while the settings recorder is capturing a chord, menu accelerators must
   // not fire — otherwise pressing a bound chord executes the command (e.g.
-  // Cmd+W closes the tab) instead of being recorded
+  // Cmd+W closes the tab) instead of being recorded. Gate every window: the
+  // chord would fire globally regardless of which window records it.
   ipcMain.on('shortcuts:recording', (_e, active: boolean) => {
-    win.webContents.setIgnoreMenuShortcuts(active === true)
+    for (const b of allBundles()) b.win.webContents.setIgnoreMenuShortcuts(active === true)
   })
 
   // ext menu only; the suggestions dropdown is a native overlay view (sugg:*)
-  ipcMain.on('ui:set-overlay-height', (_e, px: number) => tabs.setOverlayHeight(Number(px) || 0))
-
-  const suggestions = new SuggestionsOverlay(win)
-  ipcMain.on('sugg:update', (_e, p: SuggestionsPayload) => {
-    if (!p || !Array.isArray(p.items) || !p.anchor) return
-    suggestions.update(p)
-  })
-  ipcMain.on('sugg:height', (_e, px: number, gen: number) =>
-    suggestions.setHeight(Number(px) || 0, Number(gen) || 0),
+  ipcMain.on('ui:set-overlay-height', (e, px: number) =>
+    forSender(e)?.tabs.setOverlayHeight(Number(px) || 0),
   )
-  ipcMain.on('sugg:pick', (_e, url: string) => {
-    // chrome blurs and clears first — the dropdown must never stay stuck open
-    win.webContents.send('sugg:picked')
-    if (typeof url !== 'string' || !tabs.activeId) return
-    tabs.navigate(tabs.activeId, url)
-    // clicking the overlay focused its webContents; hand focus to the page
-    tabs.webContentsFor(tabs.activeId)?.focus()
-  })
-  ipcMain.on('ui:sidebar-drag-start', () => sidebarResize.start())
-  ipcMain.on('ui:sidebar-drag-end', () => sidebarResize.end())
-  ipcMain.on('ui:ai-drag-start', () => aiSidebarResize.start())
-  ipcMain.on('ui:ai-drag-end', () => aiSidebarResize.end())
 
-  ipcMain.on('ui:toggle-ai', () => toggleAiSidebar())
+  ipcMain.on('sugg:update', (e, p: SuggestionsPayload) => {
+    if (!p || !Array.isArray(p.items) || !p.anchor) return
+    forSender(e)?.suggestions.update(p)
+  })
+  ipcMain.on('sugg:height', (e, px: number, gen: number) =>
+    forSender(e)?.suggestions.setHeight(Number(px) || 0, Number(gen) || 0),
+  )
+  ipcMain.on('sugg:pick', (e, url: string) => {
+    const b = forSender(e)
+    if (!b) return
+    // chrome blurs and clears first — the dropdown must never stay stuck open
+    b.win.webContents.send('sugg:picked')
+    if (typeof url !== 'string' || !b.tabs.activeId) return
+    b.tabs.navigate(b.tabs.activeId, url)
+    // clicking the overlay focused its webContents; hand focus to the page
+    b.tabs.webContentsFor(b.tabs.activeId)?.focus()
+  })
+  ipcMain.on('ui:sidebar-drag-start', (e) => forSender(e)?.sidebarResize.start())
+  ipcMain.on('ui:sidebar-drag-end', (e) => forSender(e)?.sidebarResize.end())
+  ipcMain.on('ui:ai-drag-start', (e) => forSender(e)?.aiSidebarResize.start())
+  ipcMain.on('ui:ai-drag-end', (e) => forSender(e)?.aiSidebarResize.end())
+
+  ipcMain.on('ui:toggle-ai', (e) => {
+    const b = forSender(e)
+    if (b) toggleAiSidebar(b)
+  })
 
   // the AI sidebar's "Open Settings" shortcut must open, never close
-  ipcMain.on('ui:open-settings', () => {
-    if (!tabs.isSettingsOpen()) win.webContents.send('ui:settings', tabs.toggleSettings())
+  ipcMain.on('ui:open-settings', (e) => {
+    const b = forSender(e)
+    if (b && !b.tabs.isSettingsOpen()) toggleSettings(b)
   })
 
   ipcMain.handle('settings:get', () => ({
@@ -724,39 +696,23 @@ app.whenReady().then(async () => {
   ipcMain.on('ai:send', (_e, messages: unknown) => void ai.start(sanitizeMessages(messages)))
   ipcMain.on('ai:stop', () => ai.stop())
 
-  ipcMain.on('find:start', (_e, text: string) => {
-    if (typeof text === 'string') tabs.findStart(text)
+  ipcMain.on('find:start', (e, text: string) => {
+    if (typeof text === 'string') forSender(e)?.tabs.findStart(text)
   })
-  ipcMain.on('find:step', (_e, dir: number) => tabs.findStep(dir === -1 ? -1 : 1))
-  ipcMain.on('find:stop', () => tabs.findStop())
-
-  win.webContents.on('did-finish-load', () => {
-    tabs.refresh()
-    win.webContents.setIgnoreMenuShortcuts(false)
-    win.webContents.send('ui:sidebar-width', sidebarResize.current)
-    win.webContents.send('ui:sidebar-visible', uiStore.sidebarVisible())
-    win.webContents.send('ui:ai-width', aiSidebarResize.current)
-    win.webContents.send('ui:ai-visible', uiStore.aiSidebarVisible())
-    win.webContents.send('ui:settings', tabs.isSettingsOpen())
-  })
-
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  ipcMain.on('find:step', (e, dir: number) => forSender(e)?.tabs.findStep(dir === -1 ? -1 : 1))
+  ipcMain.on('find:stop', (e) => forSender(e)?.tabs.findStop())
 
   try {
     await extensions.init()
   } catch (err) {
     console.error('extensions: startup failed, continuing without extensions', err)
   }
-  tabs.restorePins(pinsStore.load())
-  tabs.syncBookmarks(bookmarks.ordered())
+  primary.tabs.restorePins(pinsStore.load())
+  primary.tabs.syncBookmarks(bookmarks.ordered())
   const saved = tabsStore.load()
-  tabs.restoreTabs(saved.tabs, saved.active)
+  primary.tabs.restoreTabs(saved.tabs, saved.active)
   sessionRestored = true
-  tabs.refresh() // persist the restored state now that saves are unblocked
+  primary.tabs.refresh() // persist the restored state now that saves are unblocked
 
   app.on('before-quit', () => {
     history.flush()

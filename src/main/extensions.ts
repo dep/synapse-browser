@@ -6,6 +6,15 @@ import { ElectronChromeExtensions } from 'electron-chrome-extensions'
 import { installChromeWebStore, loadAllExtensions, uninstallExtension } from 'electron-chrome-web-store'
 import type { TabManager } from './tab-manager'
 
+// how the extension layer finds "a window" now that there can be several:
+// forTabWc maps a tab's webContents to the TabManager that owns it;
+// target picks the window chrome.tabs.create and dialogs should land in
+// (focused, falling back to primary)
+export interface ExtensionWindowResolver {
+  forTabWc(wc: WebContents): TabManager | null
+  target(): { tabs: TabManager; win: BrowserWindow } | null
+}
+
 // Binds electron-chrome-extensions + the web-store install flow to the default
 // session (the one all tabs use). Web-store extension files persist under
 // <userData>/Extensions (managed by electron-chrome-web-store); unpacked
@@ -15,27 +24,28 @@ export class ExtensionManager {
   private webStorePath = join(app.getPath('userData'), 'Extensions')
   private unpackedPath = join(app.getPath('userData'), 'UnpackedExtensions')
 
-  constructor(
-    private win: BrowserWindow,
-    tabs: TabManager,
-  ) {
+  constructor(private resolve: ExtensionWindowResolver) {
     mkdirSync(this.unpackedPath, { recursive: true })
     this.extensions = new ElectronChromeExtensions({
       license: 'GPL-3.0',
       session: session.defaultSession,
       createTab: async (details) => {
-        const id = tabs.createTab(details.url, details.active ?? true)
-        return [tabs.webContentsFor(id)!, this.win]
+        const t = this.resolve.target()
+        if (!t) throw new Error('no window to open a tab in')
+        const id = t.tabs.createTab(details.url, details.active ?? true)
+        return [t.tabs.webContentsFor(id)!, t.win]
       },
       selectTab: (wc) => {
         // the library echoes our own selectTab notifications back here; re-activating
         // the already-active tab would commit an in-progress Ctrl+Tab cycle preview
-        const id = tabs.idFor(wc)
-        if (id && id !== tabs.activeId) tabs.activateTab(id)
+        const tabs = this.resolve.forTabWc(wc)
+        const id = tabs?.idFor(wc)
+        if (tabs && id && id !== tabs.activeId) tabs.activateTab(id)
       },
       removeTab: (wc) => {
-        const id = tabs.idFor(wc)
-        if (id) tabs.closeTab(id)
+        const tabs = this.resolve.forTabWc(wc)
+        const id = tabs?.idFor(wc)
+        if (tabs && id) tabs.closeTab(id)
       },
     })
     // serves crx://extension-icon/... — without this the <browser-action-list>
@@ -43,8 +53,14 @@ export class ExtensionManager {
     ElectronChromeExtensions.handleCRXProtocol(session.defaultSession)
   }
 
-  addTab(wc: WebContents): void {
-    this.extensions.addTab(wc, this.win)
+  addTab(wc: WebContents, win: BrowserWindow): void {
+    this.extensions.addTab(wc, win)
+  }
+
+  // a tab leaving its window (tear-out) unregisters here and re-registers
+  // via addTab with the destination window
+  removeTab(wc: WebContents): void {
+    this.extensions.removeTab(wc)
   }
 
   selectTab(wc: WebContents): void {
@@ -59,7 +75,7 @@ export class ExtensionManager {
       extensionsPath: this.webStorePath,
       minimumManifestVersion: 2, // default 3 would block MV2 installs like uBlock Origin classic
       beforeInstall: async (details) => {
-        const { response } = await dialog.showMessageBox(this.win, {
+        const { response } = await this.confirm({
           type: 'question',
           buttons: ['Cancel', 'Install'],
           defaultId: 1,
@@ -71,6 +87,12 @@ export class ExtensionManager {
     })
     // per-extension failures are caught and logged by the library; boot never blocks
     await loadAllExtensions(session.defaultSession, this.unpackedPath, { allowUnpacked: true })
+  }
+
+  // confirmation dialog parented to the focused/primary window when one exists
+  private confirm(opts: Electron.MessageBoxOptions): Promise<Electron.MessageBoxReturnValue> {
+    const win = this.resolve.target()?.win
+    return win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts)
   }
 
   // installed extensions, for the app menu's Extensions submenu
@@ -85,7 +107,7 @@ export class ExtensionManager {
   async remove(id: string): Promise<void> {
     const ext = session.defaultSession.extensions.getExtension(id)
     if (!ext) return
-    const { response } = await dialog.showMessageBox(this.win, {
+    const { response } = await this.confirm({
       type: 'warning',
       buttons: ['Cancel', 'Remove'],
       defaultId: 1,
@@ -106,10 +128,14 @@ export class ExtensionManager {
 
   // copies the picked folder into UnpackedExtensions so it reloads at boot
   async loadUnpacked(): Promise<void> {
-    const { canceled, filePaths } = await dialog.showOpenDialog(this.win, {
+    const win = this.resolve.target()?.win
+    const dialogOpts = {
       title: 'Load Unpacked Extension',
-      properties: ['openDirectory'],
-    })
+      properties: ['openDirectory' as const],
+    }
+    const { canceled, filePaths } = win
+      ? await dialog.showOpenDialog(win, dialogOpts)
+      : await dialog.showOpenDialog(dialogOpts)
     if (canceled || !filePaths[0]) return
     const src = filePaths[0]
     const alreadyInside = src.startsWith(this.unpackedPath)

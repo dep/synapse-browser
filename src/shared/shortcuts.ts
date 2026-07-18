@@ -6,6 +6,7 @@ export interface ShortcutCommand {
 
 // every rebindable menu command; ids are stable keys used by shortcuts.json
 export const SHORTCUT_COMMANDS: ShortcutCommand[] = [
+  { id: 'new-window', label: 'New Window', default: 'CmdOrCtrl+N' },
   { id: 'new-tab', label: 'New Tab', default: 'CmdOrCtrl+T' },
   { id: 'close-tab', label: 'Close Tab', default: 'CmdOrCtrl+W' },
   { id: 'reopen-tab', label: 'Reopen Closed Tab', default: 'CmdOrCtrl+Shift+T' },

@@ -1,24 +1,26 @@
 import { dialog, systemPreferences } from 'electron'
-import type { BrowserWindow, Session } from 'electron'
+import type { BrowserWindow, Session, WebContents } from 'electron'
 import { MediaKind, PermissionsStore, mediaRequestPlan } from './permissions-store'
 
 // Media (mic/camera) requests prompt per origin and the answer persists;
 // every other permission keeps Electron's default allow-all behavior.
 // Safe under the repo's webRequest rule — permission handlers don't touch
 // the request pipeline extensions depend on.
+// The prompt parents to the window owning the requesting tab (there can be
+// several windows), resolved per request via parentFor.
 export function attachPermissionPrompts(
   sess: Session,
-  win: BrowserWindow,
+  parentFor: (wc: WebContents) => BrowserWindow | null,
   store: PermissionsStore,
 ): void {
-  sess.setPermissionRequestHandler((_wc, permission, callback, details) => {
+  sess.setPermissionRequestHandler((wc, permission, callback, details) => {
     const kinds =
       permission === 'media' && 'mediaTypes' in details ? toKinds(details.mediaTypes) : []
     if (kinds.length === 0) {
       callback(true) // not a device request (e.g. getDisplayMedia); previous behavior
       return
     }
-    void decide(win, store, details.requestingUrl, kinds).then(callback)
+    void decide(wc ? parentFor(wc) : null, store, details.requestingUrl, kinds).then(callback)
   })
 }
 
@@ -30,7 +32,7 @@ function toKinds(mediaTypes: ReadonlyArray<'video' | 'audio'> | undefined): Medi
 }
 
 async function decide(
-  win: BrowserWindow,
+  win: BrowserWindow | null,
   store: PermissionsStore,
   requestingUrl: string,
   kinds: MediaKind[],
@@ -44,13 +46,14 @@ async function decide(
   let plan = mediaRequestPlan(kinds, (k) => store.get(origin, k))
   if (plan === 'ask') {
     const device = kinds.join(' and ')
-    const { response } = await dialog.showMessageBox(win, {
+    const opts: Electron.MessageBoxOptions = {
       type: 'question',
       buttons: ['Allow', 'Don’t Allow'],
       defaultId: 0,
       cancelId: 1,
       message: `Allow ${origin} to use your ${device}?`,
-    })
+    }
+    const { response } = await (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts))
     plan = response === 0 ? 'allow' : 'deny'
     for (const k of kinds) store.set(origin, k, plan)
   }

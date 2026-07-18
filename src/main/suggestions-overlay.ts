@@ -50,6 +50,12 @@ export class SuggestionsOverlay {
     this.load()
   }
 
+  // the overlay document's own webContents — it sends sugg:height/sugg:pick,
+  // so the window registry must map it back to this window's bundle
+  get webContents(): Electron.WebContents {
+    return this.view.webContents
+  }
+
   private load(): void {
     const dev = process.env['ELECTRON_RENDERER_URL']
     if (dev) void this.view.webContents.loadURL(`${dev}/suggestions.html`)

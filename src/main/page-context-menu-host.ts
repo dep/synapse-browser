@@ -9,13 +9,14 @@ export interface PageMenuActions {
 }
 
 // pops the native right-click menu for a web page view; menu structure is
-// decided by the Electron-free builder in page-context-menu.ts
+// decided by the Electron-free builder in page-context-menu.ts. Returns a
+// disposer so a tab moving to another window can drop this window's menu.
 export function attachPageContextMenu(
   wc: WebContents,
   win: BrowserWindow,
   actions: PageMenuActions,
-): void {
-  wc.on('context-menu', (_e, p) => {
+): () => void {
+  const handler = (_e: Electron.Event, p: Electron.ContextMenuParams): void => {
     const items = buildPageContextMenu(p, {
       canGoBack: wc.navigationHistory.canGoBack(),
       canGoForward: wc.navigationHistory.canGoForward(),
@@ -42,5 +43,9 @@ export function attachPageContextMenu(
           : { label: it.label, enabled: it.enabled, click: run[it.action] },
       ),
     ).popup({ window: win })
-  })
+  }
+  wc.on('context-menu', handler)
+  return () => {
+    if (!wc.isDestroyed()) wc.removeListener('context-menu', handler)
+  }
 }

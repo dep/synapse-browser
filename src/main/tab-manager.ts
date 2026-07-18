@@ -33,6 +33,9 @@ export interface TabManagerOptions {
   onTabActivated?(wc: WebContents, profile: ProfileId): void
   onSettingsClosed?(): void
   onFindResult?(result: { matches: number; active: number }): void
+  // called instead of auto-creating a fresh tab when the last one goes away;
+  // secondary windows close themselves here
+  onEmpty?(): void
 }
 
 export class TabManager {
@@ -135,13 +138,31 @@ export class TabManager {
     this.destroyView(id, view, wasAttached)
     this.profiles.delete(id)
     if (!this.model.activeId) {
-      this.createTab()
+      this.handleEmpty()
       return
     }
     this.syncViews()
     // destroying the focused view leaves no first responder, and Blink then
     // parks keyboard focus on the chrome toolbar's first enabled button
     if (wasAttached) this.attached?.webContents.focus()
+  }
+
+  private handleEmpty(): void {
+    if (this.opts.onEmpty) this.opts.onEmpty()
+    else this.createTab()
+  }
+
+  // window teardown: close every view without model bookkeeping; ids are
+  // cleared first so the resulting 'destroyed' events find nothing to reconcile
+  dispose(): void {
+    const views = [...this.views.values()]
+    this.views.clear()
+    this.favicons.clear()
+    this.profiles.clear()
+    this.attached = null
+    for (const view of views) {
+      if (!isDeadView(view)) view.webContents.close()
+    }
   }
 
   // Cmd+Shift+T: recreate the last closed tab at its old sidebar position.
@@ -193,7 +214,7 @@ export class TabManager {
     this.model.sleep(id)
     this.destroyView(id, view, wasAttached)
     if (!this.model.activeId) {
-      this.createTab()
+      this.handleEmpty()
       return
     }
     this.syncViews()
@@ -342,7 +363,7 @@ export class TabManager {
     }
     this.model.setBookmarkOrder(ordered.map((b) => this.bmTabId.get(b.id)!))
     if (destroyedAttached && !this.model.activeId) {
-      this.createTab()
+      this.handleEmpty()
       return
     }
     this.syncViews()
@@ -752,7 +773,7 @@ export class TabManager {
       if (this.views.get(id)?.webContents !== wc) return
       this.dropDeadView(id)
       if (!this.model.activeId) {
-        this.createTab()
+        this.handleEmpty()
         return
       }
       this.syncViews()
