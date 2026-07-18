@@ -8,16 +8,18 @@ export interface Topbar {
 
 export function shouldSyncUrlbar({
   tabChanged,
+  urlChanged,
   urlbarFocused,
   loadingStarted,
   value,
 }: {
   tabChanged: boolean
+  urlChanged: boolean
   urlbarFocused: boolean
   loadingStarted: boolean
   value: string
 }): boolean {
-  return tabChanged || !urlbarFocused || (loadingStarted && value.trim() === '')
+  return tabChanged || urlChanged || !urlbarFocused || (loadingStarted && value.trim() === '')
 }
 
 export function initTopbar(): Topbar {
@@ -73,6 +75,7 @@ export function initTopbar(): Topbar {
   const urlbarWrap = document.getElementById('urlbar-wrap') as HTMLDivElement
   let activeId: string | null = null
   let activeLoading = false
+  let lastSnapUrl = ''
   let suggestions: Suggestion[] = []
   let selected = -1
   let autoSelected = false // row 0 highlighted by inline autofill, not by the user
@@ -285,23 +288,32 @@ export function initTopbar(): Topbar {
         reload.title = nowLoading ? 'Stop' : 'Reload'
       }
       activeLoading = nowLoading
-      // A tab switch always rewrites the bar: element focus survives native
-      // focus moving to a page view (clicking a page never blurs the chrome
-      // document), so the activeElement guard alone would suppress updates
-      // forever after any urlbar use. Same-tab snapshots still defer to the
-      // guard — activeElement can't distinguish a draft from a stale display,
-      // and clobbering a draft is the worse failure. A newly loading page is
-      // the exception when the focused bar is blank: reload must restore the
-      // current URL rather than preserving an empty stale display.
+      // Element focus survives native focus moving to a page view (clicking a
+      // page never blurs the chrome document), so the activeElement guard
+      // alone would suppress updates forever after any urlbar use. The guard
+      // therefore only protects drafts across *unchanged-URL* snapshots: a
+      // tab switch or a committed navigation (the tab's URL differing from
+      // the previous snapshot's — link click, redirect, pushState) always
+      // rewrites the bar. A newly loading page is the extra exception when
+      // the focused bar is blank: reload must restore the current URL rather
+      // than preserving an empty stale display.
+      const url = tab?.url ?? ''
+      const urlChanged = url !== lastSnapUrl
+      lastSnapUrl = url
       if (
         shouldSyncUrlbar({
           tabChanged,
+          urlChanged,
           urlbarFocused: document.activeElement === urlbar,
           loadingStarted,
           value: urlbar.value,
         })
-      )
-        urlbar.value = tab?.url ?? ''
+      ) {
+        urlbar.value = url
+        // a committed navigation also invalidates any open dropdown — the
+        // query it was answering belongs to the page that just went away
+        if (urlChanged) hideSuggestions()
+      }
       const canBookmark = !!tab && !tab.isPinned && (tab.isBookmarked || isHttpUrl(tab.url))
       star.disabled = !canBookmark
       star.textContent = tab?.isBookmarked ? '★' : '☆'
