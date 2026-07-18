@@ -1,7 +1,7 @@
 {
   "name": "synapse-browser",
   "productName": "Synapse Browser",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "A very simple Chromium browser",
   "main": "out/main/index.js",
