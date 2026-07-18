@@ -6,6 +6,25 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.8.0</title>
+            <pubDate>Sat, 18 Jul 2026 12:13:10 +0000</pubDate>
+            <sparkle:version>0.8.0</sparkle:version>
+            <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>New: split-screen views &#8212; Cmd+D tiles a new pane beside the page, Cmd+Shift+D stacks one below; panes tile free-form with no limit.</li>
+                    <li>New: Cmd-click a sidebar tab or pin to open it in a split next to the current pane; the focused pane glows blue and each pane has a corner &#215; to untile it.</li>
+                    <li>Changed: Bookmark This Page moved from Cmd+D to Cmd+B.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.8.0/Synapse.Browser-0.8.0-universal.dmg"
+              sparkle:edSignature="Qk7p1u+jPQfJBv5VgIDtTUE3EaS/2+6S6FHNEJ+3F6Syfow5LJKHMzJVT1M1A9qd2YLC0dc6PNvHD36p4ga4Dg=="
+              length="219243196"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.7.0</title>
             <pubDate>Sat, 18 Jul 2026 11:17:45 +0000</pubDate>
             <sparkle:version>0.7.0</sparkle:version>
