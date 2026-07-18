@@ -36,6 +36,18 @@ export interface TabManagerOptions {
   // called instead of auto-creating a fresh tab when the last one goes away;
   // secondary windows close themselves here
   onEmpty?(): void
+  // a tab is leaving this window (tear-out): the host must drop its own
+  // per-window wiring (cycle hooks, context menu, extension registration)
+  onTabDetached?(wc: WebContents, profile: ProfileId): void
+}
+
+// a live tab in transit between windows: the view (and its WebContents —
+// no reload, audio keeps playing) plus the state the destination re-adopts
+export interface DetachedTab {
+  id: string
+  view: WebContentsView
+  profile: ProfileId
+  favicon: string | null
 }
 
 export class TabManager {
@@ -56,6 +68,9 @@ export class TabManager {
   private aiSidebarVisible = false
   private settingsOpen = false
   private blankActivatedId: string | null = null
+  // per-tab listener disposers, so a tab moving to another window (tear-out)
+  // leaves none of this window's listeners behind on its WebContents
+  private wired = new Map<string, Array<() => void>>()
 
   constructor(
     private win: BrowserWindow,
@@ -90,6 +105,7 @@ export class TabManager {
   // in the opener's container; cmd+click ('background-tab') must not steal
   // focus. Child windows get the same routing for anything they open.
   private wirePopupRouting(wc: WebContents, openerId: string): void {
+    // a re-wire on adopt replaces the source window's handler outright
     wc.setWindowOpenHandler(({ url: popupUrl, disposition }) => {
       const route = routeWindowOpen(popupUrl, disposition)
       if (route === 'popup') {
@@ -100,7 +116,25 @@ export class TabManager {
       }
       return { action: 'deny' }
     })
-    wc.on('did-create-window', (child) => this.wirePopupRouting(child.webContents, openerId))
+    this.track(openerId, wc, 'did-create-window', (child: Electron.BrowserWindow) =>
+      this.wirePopupRouting(child.webContents, openerId),
+    )
+  }
+
+  // wc.on with a recorded disposer keyed by tab id (see `wired`)
+  private track(id: string, wc: WebContents, event: string, fn: (...args: any[]) => void): void {
+    const emitter = wc as unknown as NodeJS.EventEmitter
+    emitter.on(event, fn)
+    const list = this.wired.get(id) ?? []
+    list.push(() => {
+      if (!wc.isDestroyed()) emitter.removeListener(event, fn)
+    })
+    this.wired.set(id, list)
+  }
+
+  private unwire(id: string): void {
+    for (const dispose of this.wired.get(id) ?? []) dispose()
+    this.wired.delete(id)
   }
 
   private createView(id: string): WebContentsView {
@@ -152,9 +186,58 @@ export class TabManager {
     else this.createTab()
   }
 
+  // Tear a live tab out of this window without destroying its view. Only
+  // plain order tabs move — pins and bookmark slots are window furniture.
+  // The model's close() gives the source window its usual succession
+  // (opener hand-back, right neighbor); the closed-tabs stack is untouched
+  // because the page lives on elsewhere.
+  detachTab(id: string): DetachedTab | null {
+    const view = this.views.get(id)
+    if (!view || this.model.isSlot(id) || isDeadView(view)) return null
+    const wasAttached = this.attached === view
+    if (wasAttached) {
+      if (this.findText) {
+        view.webContents.stopFindInPage('clearSelection')
+        this.findText = ''
+      }
+      this.win.contentView.removeChildView(view)
+      this.attached = null
+    }
+    this.unwire(id)
+    const profile = this.profileOf(id)
+    this.opts.onTabDetached?.(view.webContents, profile)
+    const favicon = this.favicons.get(id) ?? null
+    this.model.close(id)
+    this.views.delete(id)
+    this.favicons.delete(id)
+    this.profiles.delete(id)
+    if (!this.model.activeId) {
+      this.handleEmpty()
+      return { id, view, profile, favicon }
+    }
+    this.syncViews()
+    if (wasAttached) this.attached?.webContents.focus()
+    return { id, view, profile, favicon }
+  }
+
+  // the destination side of a tear-out: same id (process-unique), same live
+  // WebContents; rewires events, popup routing, and host hooks to THIS window
+  adoptTab(t: DetachedTab): void {
+    this.profiles.set(t.id, t.profile)
+    this.views.set(t.id, t.view)
+    this.favicons.set(t.id, t.favicon)
+    this.wireEvents(t.id, t.view.webContents)
+    this.wirePopupRouting(t.view.webContents, t.id)
+    this.opts.onTabCreated?.(t.view.webContents, t.profile)
+    this.model.add(t.id, true)
+    this.syncViews()
+    this.attached?.webContents.focus()
+  }
+
   // window teardown: close every view without model bookkeeping; ids are
   // cleared first so the resulting 'destroyed' events find nothing to reconcile
   dispose(): void {
+    for (const id of [...this.wired.keys()]) this.unwire(id)
     const views = [...this.views.values()]
     this.views.clear()
     this.favicons.clear()
@@ -191,6 +274,7 @@ export class TabManager {
   }
 
   private destroyView(id: string, view: WebContentsView, wasAttached: boolean): void {
+    this.unwire(id)
     this.views.delete(id)
     this.favicons.delete(id)
     if (wasAttached) {
@@ -706,57 +790,69 @@ export class TabManager {
     )
   }
 
+  // every listener goes through track() so detachTab can unwire the lot —
+  // a moved tab must not keep driving this window's manager
   private wireEvents(id: string, wc: WebContents): void {
     const refresh = () => this.refresh()
     // HTML fullscreen (video players) must escape the carved canvas: drop the
     // rounded mask and fill the window, then restore the inset on leave
-    wc.on('enter-html-full-screen', () => {
+    this.track(id, wc, 'enter-html-full-screen', () => {
       this.htmlFullscreenId = id
       this.views.get(id)?.setBorderRadius(0)
       this.layout()
     })
-    wc.on('leave-html-full-screen', () => {
+    this.track(id, wc, 'leave-html-full-screen', () => {
       if (this.htmlFullscreenId === id) this.htmlFullscreenId = null
       this.views.get(id)?.setBorderRadius(CANVAS_RADIUS)
       this.layout()
     })
-    wc.on('page-title-updated', refresh)
+    this.track(id, wc, 'page-title-updated', refresh)
     // attach/detach must be re-evaluated at every loading transition and at
     // commit, not just load start: a fresh view reports a blank getURL()
     // until its first navigation commits, so any single check can race and
     // leave an active tab's view detached — a blank page (issue #24).
     // syncViews ends with refresh(), so these are supersets of refresh.
-    wc.on('did-start-loading', () => this.syncViews())
-    wc.on('did-stop-loading', () => this.syncViews())
-    wc.on('did-navigate', () => {
+    this.track(id, wc, 'did-start-loading', () => this.syncViews())
+    this.track(id, wc, 'did-stop-loading', () => this.syncViews())
+    this.track(id, wc, 'did-navigate', () => {
       this.favicons.set(id, null)
       this.syncViews()
     })
-    wc.on('page-favicon-updated', (_e, favicons) => {
+    this.track(id, wc, 'page-favicon-updated', (_e: Electron.Event, favicons: string[]) => {
       this.favicons.set(id, favicons[0] ?? null)
       const bid = this.bookmarkIdOf(id)
       if (bid) this.opts.onBookmarkFavicon(bid, favicons[0] ?? null)
       this.opts.onPageFavicon(wc.getURL(), favicons[0] ?? null)
       this.refresh()
     })
-    wc.on('did-finish-load', () => {
+    this.track(id, wc, 'did-finish-load', () => {
       this.opts.onNavigated(wc.getURL(), wc.getTitle() || wc.getURL())
       this.refresh()
     })
-    wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
-      if (isMainFrame) this.opts.onNavigated(url, wc.getTitle() || url)
-      this.refresh()
-    })
-    wc.on('did-fail-load', (_e, code, desc, validatedUrl, isMainFrame) => {
-      if (!isMainFrame || code === -3) return // -3 = user/redirect abort, not an error
-      if (validatedUrl.startsWith('data:')) return // the error page itself failed; don't loop
-      wc.loadURL(errorPageDataUrl(desc || `Error ${code}`, validatedUrl))
-    })
-    wc.on('render-process-gone', (_e, details) => {
+    this.track(
+      id,
+      wc,
+      'did-navigate-in-page',
+      (_e: Electron.Event, url: string, isMainFrame: boolean) => {
+        if (isMainFrame) this.opts.onNavigated(url, wc.getTitle() || url)
+        this.refresh()
+      },
+    )
+    this.track(
+      id,
+      wc,
+      'did-fail-load',
+      (_e: Electron.Event, code: number, desc: string, validatedUrl: string, isMainFrame: boolean) => {
+        if (!isMainFrame || code === -3) return // -3 = user/redirect abort, not an error
+        if (validatedUrl.startsWith('data:')) return // the error page itself failed; don't loop
+        wc.loadURL(errorPageDataUrl(desc || `Error ${code}`, validatedUrl))
+      },
+    )
+    this.track(id, wc, 'render-process-gone', (_e: Electron.Event, details: Electron.RenderProcessGoneDetails) => {
       if (wc.getURL().startsWith('data:')) return // error page crashed; don't loop
       wc.loadURL(errorPageDataUrl(`Page crashed (${details.reason})`, wc.getURL()))
     })
-    wc.on('found-in-page', (_e, result) => {
+    this.track(id, wc, 'found-in-page', (_e: Electron.Event, result: Electron.Result) => {
       // only the attached view's session is live; ignore stragglers
       if (this.attached?.webContents === wc) {
         this.opts.onFindResult?.({ matches: result.matches, active: result.activeMatchOrdinal })
@@ -769,7 +865,7 @@ export class TabManager {
     // outside and the model still lists a tab with no live view. Reconcile it,
     // else the next snapshot dereferences an undefined tab or `attached` points
     // at a dead view — either crashes the main process.
-    wc.on('destroyed', () => {
+    this.track(id, wc, 'destroyed', () => {
       if (this.views.get(id)?.webContents !== wc) return
       this.dropDeadView(id)
       if (!this.model.activeId) {
@@ -785,6 +881,7 @@ export class TabManager {
   // from our state as if the user closed it: slots sleep, plain tabs close.
   // Pure bookkeeping — no syncViews/focus, so it is safe to call mid-syncViews.
   private dropDeadView(id: string): void {
+    this.unwire(id)
     this.views.delete(id)
     this.favicons.delete(id)
     if (this.attached && isDeadView(this.attached)) {

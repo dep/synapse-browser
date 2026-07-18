@@ -13,6 +13,7 @@ import type { UiStore } from './ui-store'
 import { SidebarResizeController } from './sidebar-resize'
 import { SuggestionsOverlay } from './suggestions-overlay'
 import { TabManager } from './tab-manager'
+import type { DetachedTab } from './tab-manager'
 import { attachPageContextMenu } from './page-context-menu-host'
 import { clampAiSidebarWidth } from '../shared/ai'
 
@@ -117,7 +118,7 @@ function attachCycleHooks(wc: WebContents, tabs: TabManager): () => void {
 export function createWindow(
   role: WindowRole,
   deps: WindowDeps,
-  opts?: { position?: { x: number; y: number } },
+  opts?: { position?: { x: number; y: number }; adopt?: DetachedTab },
 ): WindowBundle {
   const win = new BrowserWindow({
     width: 1280,
@@ -195,6 +196,13 @@ export function createWindow(
     },
     onSettingsClosed: () => win.webContents.send('ui:settings', false),
     onFindResult: (r) => win.webContents.send('ui:find-result', r),
+    // a tab tearing out of this window: drop this window's cycle-hook and
+    // context-menu listeners, and its extension registration — the
+    // destination window re-registers all three on adopt
+    onTabDetached: (wc, profile) => {
+      disposeFor(wc)
+      if (profile === 'default') deps.extensions.removeTab(wc)
+    },
     // a secondary window with no tabs left closes itself; the primary
     // falls back to TabManager's fresh-tab default
     ...(role === 'secondary' ? { onEmpty: () => win.close() } : {}),
@@ -284,8 +292,28 @@ export function createWindow(
   }
 
   // the primary restores its session in index.ts after extensions init;
-  // a fresh secondary starts with a single blank tab
-  if (role === 'secondary') tabs.createTab()
+  // a fresh secondary starts with a single blank tab — or the live tab it
+  // was just torn out around
+  if (opts?.adopt) tabs.adoptTab(opts.adopt)
+  else if (role === 'secondary') tabs.createTab()
 
   return bundle
+}
+
+// tear `tabId` out of `source` into its own secondary window at the drop
+// point; the WebContents moves live (no reload)
+export function detachTabToNewWindow(
+  source: WindowBundle,
+  tabId: string,
+  screenX: number,
+  screenY: number,
+  deps: WindowDeps,
+): void {
+  const t = source.tabs.detachTab(tabId)
+  if (!t) return
+  const b = createWindow('secondary', deps, {
+    position: { x: Math.max(0, Math.round(screenX) - 80), y: Math.max(0, Math.round(screenY) - 20) },
+    adopt: t,
+  })
+  b.win.focus()
 }
