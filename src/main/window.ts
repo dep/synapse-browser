@@ -277,6 +277,7 @@ export function createWindow(
 
   win.webContents.on('did-finish-load', () => {
     tabs.refresh()
+    tabs.resendPaneRects()
     win.webContents.setIgnoreMenuShortcuts(false)
     win.webContents.send('ui:sidebar-width', sidebarResize.current)
     win.webContents.send('ui:sidebar-visible', bundle.sidebarVisible)

@@ -54,7 +54,8 @@ const paneGlowEl = document.getElementById('pane-glow')!
 let paneRects: PaneRect[] = []
 window.synapse.ui.onPaneRects((rects) => {
   paneRects = rects
-  render()
+  // geometry-only update: sidebar/topbar state arrives via tabs:updated
+  renderPaneChrome()
 })
 
 function activePaneRect(): PaneRect['rect'] | undefined {

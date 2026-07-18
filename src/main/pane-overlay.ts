@@ -18,13 +18,15 @@ export class PaneOverlays {
 
   // Reconcile one button per pane and pin it to the pane's corner. An empty
   // list (no split, settings open, HTML fullscreen) removes them all.
-  // Re-adding surviving buttons raises them above pane views attached since.
+  // Existing buttons are only repositioned — raising above later-attached
+  // pane views is raise()'s job, so live resizes stay cheap setBounds calls.
   sync(rects: PaneRect[]): void {
+    if (this.win.isDestroyed()) return
     const want = new Set(rects.map((r) => r.id))
     for (const [id, view] of [...this.buttons]) {
       if (want.has(id)) continue
       this.win.contentView.removeChildView(view)
-      view.webContents.close()
+      if (!view.webContents.isDestroyed()) view.webContents.close()
       this.buttons.delete(id)
     }
     for (const { id, rect } of rects) {
@@ -38,8 +40,8 @@ export class PaneOverlays {
         if (dev) void view.webContents.loadURL(`${dev}/pane.html`)
         else void view.webContents.loadFile(join(__dirname, '../renderer/pane.html'))
         this.buttons.set(id, view)
+        this.win.contentView.addChildView(view)
       }
-      this.win.contentView.addChildView(view)
       view.setBounds({
         x: rect.x + rect.width - BUTTON_SIZE - BUTTON_MARGIN,
         y: rect.y + BUTTON_MARGIN,
@@ -47,6 +49,12 @@ export class PaneOverlays {
         height: BUTTON_SIZE,
       })
     }
+  }
+
+  // re-adding an existing child raises it; called after pane views attach
+  raise(): void {
+    if (this.win.isDestroyed()) return
+    for (const view of this.buttons.values()) this.win.contentView.addChildView(view)
   }
 
   // resolve a pane:close sender to its pane; null if this window doesn't own it

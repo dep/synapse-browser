@@ -355,25 +355,31 @@ export class TabManager {
     this.attached?.webContents.focus()
   }
 
-  private wakePin(id: string): void {
+  // recreate a sleeping slot's view and load its anchor URL; whether the
+  // wake also focuses it is the caller's choice (activating wakes focus it,
+  // openInSplit tiles it in the background first)
+  private wakeSlotView(id: string, activate: boolean): boolean {
     const slot = this.pins.get(id)
-    if (!slot) return
+    const bid = slot ? null : this.bookmarkIdOf(id)
+    const bm = bid ? this.opts.getBookmark(bid) : undefined
+    const url = slot?.url ?? bm?.url
+    if (!url) return false
+    // profile can have changed while asleep; the store is authoritative
+    if (bm) this.profiles.set(id, bm.profile ?? 'default')
     const view = this.createView(id)
-    this.model.wake(id)
-    view.webContents.loadURL(slot.url)
+    this.model.wake(id, activate)
+    view.webContents.loadURL(url)
+    return true
+  }
+
+  private wakePin(id: string): void {
+    if (!this.wakeSlotView(id, true)) return
     this.syncViews()
     this.attached?.webContents.focus()
   }
 
   private wakeBookmark(tabId: string): void {
-    const bid = this.bookmarkIdOf(tabId)
-    const bm = bid ? this.opts.getBookmark(bid) : undefined
-    if (!bm) return
-    // profile can have changed while asleep; the store is authoritative
-    this.profiles.set(tabId, bm.profile ?? 'default')
-    const view = this.createView(tabId)
-    this.model.wake(tabId)
-    view.webContents.loadURL(bm.url)
+    if (!this.wakeSlotView(tabId, true)) return
     this.syncViews()
     this.attached?.webContents.focus()
   }
@@ -708,16 +714,17 @@ export class TabManager {
         this.splitRoot = this.splitRoot && removeLeaf(this.splitRoot, id)
       }
     }
+    if (!this.splitRoot) return
     const active = this.model.activeId
-    if (this.splitRoot && active && this.views.has(active) && !hasLeaf(this.splitRoot, active)) {
+    if (active && this.views.has(active) && !hasLeaf(this.splitRoot, active)) {
       const target =
         this.focusedLeaf && hasLeaf(this.splitRoot, this.focusedLeaf)
           ? this.focusedLeaf
           : leafIds(this.splitRoot)[0]!
       this.splitRoot = replaceLeaf(this.splitRoot, target, active)
     }
-    if (this.splitRoot && active && hasLeaf(this.splitRoot, active)) this.focusedLeaf = active
-    if (this.splitRoot && leafIds(this.splitRoot).length < 2) this.splitRoot = null
+    if (active && hasLeaf(this.splitRoot, active)) this.focusedLeaf = active
+    if (leafIds(this.splitRoot).length < 2) this.splitRoot = null
   }
 
   // ⌘D / ⌘⇧D: carve a fresh blank pane out of the focused pane's cell. The
@@ -749,17 +756,7 @@ export class TabManager {
       this.activateTab(id)
       return
     }
-    if (!this.views.has(id)) {
-      const slot = this.model.isPinned(id) ? this.pins.get(id) : undefined
-      const bid = !slot && this.model.isBookmarkSlot(id) ? this.bookmarkIdOf(id) : null
-      const bm = bid ? this.opts.getBookmark(bid) : undefined
-      const url = slot?.url ?? bm?.url
-      if (!url) return
-      if (bm) this.profiles.set(id, bm.profile ?? 'default')
-      const view = this.createView(id)
-      this.model.wake(id, false)
-      view.webContents.loadURL(url)
-    }
+    if (!this.views.has(id) && !this.wakeSlotView(id, false)) return
     if (this.settingsOpen) {
       this.settingsOpen = false
       this.opts.onSettingsClosed?.()
@@ -794,7 +791,12 @@ export class TabManager {
 
   refresh(): void {
     this.opts.onSnapshot(this.snapshot())
-    // a reloaded chrome document needs current pane geometry, not just ids
+  }
+
+  // a freshly (re)loaded chrome document needs current pane geometry, not
+  // just the snapshot's ids; called from the window's did-finish-load
+  resendPaneRects(): void {
+    if (this.win.isDestroyed()) return
     this.win.webContents.send('ui:pane-rects', this.lastPaneRects)
   }
 
@@ -902,10 +904,12 @@ export class TabManager {
         this.attachedAll.delete(id)
       }
     }
+    let attachedNew = false
     for (const [id, v] of desired) {
       if (!this.attachedAll.has(id)) {
         this.win.contentView.addChildView(v)
         this.attachedAll.set(id, v)
+        attachedNew = true
       }
     }
     if (this.attached !== active) {
@@ -928,12 +932,19 @@ export class TabManager {
       this.blankActivatedId = null
     }
     this.layout()
+    // views attached above existing ✕ buttons would cover them; re-raise
+    if (attachedNew) this.paneButtons.raise()
     this.refresh()
   }
 
   private layout(): void {
     const [w, h] = this.win.getContentSize()
-    const fsView = this.htmlFullscreenId ? this.attachedAll.get(this.htmlFullscreenId) : undefined
+    // fullscreen fills the window only for the ACTIVE tab (as before splits):
+    // a background pane's requestFullscreen must not hijack the whole canvas
+    const fsView =
+      this.htmlFullscreenId && this.htmlFullscreenId === this.model.activeId
+        ? this.attachedAll.get(this.htmlFullscreenId)
+        : undefined
     if (fsView) {
       fsView.setBounds({ x: 0, y: 0, width: w, height: h })
       this.syncPaneChrome([]) // glow and ✕ buttons would float above the video
@@ -959,9 +970,12 @@ export class TabManager {
 
   // pane geometry consumers outside the views themselves: the ✕ button
   // overlays (native, positioned here) and the chrome renderer (active-pane
-  // glow, new-tab cell), which only sees window coordinates over IPC
+  // glow, new-tab cell), which only sees window coordinates over IPC.
+  // Unchanged geometry is skipped — layout() runs on every syncViews and
+  // resize tick, and identical rects would just spam IPC and view mutations.
   private syncPaneChrome(rects: PaneRect[]): void {
-    if (rects.length === 0 && this.lastPaneRects.length === 0) return
+    if (this.win.isDestroyed()) return
+    if (JSON.stringify(rects) === JSON.stringify(this.lastPaneRects)) return
     this.lastPaneRects = rects
     this.paneButtons.sync(rects)
     this.win.webContents.send('ui:pane-rects', rects)
