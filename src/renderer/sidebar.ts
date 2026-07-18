@@ -91,6 +91,8 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
         if (from !== -1 && from < to) to -= 1
         window.synapse.tabs.reorder(d.id, to)
       },
+      // released past the window edge: tear the tab into its own window
+      onDragOut: (e) => window.synapse.tabs.detach(id, e.screenX, e.screenY),
     })
     el.append(item)
   })

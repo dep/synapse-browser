@@ -1,5 +1,7 @@
 // Shared HTML5 drag-and-drop helper for the sidebar lists and the bookmarks
 // panel. One drag runs at a time; `accepts` decides which targets react.
+import { droppedOutsideViewport } from '../shared/drag-out'
+
 export interface DragItem {
   kind: string
   id: string
@@ -27,6 +29,9 @@ export interface DragItemOpts {
   // instead of before/after it
   into?(drag: DragItem): boolean
   onDrop(drag: DragItem, before: boolean): void
+  // the drag ended outside the window with no internal drop having consumed
+  // it (tab tear-out); e carries the final screen coordinates
+  onDragOut?(e: DragEvent): void
 }
 
 export function wireDragItem(el: HTMLElement, self: DragItem, opts: DragItemOpts): void {
@@ -36,7 +41,12 @@ export function wireDragItem(el: HTMLElement, self: DragItem, opts: DragItemOpts
     e.dataTransfer?.setData('text/plain', self.id)
     if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
   })
-  el.addEventListener('dragend', () => {
+  el.addEventListener('dragend', (e) => {
+    // an internal drop already nulled `drag`; a still-live drag that ended
+    // beyond the viewport is a tear-out
+    if (drag && opts.onDragOut && droppedOutsideViewport(e, window.innerWidth, window.innerHeight)) {
+      opts.onDragOut(e)
+    }
     drag = null
     clearIndicators()
   })

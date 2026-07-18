@@ -31,6 +31,7 @@ import {
   bundleFor,
   bundleOwningTab,
   createWindow,
+  detachTabToNewWindow,
   focusedBundle,
   primaryBundle,
 } from './window'
@@ -209,6 +210,11 @@ app.whenReady().then(async () => {
   ipcMain.on('tabs:stop', (e, id: string) => forSender(e)?.tabs.stop(id))
   ipcMain.on('tabs:reorder', (e, id: string, toIndex: number) => {
     if (typeof id === 'string') forSender(e)?.tabs.reorderTab(id, Number(toIndex))
+  })
+  ipcMain.on('tabs:detach', (e, id: string, x: number, y: number) => {
+    const b = forSender(e)
+    if (!b || typeof id !== 'string' || !Number.isFinite(x) || !Number.isFinite(y)) return
+    detachTabToNewWindow(b, id, x, y, deps)
   })
 
   ipcMain.on('tabs:context-menu', (e, id: string) => {

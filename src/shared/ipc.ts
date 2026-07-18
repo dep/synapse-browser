@@ -149,6 +149,8 @@ export interface SynapseApi {
     openNavInNewTab(id: string, offset: -1 | 0 | 1): void
     stop(id: string): void
     reorder(id: string, toIndex: number): void
+    // tear the tab out into its own window at the given screen point
+    detach(id: string, screenX: number, screenY: number): void
     showContextMenu(id: string): void
   }
   onTabsUpdated(cb: (snap: TabsSnapshot) => void): void

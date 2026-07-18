@@ -14,6 +14,7 @@ const api: SynapseApi = {
     openNavInNewTab: (id, offset) => ipcRenderer.send('tabs:nav-new-tab', id, offset),
     stop: (id) => ipcRenderer.send('tabs:stop', id),
     reorder: (id, toIndex) => ipcRenderer.send('tabs:reorder', id, toIndex),
+    detach: (id, screenX, screenY) => ipcRenderer.send('tabs:detach', id, screenX, screenY),
     showContextMenu: (id) => ipcRenderer.send('tabs:context-menu', id),
   },
   onTabsUpdated: (cb) => {
