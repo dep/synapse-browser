@@ -6,6 +6,23 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.6.10</title>
+            <pubDate>Sat, 18 Jul 2026 10:23:20 +0000</pubDate>
+            <sparkle:version>0.6.10</sparkle:version>
+            <sparkle:shortVersionString>0.6.10</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>Fixed: the URL bar now reliably updates when clicking links in a page &#8212; same-tab navigations always sync the address bar, even after it had been focused.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.6.10/Synapse.Browser-0.6.10-universal.dmg"
+              sparkle:edSignature="j4aHgHTJgFVbt7hPJChzxqEJK6RWT7ZwqrD0HSRivPMF9lvLdiNQol5s4+AjiwiGTVOcyScV+vkCmonghC7fCQ=="
+              length="219231362"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.6.9</title>
             <pubDate>Thu, 16 Jul 2026 18:52:49 +0000</pubDate>
             <sparkle:version>0.6.9</sparkle:version>
