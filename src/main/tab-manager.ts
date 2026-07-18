@@ -5,6 +5,7 @@ import { isBlankUrl } from '../shared/newtab'
 import { routeWindowOpen } from '../shared/popup-router'
 import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
 import { ClosedTabsStack } from './closed-tabs'
+import { nextTabId } from './tab-ids'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
@@ -50,7 +51,6 @@ export class TabManager {
   private aiSidebarWidth = AI_SIDEBAR_WIDTH_DEFAULT
   private aiSidebarVisible = false
   private settingsOpen = false
-  private counter = 0
   private blankActivatedId: string | null = null
 
   constructor(
@@ -70,7 +70,7 @@ export class TabManager {
       this.settingsOpen = false
       this.opts.onSettingsClosed?.()
     }
-    const id = `tab-${++this.counter}`
+    const id = nextTabId()
     this.profiles.set(id, profile)
     const view = this.createView(id)
     this.model.add(id, activate, opener)
@@ -250,7 +250,7 @@ export class TabManager {
   // register saved pins as asleep slots; called once at startup before restoreTabs
   restorePins(slots: PinSlot[]): void {
     for (const slot of slots) {
-      const id = `tab-${++this.counter}`
+      const id = nextTabId()
       this.pins.set(id, { ...slot })
       this.profiles.set(id, slot.profile ?? 'default')
       this.model.addPin(id)
@@ -334,7 +334,7 @@ export class TabManager {
     }
     for (const b of ordered) {
       if (this.bmTabId.has(b.id)) continue
-      const tid = `tab-${++this.counter}`
+      const tid = nextTabId()
       this.bmTabId.set(b.id, tid)
       this.profiles.set(tid, b.profile ?? 'default')
       this.model.addBookmark(tid)
