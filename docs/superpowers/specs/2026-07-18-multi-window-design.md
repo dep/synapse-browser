@@ -44,7 +44,7 @@ A module-level **registry** (`Map<winId, WindowBundle>`) plus a **`bundleFor(web
 
 - **Extensions** — `ExtensionManager` becomes app-global. `addTab(wc, win)` receives the tab's actual window; the `createTab` callback (chrome.tabs.create) lands in the last-focused default-session window, falling back to primary. Secondary windows' default-profile tabs are fully extension-registered. Work-profile tabs stay excluded everywhere, as today.
 - **Menu** — one global app menu; every command resolves `BrowserWindow.getFocusedWindow()` → bundle at invocation time. Adds "New Window" (`CmdOrCtrl+N`) above "New Tab".
-- **Downloads** — session-level as today; the `will-download` event's source WebContents routes shelf updates to the owning window, falling back to primary.
+- **Downloads** — session-level as today; the shelf list is app-global, so updates broadcast to every window's chrome (routing a global list to one window would show a wrong subset).
 - **Permission prompts** — parent to the requesting tab's window instead of the fixed `win`.
 - **AI sidebar** — primary-only. Single `AiChatController` stays bound to the primary bundle; the AI toggle is suppressed in secondary chrome.
 - **Find-in-page / tab cycling / suggestions** — state already lives on `TabManager` (or per-window overlay), so they become per-window once the bundle owns them. Menu Find and blur-commit route per window.
