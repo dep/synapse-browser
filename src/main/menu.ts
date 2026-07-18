@@ -148,6 +148,17 @@ export function buildMenu(ctx: MenuContext): void {
         },
         { type: 'separator' },
         {
+          label: 'Split Pane Right',
+          accelerator: shortcuts['split-vertical'],
+          click: withBundle((b) => b.tabs.splitActive('row')),
+        },
+        {
+          label: 'Split Pane Down',
+          accelerator: shortcuts['split-horizontal'],
+          click: withBundle((b) => b.tabs.splitActive('col')),
+        },
+        { type: 'separator' },
+        {
           label: 'Toggle Sidebar',
           accelerator: shortcuts['toggle-sidebar'],
           click: withBundle((b) => commands.toggleSidebar(b)),

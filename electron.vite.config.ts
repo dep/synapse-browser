@@ -8,7 +8,8 @@ import { defineConfig } from 'electron-vite'
 // must be bundled in, hence the exclude.
 export default defineConfig({
   main: {},
-  // two preloads: the full chrome API and the minimal suggestions-overlay one
+  // three preloads: the full chrome API and the minimal overlay ones
+  // (suggestions dropdown, split-pane close buttons)
   preload: {
     build: {
       externalizeDeps: { exclude: ['electron-chrome-extensions'] },
@@ -16,17 +17,19 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/preload/index.ts'),
           suggestions: resolve(__dirname, 'src/preload/suggestions.ts'),
+          pane: resolve(__dirname, 'src/preload/pane.ts'),
         },
       },
     },
   },
-  // two documents: the chrome UI and the suggestions overlay view
+  // three documents: the chrome UI and the overlay views
   renderer: {
     build: {
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
           suggestions: resolve(__dirname, 'src/renderer/suggestions.html'),
+          pane: resolve(__dirname, 'src/renderer/pane.html'),
         },
       },
     },

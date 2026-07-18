@@ -29,7 +29,10 @@ export const SHORTCUT_COMMANDS: ShortcutCommand[] = [
   { id: 'pin-tab', label: 'Pin/Unpin Tab', default: 'CmdOrCtrl+P' },
   { id: 'restore-anchor', label: 'Restore Pinned/Bookmarked URL', default: 'Control+CmdOrCtrl+H' },
   { id: 'focus-urlbar', label: 'Focus Address Bar', default: 'CmdOrCtrl+L' },
-  { id: 'bookmark-page', label: 'Bookmark This Page', default: 'CmdOrCtrl+D' },
+  // ⌘D belongs to the splits (Chrome muscle memory loses; issue #27)
+  { id: 'bookmark-page', label: 'Bookmark This Page', default: 'CmdOrCtrl+B' },
+  { id: 'split-vertical', label: 'Split Pane Right', default: 'CmdOrCtrl+D' },
+  { id: 'split-horizontal', label: 'Split Pane Down', default: 'CmdOrCtrl+Shift+D' },
   { id: 'history', label: 'History', default: 'CmdOrCtrl+Y' },
   { id: 'settings', label: 'Settings…', default: 'CmdOrCtrl+,' },
 ]

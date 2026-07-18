@@ -15,6 +15,7 @@ const api: SynapseApi = {
     stop: (id) => ipcRenderer.send('tabs:stop', id),
     reorder: (id, toIndex) => ipcRenderer.send('tabs:reorder', id, toIndex),
     detach: (id, screenX, screenY) => ipcRenderer.send('tabs:detach', id, screenX, screenY),
+    openInSplit: (id) => ipcRenderer.send('tabs:open-in-split', id),
     showContextMenu: (id) => ipcRenderer.send('tabs:context-menu', id),
   },
   onTabsUpdated: (cb) => {
@@ -119,6 +120,9 @@ const api: SynapseApi = {
     },
     onFocusUrlBar: (cb) => {
       ipcRenderer.on('ui:focus-urlbar', () => cb())
+    },
+    onPaneRects: (cb) => {
+      ipcRenderer.on('ui:pane-rects', (_e, rects) => cb(rects))
     },
     onToggleHistory: (cb) => {
       ipcRenderer.on('ui:toggle-history', () => cb())

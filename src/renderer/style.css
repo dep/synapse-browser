@@ -975,6 +975,27 @@ select.settings-input {
     animation: none;
   }
 }
+/* ---- split panes ---- */
+/* The focused pane's glow: the native pane view covers its own rect, so only
+   the ring/glow spilling into the surrounding canvas gaps is visible — which
+   is exactly the effect. Sized to the pane rect by main.ts. */
+#pane-glow {
+  position: fixed;
+  pointer-events: none;
+  border-radius: var(--canvas-radius, 8px);
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 16px 3px rgba(122, 162, 247, 0.55);
+  z-index: 40;
+}
+#pane-glow[hidden] {
+  display: none;
+}
+/* sidebar rows for tabs currently tiled in the split */
+.tab.in-split,
+.pin.in-split {
+  box-shadow: inset 2px 0 0 0 var(--accent);
+}
 /* ---- new tab page ---- */
 /* unlike #canvas-frame there is no native view to track here, so the
    urlbar dropdown just overlaps the page — no --overlay-shift */

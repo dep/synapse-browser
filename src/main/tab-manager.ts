@@ -1,6 +1,16 @@
 import { BrowserWindow, WebContents, WebContentsView } from 'electron'
 import { classifyInput, isHttpUrl } from '../shared/url-classifier'
-import { CANVAS_RADIUS, computeCanvasBounds } from '../shared/canvas-layout'
+import { CANVAS_GAP, CANVAS_RADIUS, computeCanvasBounds } from '../shared/canvas-layout'
+import {
+  computePaneRects,
+  hasLeaf,
+  leafIds,
+  removeLeaf,
+  replaceLeaf,
+  splitLeaf,
+} from '../shared/split-layout'
+import type { PaneRect, SplitDir, SplitNode } from '../shared/split-layout'
+import { PaneOverlays } from './pane-overlay'
 import { isBlankUrl } from '../shared/newtab'
 import { routeWindowOpen } from '../shared/popup-router'
 import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot, WindowRole } from '../shared/ipc'
@@ -59,6 +69,14 @@ export class TabManager {
   private bmTabId = new Map<string, string>() // bookmarkId → tabId
   private closed = new ClosedTabsStack()
   private attached: WebContentsView | null = null
+  // split panes (issue #27): every visible view keyed by tab id — the focused
+  // pane's view is also `attached` so single-view consumers (find, zoom, AI)
+  // keep working untouched. splitRoot is non-null only while ≥2 panes tile.
+  private attachedAll = new Map<string, WebContentsView>()
+  private splitRoot: SplitNode | null = null
+  private focusedLeaf: string | null = null
+  private lastPaneRects: PaneRect[] = []
+  private paneButtons: PaneOverlays
   private overlayHeight = 0
   private htmlFullscreenId: string | null = null
   private findText = ''
@@ -76,6 +94,7 @@ export class TabManager {
     private win: BrowserWindow,
     private opts: TabManagerOptions,
   ) {
+    this.paneButtons = new PaneOverlays(win)
     win.on('resize', () => this.layout())
   }
 
@@ -169,6 +188,15 @@ export class TabManager {
     })
     const wasAttached = this.attached === view
     this.model.close(id)
+    // ⌘W on a split pane: the pane collapses and focus stays inside the
+    // tiling — the model's usual successor may be a hidden sidebar tab
+    if (this.splitRoot && hasLeaf(this.splitRoot, id)) {
+      this.splitRoot = removeLeaf(this.splitRoot, id)
+      const remaining = this.splitRoot ? leafIds(this.splitRoot) : []
+      if (remaining.length > 0 && this.model.activeId && !remaining.includes(this.model.activeId)) {
+        this.model.activate(this.model.mru.find((t) => remaining.includes(t)) ?? remaining[0]!)
+      }
+    }
     this.destroyView(id, view, wasAttached)
     this.profiles.delete(id)
     if (!this.model.activeId) {
@@ -195,14 +223,15 @@ export class TabManager {
     const view = this.views.get(id)
     if (!view || this.model.isSlot(id) || isDeadView(view)) return null
     const wasAttached = this.attached === view
-    if (wasAttached) {
-      if (this.findText) {
-        view.webContents.stopFindInPage('clearSelection')
-        this.findText = ''
-      }
-      this.win.contentView.removeChildView(view)
-      this.attached = null
+    if (wasAttached && this.findText) {
+      view.webContents.stopFindInPage('clearSelection')
+      this.findText = ''
     }
+    if (this.attachedAll.get(id) === view) {
+      this.win.contentView.removeChildView(view)
+      this.attachedAll.delete(id)
+    }
+    if (wasAttached) this.attached = null
     this.unwire(id)
     const profile = this.profileOf(id)
     this.opts.onTabDetached?.(view.webContents, profile)
@@ -243,6 +272,9 @@ export class TabManager {
     this.favicons.clear()
     this.profiles.clear()
     this.attached = null
+    this.attachedAll.clear()
+    this.splitRoot = null
+    this.paneButtons.dispose()
     for (const view of views) {
       if (!isDeadView(view)) view.webContents.close()
     }
@@ -277,9 +309,12 @@ export class TabManager {
     this.unwire(id)
     this.views.delete(id)
     this.favicons.delete(id)
+    if (this.attachedAll.get(id) === view) {
+      this.win.contentView.removeChildView(view)
+      this.attachedAll.delete(id)
+    }
     if (wasAttached) {
       this.findText = ''
-      this.win.contentView.removeChildView(view)
       this.attached = null
     }
     view.webContents.close()
@@ -660,8 +695,107 @@ export class TabManager {
     if (next) this.activateTab(next)
   }
 
+  // ── split panes (issue #27) ──────────────────────────────────────────
+
+  // Drop leaves whose tabs died or fell asleep, swap an outside activation
+  // into the focused pane (the tiling stays put when the user clicks another
+  // sidebar tab or Ctrl+Tabs away), and dissolve a split that's down to one
+  // pane. Runs at the top of every syncViews, so every mutation path heals.
+  private reconcileSplit(): void {
+    if (!this.splitRoot) return
+    for (const id of leafIds(this.splitRoot)) {
+      if (!this.views.has(id) || !this.model.isAwake(id)) {
+        this.splitRoot = this.splitRoot && removeLeaf(this.splitRoot, id)
+      }
+    }
+    const active = this.model.activeId
+    if (this.splitRoot && active && this.views.has(active) && !hasLeaf(this.splitRoot, active)) {
+      const target =
+        this.focusedLeaf && hasLeaf(this.splitRoot, this.focusedLeaf)
+          ? this.focusedLeaf
+          : leafIds(this.splitRoot)[0]!
+      this.splitRoot = replaceLeaf(this.splitRoot, target, active)
+    }
+    if (this.splitRoot && active && hasLeaf(this.splitRoot, active)) this.focusedLeaf = active
+    if (this.splitRoot && leafIds(this.splitRoot).length < 2) this.splitRoot = null
+  }
+
+  // ⌘D / ⌘⇧D: carve a fresh blank pane out of the focused pane's cell. The
+  // new tab is a normal sidebar tab that happens to be tiled; urlbar focus
+  // for typing its URL falls out of the existing blank-tab flow.
+  splitActive(dir: SplitDir): void {
+    const anchor = this.model.activeId
+    if (!anchor || !this.views.has(anchor)) return
+    if (this.settingsOpen) {
+      this.settingsOpen = false
+      this.opts.onSettingsClosed?.()
+    }
+    const id = nextTabId()
+    this.profiles.set(id, this.profileOf(anchor))
+    this.createView(id)
+    this.splitRoot = splitLeaf(this.splitRoot ?? { leaf: anchor }, anchor, id, dir)
+    this.focusedLeaf = id
+    this.model.add(id, true, anchor)
+    this.syncViews()
+  }
+
+  // ⌘-click on a sidebar tab or pin: tile it next to the focused pane
+  // (vertical split). An existing pane is just focused; sleeping slots wake
+  // in the background first so the activation lands inside the split.
+  openInSplit(id: string): void {
+    const anchor = this.model.activeId
+    if (!anchor || id === anchor) return
+    if (this.splitRoot && hasLeaf(this.splitRoot, id)) {
+      this.activateTab(id)
+      return
+    }
+    if (!this.views.has(id)) {
+      const slot = this.model.isPinned(id) ? this.pins.get(id) : undefined
+      const bid = !slot && this.model.isBookmarkSlot(id) ? this.bookmarkIdOf(id) : null
+      const bm = bid ? this.opts.getBookmark(bid) : undefined
+      const url = slot?.url ?? bm?.url
+      if (!url) return
+      if (bm) this.profiles.set(id, bm.profile ?? 'default')
+      const view = this.createView(id)
+      this.model.wake(id, false)
+      view.webContents.loadURL(url)
+    }
+    if (this.settingsOpen) {
+      this.settingsOpen = false
+      this.opts.onSettingsClosed?.()
+    }
+    this.splitRoot = splitLeaf(this.splitRoot ?? { leaf: anchor }, anchor, id, 'row')
+    this.focusedLeaf = id
+    this.model.activate(id)
+    this.syncViews()
+    this.attached?.webContents.focus()
+  }
+
+  // the pane's ✕: untile the pane — the tab itself survives in the sidebar
+  // (⌘-clicked tabs existed before the split; closing them would be lossy)
+  closePane(id: string): void {
+    if (!this.splitRoot || !hasLeaf(this.splitRoot, id)) return
+    const remaining = leafIds(this.splitRoot).filter((t) => t !== id)
+    this.splitRoot = removeLeaf(this.splitRoot, id)
+    if (this.model.activeId === id && remaining.length > 0) {
+      this.model.activate(this.model.mru.find((t) => remaining.includes(t)) ?? remaining[0]!)
+    }
+    this.syncViews()
+    this.attached?.webContents.focus()
+  }
+
+  // a pane ✕ button document sent pane:close; true if this window owns it
+  closePaneFromOverlay(wc: WebContents): boolean {
+    const id = this.paneButtons.paneIdFor(wc)
+    if (!id) return false
+    this.closePane(id)
+    return true
+  }
+
   refresh(): void {
     this.opts.onSnapshot(this.snapshot())
+    // a reloaded chrome document needs current pane geometry, not just ids
+    this.win.webContents.send('ui:pane-rects', this.lastPaneRects)
   }
 
   private snapshot(): TabsSnapshot {
@@ -720,6 +854,7 @@ export class TabManager {
       pinned: emit(this.model.pinned),
       bookmarkTabs,
       activeId,
+      panes: this.splitRoot ? emit(leafIds(this.splitRoot)) : [],
       role: this.opts.role ?? 'primary',
     }
   }
@@ -734,27 +869,50 @@ export class TabManager {
     for (const [id, view] of [...this.views]) {
       if (isDeadView(view)) this.dropDeadView(id)
     }
-    // a blank active tab attaches no view, leaving the chrome renderer's
-    // new-tab page visible in the page cell (same mechanism as settings).
-    // A loading tab counts as a page tab even while getURL() is still '' —
-    // a fresh view's first navigation hasn't committed yet, and waiting for
-    // the URL would leave the view detached (and steal focus to the urlbar).
+    this.reconcileSplit()
+    // One desired set for every visible view: all split leaves, or just the
+    // active tab. A blank active tab attaches no view, leaving the chrome
+    // renderer's new-tab page visible in its cell (same mechanism as
+    // settings). A loading tab counts as a page tab even while getURL() is
+    // still '' — a fresh view's first navigation hasn't committed yet, and
+    // waiting for the URL would leave the view detached (and steal focus to
+    // the urlbar).
+    const showable = (v: WebContentsView): boolean =>
+      !isBlankUrl(v.webContents.getURL()) || v.webContents.isLoading()
+    const desired = new Map<string, WebContentsView>()
+    if (!this.settingsOpen) {
+      const ids = this.splitRoot
+        ? leafIds(this.splitRoot)
+        : this.model.activeId
+          ? [this.model.activeId]
+          : []
+      for (const id of ids) {
+        const v = this.views.get(id)
+        if (v && showable(v)) desired.set(id, v)
+      }
+    }
     const activeView =
       !this.settingsOpen && this.model.activeId
         ? (this.views.get(this.model.activeId) ?? null)
         : null
-    const active =
-      activeView &&
-      (!isBlankUrl(activeView.webContents.getURL()) || activeView.webContents.isLoading())
-        ? activeView
-        : null
+    const active = this.model.activeId ? (desired.get(this.model.activeId) ?? null) : null
+    for (const [id, v] of [...this.attachedAll]) {
+      if (desired.get(id) !== v) {
+        this.win.contentView.removeChildView(v)
+        this.attachedAll.delete(id)
+      }
+    }
+    for (const [id, v] of desired) {
+      if (!this.attachedAll.has(id)) {
+        this.win.contentView.addChildView(v)
+        this.attachedAll.set(id, v)
+      }
+    }
     if (this.attached !== active) {
       if (this.attached && this.findText) {
-        this.attached.webContents.stopFindInPage('clearSelection')
+        if (!isDeadView(this.attached)) this.attached.webContents.stopFindInPage('clearSelection')
         this.findText = ''
       }
-      if (this.attached) this.win.contentView.removeChildView(this.attached)
-      if (active) this.win.contentView.addChildView(active)
       this.attached = active
       if (active) this.opts.onTabActivated?.(active.webContents, this.profileOf(this.model.activeId!))
     }
@@ -774,20 +932,39 @@ export class TabManager {
   }
 
   private layout(): void {
-    if (!this.attached) return
     const [w, h] = this.win.getContentSize()
-    if (this.htmlFullscreenId && this.htmlFullscreenId === this.model.activeId) {
-      this.attached.setBounds({ x: 0, y: 0, width: w, height: h })
+    const fsView = this.htmlFullscreenId ? this.attachedAll.get(this.htmlFullscreenId) : undefined
+    if (fsView) {
+      fsView.setBounds({ x: 0, y: 0, width: w, height: h })
+      this.syncPaneChrome([]) // glow and ✕ buttons would float above the video
       return
     }
-    this.attached.setBounds(
-      computeCanvasBounds(w, h, {
-        topbar: TOPBAR_HEIGHT,
-        overlay: this.overlayHeight,
-        sidebar: this.sidebarVisible ? this.sidebarWidth : 0,
-        ai: this.aiSidebarVisible ? this.aiSidebarWidth : 0,
-      }),
-    )
+    const canvas = computeCanvasBounds(w, h, {
+      topbar: TOPBAR_HEIGHT,
+      overlay: this.overlayHeight,
+      sidebar: this.sidebarVisible ? this.sidebarWidth : 0,
+      ai: this.aiSidebarVisible ? this.aiSidebarWidth : 0,
+    })
+    if (this.splitRoot && !this.settingsOpen) {
+      const rects = computePaneRects(this.splitRoot, canvas, CANVAS_GAP)
+      // blank leaves have no attached view; their rect still ships to the
+      // chrome renderer, which draws its new-tab page in that cell
+      for (const { id, rect } of rects) this.attachedAll.get(id)?.setBounds(rect)
+      this.syncPaneChrome(rects)
+      return
+    }
+    this.attached?.setBounds(canvas)
+    this.syncPaneChrome([])
+  }
+
+  // pane geometry consumers outside the views themselves: the ✕ button
+  // overlays (native, positioned here) and the chrome renderer (active-pane
+  // glow, new-tab cell), which only sees window coordinates over IPC
+  private syncPaneChrome(rects: PaneRect[]): void {
+    if (rects.length === 0 && this.lastPaneRects.length === 0) return
+    this.lastPaneRects = rects
+    this.paneButtons.sync(rects)
+    this.win.webContents.send('ui:pane-rects', rects)
   }
 
   // every listener goes through track() so detachTab can unwire the lot —
@@ -798,7 +975,11 @@ export class TabManager {
     // rounded mask and fill the window, then restore the inset on leave
     this.track(id, wc, 'enter-html-full-screen', () => {
       this.htmlFullscreenId = id
-      this.views.get(id)?.setBorderRadius(0)
+      const view = this.views.get(id)
+      view?.setBorderRadius(0)
+      // in a split the fullscreen view must draw above its sibling panes;
+      // re-adding an existing child raises it
+      if (view && this.attachedAll.get(id) === view) this.win.contentView.addChildView(view)
       this.layout()
     })
     this.track(id, wc, 'leave-html-full-screen', () => {
@@ -807,6 +988,14 @@ export class TabManager {
       this.layout()
     })
     this.track(id, wc, 'page-title-updated', refresh)
+    // clicking into a pane hands its webContents native focus; follow it so
+    // the focused pane, topbar, and sidebar highlight stay in sync
+    this.track(id, wc, 'focus', () => {
+      if (this.splitRoot && this.model.activeId !== id && hasLeaf(this.splitRoot, id)) {
+        this.model.activate(id)
+        this.syncViews()
+      }
+    })
     // attach/detach must be re-evaluated at every loading transition and at
     // commit, not just load start: a fresh view reports a blank getURL()
     // until its first navigation commits, so any single check can race and
@@ -884,8 +1073,12 @@ export class TabManager {
     this.unwire(id)
     this.views.delete(id)
     this.favicons.delete(id)
+    const dead = this.attachedAll.get(id)
+    if (dead) {
+      this.win.contentView.removeChildView(dead)
+      this.attachedAll.delete(id)
+    }
     if (this.attached && isDeadView(this.attached)) {
-      this.win.contentView.removeChildView(this.attached)
       this.attached = null
       this.findText = ''
     }

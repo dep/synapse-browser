@@ -211,6 +211,14 @@ app.whenReady().then(async () => {
   ipcMain.on('tabs:reorder', (e, id: string, toIndex: number) => {
     if (typeof id === 'string') forSender(e)?.tabs.reorderTab(id, Number(toIndex))
   })
+  ipcMain.on('tabs:open-in-split', (e, id: string) => {
+    if (typeof id === 'string') forSender(e)?.tabs.openInSplit(id)
+  })
+  // a pane ✕ button's overlay document isn't in the chrome-renderer registry;
+  // each window's TabManager knows which overlays it owns
+  ipcMain.on('pane:close', (e) => {
+    for (const b of allBundles()) if (b.tabs.closePaneFromOverlay(e.sender)) return
+  })
   ipcMain.on('tabs:detach', (e, id: string, x: number, y: number) => {
     const b = forSender(e)
     if (!b || typeof id !== 'string' || !Number.isFinite(x) || !Number.isFinite(y)) return

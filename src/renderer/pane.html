@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'"
+    />
+    <title>Pane</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+        overflow: hidden;
+      }
+      button {
+        display: block;
+        width: 24px;
+        height: 24px;
+        border: none;
+        border-radius: 50%;
+        background: rgba(28, 29, 34, 0.72);
+        color: #e6e6ea;
+        font: 14px/1 -apple-system, BlinkMacSystemFont, sans-serif;
+        cursor: pointer;
+        padding: 0;
+        transition:
+          background 120ms ease-out,
+          color 120ms ease-out;
+      }
+      button:hover {
+        background: rgba(122, 162, 247, 0.9);
+        color: #16171b;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="close" title="Close split pane" aria-label="Close split pane">×</button>
+    <script type="module" src="./pane-view.ts"></script>
+  </body>
+</html>

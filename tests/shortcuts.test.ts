@@ -28,6 +28,18 @@ describe('resolveShortcuts', () => {
     expect(new Set(ids).size).toBe(ids.length)
     for (const c of SHORTCUT_COMMANDS) expect(c.default.length).toBeGreaterThan(0)
   })
+
+  it('no two commands share a default accelerator', () => {
+    const defaults = SHORTCUT_COMMANDS.map((c) => c.default)
+    expect(new Set(defaults).size).toBe(defaults.length)
+  })
+
+  it('bookmarking moved to Cmd+B, freeing Cmd+D for the vertical split', () => {
+    const resolved = resolveShortcuts({})
+    expect(resolved['bookmark-page']).toBe('CmdOrCtrl+B')
+    expect(resolved['split-vertical']).toBe('CmdOrCtrl+D')
+    expect(resolved['split-horizontal']).toBe('CmdOrCtrl+Shift+D')
+  })
 })
 
 describe('RESERVED_ACCELERATORS', () => {

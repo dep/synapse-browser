@@ -16,7 +16,8 @@ export function renderPins(el: HTMLElement, snap: TabsSnapshot): void {
       'pin' +
       (id === snap.activeId ? ' active' : '') +
       (tab.isAsleep ? ' asleep' : '') +
-      (tab.profile === 'work' ? ' work' : '')
+      (tab.profile === 'work' ? ' work' : '') +
+      (snap.panes.includes(id) ? ' in-split' : '')
     btn.title = tab.title
 
     const icon = document.createElement('img')
@@ -26,7 +27,11 @@ export function renderPins(el: HTMLElement, snap: TabsSnapshot): void {
     else icon.style.visibility = 'hidden'
 
     btn.append(icon)
-    btn.addEventListener('click', () => window.synapse.tabs.activate(id))
+    btn.addEventListener('click', (e) => {
+      // ⌘-click tiles the pin next to the current pane instead of switching
+      if (e.metaKey || e.ctrlKey) window.synapse.tabs.openInSplit(id)
+      else window.synapse.tabs.activate(id)
+    })
     btn.addEventListener('contextmenu', (e) => {
       e.preventDefault()
       window.synapse.tabs.showContextMenu(id)
@@ -56,7 +61,10 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     const tab = snap.tabs[id]!
     const item = document.createElement('div')
     item.className =
-      'tab' + (id === snap.activeId ? ' active' : '') + (tab.profile === 'work' ? ' work' : '')
+      'tab' +
+      (id === snap.activeId ? ' active' : '') +
+      (tab.profile === 'work' ? ' work' : '') +
+      (snap.panes.includes(id) ? ' in-split' : '')
 
     const icon = rowIcon(tab.favicon, tab.isLoading, tab.profile === 'work')
 
@@ -74,7 +82,11 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     })
 
     item.append(icon, title, close)
-    item.addEventListener('click', () => window.synapse.tabs.activate(id))
+    item.addEventListener('click', (e) => {
+      // ⌘-click tiles the tab next to the current pane instead of switching
+      if (e.metaKey || e.ctrlKey) window.synapse.tabs.openInSplit(id)
+      else window.synapse.tabs.activate(id)
+    })
     // middle click doesn't fire 'click' in browsers; it's reported via auxclick
     item.addEventListener('auxclick', (e) => {
       if (e.button === 1) window.synapse.tabs.close(id)

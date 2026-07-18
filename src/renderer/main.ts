@@ -1,6 +1,7 @@
 import './style.css'
 import { CANVAS_GAP, CANVAS_RADIUS } from '../shared/canvas-layout'
 import type { BookmarksData, TabsSnapshot } from '../shared/ipc'
+import type { PaneRect } from '../shared/split-layout'
 import { renderBookmarks, startItemEdit } from './bookmarks-section'
 import { PanelMode, renderPanel } from './panel'
 import { renderPins, renderTabList } from './sidebar'
@@ -35,6 +36,7 @@ let snap: TabsSnapshot = {
   pinned: [],
   bookmarkTabs: {},
   activeId: null,
+  panes: [],
   role: 'primary',
 }
 let bookmarks: BookmarksData = { folders: [], bookmarks: [] }
@@ -44,6 +46,45 @@ window.synapse.onTabsUpdated((s) => {
   snap = s
   render()
 })
+
+// Pane geometry comes from main (it positions the views); the renderer draws
+// what the native views can't: the focused pane's glow lives in the canvas
+// gaps around the pane, and a blank pane's cell hosts the new-tab document.
+const paneGlowEl = document.getElementById('pane-glow')!
+let paneRects: PaneRect[] = []
+window.synapse.ui.onPaneRects((rects) => {
+  paneRects = rects
+  render()
+})
+
+function activePaneRect(): PaneRect['rect'] | undefined {
+  if (settingsOpen || paneRects.length < 2 || !snap.activeId) return undefined
+  return paneRects.find((p) => p.id === snap.activeId)?.rect
+}
+
+function renderPaneChrome(): void {
+  const rect = activePaneRect()
+  paneGlowEl.hidden = !rect
+  if (rect) {
+    paneGlowEl.style.left = `${rect.x}px`
+    paneGlowEl.style.top = `${rect.y}px`
+    paneGlowEl.style.width = `${rect.width}px`
+    paneGlowEl.style.height = `${rect.height}px`
+  }
+  // a blank focused pane shows the new-tab page in its own cell, not the
+  // full canvas; inline styles override the grid placement
+  const newtabEl = document.getElementById('newtab')!
+  if (rect) {
+    newtabEl.style.position = 'fixed'
+    newtabEl.style.left = `${rect.x}px`
+    newtabEl.style.top = `${rect.y}px`
+    newtabEl.style.width = `${rect.width}px`
+    newtabEl.style.height = `${rect.height}px`
+    newtabEl.style.padding = '0'
+  } else {
+    newtabEl.removeAttribute('style')
+  }
+}
 
 // width is owned by main (it must position the page view); the renderer
 // only initiates drags and renders pushed widths
@@ -128,5 +169,6 @@ function render(): void {
   bookmarksEl.hidden = secondary || !showSidebar
   tabListEl.hidden = !showSidebar
   panelEl.hidden = showSidebar
+  renderPaneChrome()
   newtab.update(snap, settingsOpen)
 }

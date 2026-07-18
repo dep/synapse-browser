@@ -1,4 +1,5 @@
 import type { AiChatMessage } from './ai'
+import type { PaneRect } from './split-layout'
 
 export type ProfileId = 'default' | 'work'
 
@@ -39,6 +40,7 @@ export interface TabsSnapshot {
   pinned: string[]
   bookmarkTabs: Record<string, string> // bookmarkId → tabId, awake only
   activeId: string | null
+  panes: string[] // split-pane tab ids in layout order; [] = no split
   role: WindowRole
 }
 
@@ -151,6 +153,8 @@ export interface SynapseApi {
     reorder(id: string, toIndex: number): void
     // tear the tab out into its own window at the given screen point
     detach(id: string, screenX: number, screenY: number): void
+    // ⌘-click: tile the tab next to the focused pane (vertical split)
+    openInSplit(id: string): void
     showContextMenu(id: string): void
   }
   onTabsUpdated(cb: (snap: TabsSnapshot) => void): void
@@ -224,6 +228,9 @@ export interface SynapseApi {
     onFindStep(cb: (dir: 1 | -1) => void): void
     onFindResult(cb: (r: { matches: number; active: number }) => void): void
     onFocusUrlBar(cb: () => void): void
+    // split-pane rects in window coordinates, streamed on every relayout;
+    // [] when no split is showing (drives the active-pane glow + new-tab cell)
+    onPaneRects(cb: (rects: PaneRect[]) => void): void
     onToggleHistory(cb: () => void): void
     onBookmarksChanged(cb: () => void): void
     onEditFolder(cb: (folderId: string) => void): void
