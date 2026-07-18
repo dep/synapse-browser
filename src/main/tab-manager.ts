@@ -6,7 +6,7 @@ import {
   hasLeaf,
   leafIds,
   removeLeaf,
-  replaceLeaf,
+  showsSplit,
   splitLeaf,
 } from '../shared/split-layout'
 import type { PaneRect, SplitDir, SplitNode } from '../shared/split-layout'
@@ -74,7 +74,6 @@ export class TabManager {
   // keep working untouched. splitRoot is non-null only while ≥2 panes tile.
   private attachedAll = new Map<string, WebContentsView>()
   private splitRoot: SplitNode | null = null
-  private focusedLeaf: string | null = null
   private lastPaneRects: PaneRect[] = []
   private paneButtons: PaneOverlays
   private overlayHeight = 0
@@ -187,13 +186,20 @@ export class TabManager {
       index: this.model.order.indexOf(id),
     })
     const wasAttached = this.attached === view
+    // ⌘W on the focused pane of a visible split: the pane collapses and
+    // focus stays inside the tiling — the model's usual successor may be a
+    // hidden sidebar tab. Closing a background split tab redirects nothing.
+    const wasFocusedPane = this.model.activeId === id && showsSplit(this.splitRoot, id)
     this.model.close(id)
-    // ⌘W on a split pane: the pane collapses and focus stays inside the
-    // tiling — the model's usual successor may be a hidden sidebar tab
     if (this.splitRoot && hasLeaf(this.splitRoot, id)) {
       this.splitRoot = removeLeaf(this.splitRoot, id)
       const remaining = this.splitRoot ? leafIds(this.splitRoot) : []
-      if (remaining.length > 0 && this.model.activeId && !remaining.includes(this.model.activeId)) {
+      if (
+        wasFocusedPane &&
+        remaining.length > 0 &&
+        this.model.activeId &&
+        !remaining.includes(this.model.activeId)
+      ) {
         this.model.activate(this.model.mru.find((t) => remaining.includes(t)) ?? remaining[0]!)
       }
     }
@@ -703,10 +709,11 @@ export class TabManager {
 
   // ── split panes (issue #27) ──────────────────────────────────────────
 
-  // Drop leaves whose tabs died or fell asleep, swap an outside activation
-  // into the focused pane (the tiling stays put when the user clicks another
-  // sidebar tab or Ctrl+Tabs away), and dissolve a split that's down to one
-  // pane. Runs at the top of every syncViews, so every mutation path heals.
+  // Drop leaves whose tabs died or fell asleep and dissolve a split that's
+  // down to one pane. Runs at the top of every syncViews, so every mutation
+  // path heals. An active tab OUTSIDE the split is deliberately left alone:
+  // the tiling keeps waiting in the background (see showsSplit) so Cmd+T,
+  // urlbar Alt+Enter, and plain sidebar clicks never get pulled into a pane.
   private reconcileSplit(): void {
     if (!this.splitRoot) return
     for (const id of leafIds(this.splitRoot)) {
@@ -714,17 +721,7 @@ export class TabManager {
         this.splitRoot = this.splitRoot && removeLeaf(this.splitRoot, id)
       }
     }
-    if (!this.splitRoot) return
-    const active = this.model.activeId
-    if (active && this.views.has(active) && !hasLeaf(this.splitRoot, active)) {
-      const target =
-        this.focusedLeaf && hasLeaf(this.splitRoot, this.focusedLeaf)
-          ? this.focusedLeaf
-          : leafIds(this.splitRoot)[0]!
-      this.splitRoot = replaceLeaf(this.splitRoot, target, active)
-    }
-    if (active && hasLeaf(this.splitRoot, active)) this.focusedLeaf = active
-    if (leafIds(this.splitRoot).length < 2) this.splitRoot = null
+    if (this.splitRoot && leafIds(this.splitRoot).length < 2) this.splitRoot = null
   }
 
   // ⌘D / ⌘⇧D: carve a fresh blank pane out of the focused pane's cell. The
@@ -740,8 +737,9 @@ export class TabManager {
     const id = nextTabId()
     this.profiles.set(id, this.profileOf(anchor))
     this.createView(id)
-    this.splitRoot = splitLeaf(this.splitRoot ?? { leaf: anchor }, anchor, id, dir)
-    this.focusedLeaf = id
+    // splitting from a tab outside the old tiling starts a fresh one
+    const root = showsSplit(this.splitRoot, anchor) ? this.splitRoot! : { leaf: anchor }
+    this.splitRoot = splitLeaf(root, anchor, id, dir)
     this.model.add(id, true, anchor)
     this.syncViews()
   }
@@ -761,8 +759,9 @@ export class TabManager {
       this.settingsOpen = false
       this.opts.onSettingsClosed?.()
     }
-    this.splitRoot = splitLeaf(this.splitRoot ?? { leaf: anchor }, anchor, id, 'row')
-    this.focusedLeaf = id
+    // splitting from a tab outside the old tiling starts a fresh one
+    const root = showsSplit(this.splitRoot, anchor) ? this.splitRoot! : { leaf: anchor }
+    this.splitRoot = splitLeaf(root, anchor, id, 'row')
     this.model.activate(id)
     this.syncViews()
     this.attached?.webContents.focus()
@@ -883,8 +882,8 @@ export class TabManager {
       !isBlankUrl(v.webContents.getURL()) || v.webContents.isLoading()
     const desired = new Map<string, WebContentsView>()
     if (!this.settingsOpen) {
-      const ids = this.splitRoot
-        ? leafIds(this.splitRoot)
+      const ids = showsSplit(this.splitRoot, this.model.activeId)
+        ? leafIds(this.splitRoot!)
         : this.model.activeId
           ? [this.model.activeId]
           : []
@@ -956,8 +955,8 @@ export class TabManager {
       sidebar: this.sidebarVisible ? this.sidebarWidth : 0,
       ai: this.aiSidebarVisible ? this.aiSidebarWidth : 0,
     })
-    if (this.splitRoot && !this.settingsOpen) {
-      const rects = computePaneRects(this.splitRoot, canvas, CANVAS_GAP)
+    if (showsSplit(this.splitRoot, this.model.activeId) && !this.settingsOpen) {
+      const rects = computePaneRects(this.splitRoot!, canvas, CANVAS_GAP)
       // blank leaves have no attached view; their rect still ships to the
       // chrome renderer, which draws its new-tab page in that cell
       for (const { id, rect } of rects) this.attachedAll.get(id)?.setBounds(rect)

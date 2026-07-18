@@ -5,6 +5,7 @@ import {
   leafIds,
   removeLeaf,
   replaceLeaf,
+  showsSplit,
   splitLeaf,
   type SplitNode,
 } from '../src/shared/split-layout'
@@ -122,6 +123,24 @@ describe('leafIds / hasLeaf', () => {
     }
     expect(hasLeaf(root, 'b')).toBe(true)
     expect(hasLeaf(root, 'z')).toBe(false)
+  })
+})
+
+describe('showsSplit', () => {
+  const root: SplitNode = { dir: 'row', children: [leaf('a'), leaf('b')] }
+
+  it('shows the tiling only while the active tab is one of its panes', () => {
+    expect(showsSplit(root, 'a')).toBe(true)
+    expect(showsSplit(root, 'b')).toBe(true)
+  })
+
+  it('an outside active tab hides the tiling (it displays full-canvas instead)', () => {
+    expect(showsSplit(root, 'outside')).toBe(false)
+  })
+
+  it('no split or no active tab shows nothing', () => {
+    expect(showsSplit(null, 'a')).toBe(false)
+    expect(showsSplit(root, null)).toBe(false)
   })
 })
 

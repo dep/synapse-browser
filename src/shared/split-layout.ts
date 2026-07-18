@@ -61,8 +61,15 @@ export function splitLeaf(
   return changed ? { dir: root.dir, children } : root
 }
 
-// Swap a leaf's tab in place (activating a tab outside the split puts it in
-// the focused pane rather than dissolving the tiling). Same tree when the
+// The tiling displays only while the active tab is one of its panes; an
+// outside activation (sidebar click, Cmd+T, urlbar Alt+Enter) shows that tab
+// full-canvas and the split waits in the background until a pane tab is
+// active again.
+export function showsSplit(root: SplitNode | null, activeId: string | null): boolean {
+  return root !== null && activeId !== null && hasLeaf(root, activeId)
+}
+
+// Swap a leaf's tab in place, keeping the tree shape. Same tree when the
 // target isn't present.
 export function replaceLeaf(root: SplitNode, target: string, newId: string): SplitNode {
   if (isLeaf(root)) return root.leaf === target ? { leaf: newId } : root
