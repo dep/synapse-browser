@@ -23,6 +23,10 @@ export class ExtensionManager {
   private extensions: ElectronChromeExtensions
   private webStorePath = join(app.getPath('userData'), 'Extensions')
   private unpackedPath = join(app.getPath('userData'), 'UnpackedExtensions')
+  // tabs mid-move between windows: the library's store.removeTab invokes the
+  // impl removeTab callback (close request) even for our own untrack calls,
+  // which would destroy the moving tab's view
+  private moving = new Set<WebContents>()
 
   constructor(private resolve: ExtensionWindowResolver) {
     mkdirSync(this.unpackedPath, { recursive: true })
@@ -43,6 +47,7 @@ export class ExtensionManager {
         if (tabs && id && id !== tabs.activeId) tabs.activateTab(id)
       },
       removeTab: (wc) => {
+        if (this.moving.has(wc)) return // untrack for a window move, not a close
         const tabs = this.resolve.forTabWc(wc)
         const id = tabs?.idFor(wc)
         if (tabs && id) tabs.closeTab(id)
@@ -58,9 +63,15 @@ export class ExtensionManager {
   }
 
   // a tab leaving its window (tear-out) unregisters here and re-registers
-  // via addTab with the destination window
+  // via addTab with the destination window; the `moving` guard stops the
+  // library's synchronous close-callback echo from destroying the tab
   removeTab(wc: WebContents): void {
-    this.extensions.removeTab(wc)
+    this.moving.add(wc)
+    try {
+      this.extensions.removeTab(wc)
+    } finally {
+      this.moving.delete(wc)
+    }
   }
 
   selectTab(wc: WebContents): void {
