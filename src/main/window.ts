@@ -250,15 +250,19 @@ export function createWindow(
     addDisposer,
     disposeFor,
   }
-  bundles.set(win.id, bundle)
-  byWc.set(win.webContents.id, bundle)
-  byWc.set(suggestions.webContents.id, bundle)
+  // captured now: the getters throw "Object has been destroyed" inside 'closed'
+  const winId = win.id
+  const chromeWcId = win.webContents.id
+  const suggWcId = suggestions.webContents.id
+  bundles.set(winId, bundle)
+  byWc.set(chromeWcId, bundle)
+  byWc.set(suggWcId, bundle)
   if (role === 'primary') primaryB = bundle
 
   win.on('closed', () => {
-    bundles.delete(win.id)
-    byWc.delete(win.webContents.id)
-    byWc.delete(suggestions.webContents.id)
+    bundles.delete(winId)
+    byWc.delete(chromeWcId)
+    byWc.delete(suggWcId)
     if (primaryB === bundle) primaryB = null
     tabs.dispose()
   })
