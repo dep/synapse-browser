@@ -29,7 +29,14 @@ const aiToggleEl = document.getElementById('ai-toggle')!
 appEl.style.setProperty('--gap', `${CANVAS_GAP}px`)
 appEl.style.setProperty('--canvas-radius', `${CANVAS_RADIUS}px`)
 
-let snap: TabsSnapshot = { tabs: {}, order: [], pinned: [], bookmarkTabs: {}, activeId: null }
+let snap: TabsSnapshot = {
+  tabs: {},
+  order: [],
+  pinned: [],
+  bookmarkTabs: {},
+  activeId: null,
+  role: 'primary',
+}
 let bookmarks: BookmarksData = { folders: [], bookmarks: [] }
 let panelMode: PanelMode = 'none'
 
@@ -106,6 +113,10 @@ function render(): void {
   // tab's profile
   const activeProfile = snap.activeId ? snap.tabs[snap.activeId]?.profile : undefined
   document.body.classList.toggle('profile-work', activeProfile === 'work')
+  // secondary windows are ephemeral workspaces: no pins, no bookmarks, no AI
+  const secondary = snap.role === 'secondary'
+  document.body.classList.toggle('secondary', secondary)
+  aiToggleEl.hidden = secondary
   renderPins(pinGridEl, snap)
   renderBookmarks(bookmarksEl, bookmarks, snap, render)
   renderTabList(tabListEl, snap)
@@ -113,8 +124,8 @@ function render(): void {
   findBar.update(snap)
   loadingBar.update(snap)
   const showSidebar = panelMode === 'none'
-  pinGridEl.hidden = !showSidebar || snap.pinned.length === 0
-  bookmarksEl.hidden = !showSidebar
+  pinGridEl.hidden = secondary || !showSidebar || snap.pinned.length === 0
+  bookmarksEl.hidden = secondary || !showSidebar
   tabListEl.hidden = !showSidebar
   panelEl.hidden = showSidebar
   newtab.update(snap, settingsOpen)

@@ -2,6 +2,10 @@ import type { AiChatMessage } from './ai'
 
 export type ProfileId = 'default' | 'work'
 
+// primary = the persistent launch window (pins, bookmarks, AI sidebar);
+// secondary = an ephemeral Cmd+N / torn-out window showing only its own tabs
+export type WindowRole = 'primary' | 'secondary'
+
 export interface AiSettings {
   apiKey: string
   model: string
@@ -35,6 +39,7 @@ export interface TabsSnapshot {
   pinned: string[]
   bookmarkTabs: Record<string, string> // bookmarkId → tabId, awake only
   activeId: string | null
+  role: WindowRole
 }
 
 export interface HistoryEntry {

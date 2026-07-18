@@ -3,7 +3,7 @@ import { classifyInput, isHttpUrl } from '../shared/url-classifier'
 import { CANVAS_RADIUS, computeCanvasBounds } from '../shared/canvas-layout'
 import { isBlankUrl } from '../shared/newtab'
 import { routeWindowOpen } from '../shared/popup-router'
-import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot } from '../shared/ipc'
+import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot, WindowRole } from '../shared/ipc'
 import { ClosedTabsStack } from './closed-tabs'
 import { nextTabId } from './tab-ids'
 import { CycleList, Direction, TabModel } from './tab-model'
@@ -23,6 +23,7 @@ function isDeadView(view: WebContentsView): boolean {
 }
 
 export interface TabManagerOptions {
+  role?: WindowRole // default 'primary'
   getBookmark(id: string): Bookmark | undefined
   onBookmarkFavicon(id: string, favicon: string | null): void
   onPageFavicon(url: string, favicon: string | null): void
@@ -614,6 +615,7 @@ export class TabManager {
       pinned: emit(this.model.pinned),
       bookmarkTabs,
       activeId,
+      role: this.opts.role ?? 'primary',
     }
   }
 
