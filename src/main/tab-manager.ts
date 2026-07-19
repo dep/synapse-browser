@@ -58,6 +58,7 @@ export interface DetachedTab {
   view: WebContentsView
   profile: ProfileId
   favicon: string | null
+  customTitle: string | null
 }
 
 export class TabManager {
@@ -65,6 +66,8 @@ export class TabManager {
   private views = new Map<string, WebContentsView>()
   private favicons = new Map<string, string | null>()
   private pins = new Map<string, PinSlot>()
+  // user-set names (double-click rename); win over page titles in snapshots
+  private customTitles = new Map<string, string>()
   private profiles = new Map<string, ProfileId>()
   private bmTabId = new Map<string, string>() // bookmarkId → tabId
   private closed = new ClosedTabsStack()
@@ -205,6 +208,7 @@ export class TabManager {
     }
     this.destroyView(id, view, wasAttached)
     this.profiles.delete(id)
+    this.customTitles.delete(id)
     if (!this.model.activeId) {
       this.handleEmpty()
       return
@@ -242,17 +246,19 @@ export class TabManager {
     const profile = this.profileOf(id)
     this.opts.onTabDetached?.(view.webContents, profile)
     const favicon = this.favicons.get(id) ?? null
+    const customTitle = this.customTitles.get(id) ?? null
     this.model.close(id)
     this.views.delete(id)
     this.favicons.delete(id)
     this.profiles.delete(id)
+    this.customTitles.delete(id)
     if (!this.model.activeId) {
       this.handleEmpty()
-      return { id, view, profile, favicon }
+      return { id, view, profile, favicon, customTitle }
     }
     this.syncViews()
     if (wasAttached) this.attached?.webContents.focus()
-    return { id, view, profile, favicon }
+    return { id, view, profile, favicon, customTitle }
   }
 
   // the destination side of a tear-out: same id (process-unique), same live
@@ -261,6 +267,7 @@ export class TabManager {
     this.profiles.set(t.id, t.profile)
     this.views.set(t.id, t.view)
     this.favicons.set(t.id, t.favicon)
+    if (t.customTitle) this.customTitles.set(t.id, t.customTitle)
     this.wireEvents(t.id, t.view.webContents)
     this.wirePopupRouting(t.view.webContents, t.id)
     this.opts.onTabCreated?.(t.view.webContents, t.profile)
@@ -277,6 +284,7 @@ export class TabManager {
     this.views.clear()
     this.favicons.clear()
     this.profiles.clear()
+    this.customTitles.clear()
     this.attached = null
     this.attachedAll.clear()
     this.splitRoot = null
@@ -284,6 +292,15 @@ export class TabManager {
     for (const view of views) {
       if (!isDeadView(view)) view.webContents.close()
     }
+  }
+
+  // double-click rename in the sidebar; an empty title reverts to the page's
+  renameTab(id: string, title: string): void {
+    if (!this.views.has(id) && !this.pins.has(id)) return
+    const next = title.trim()
+    if (next) this.customTitles.set(id, next)
+    else this.customTitles.delete(id)
+    this.refresh()
   }
 
   // Cmd+Shift+T: recreate the last closed tab at its old sidebar position.
@@ -391,12 +408,16 @@ export class TabManager {
   }
 
   // recreate a saved session: tabs in sidebar order, then the active one
-  restoreTabs(tabs: { url: string; profile: ProfileId }[], active: number): void {
+  restoreTabs(tabs: { url: string; profile: ProfileId; title?: string }[], active: number): void {
     if (tabs.length === 0) {
       this.createTab()
       return
     }
-    const ids = tabs.map((t) => this.createTab(t.url || undefined, false, t.profile))
+    const ids = tabs.map((t) => {
+      const id = this.createTab(t.url || undefined, false, t.profile)
+      if (t.title) this.customTitles.set(id, t.title)
+      return id
+    })
     this.activateTab(ids[Math.min(Math.max(active, 0), ids.length - 1)]!)
   }
 
@@ -805,11 +826,13 @@ export class TabManager {
       const slot = this.pins.get(id)
       const bid = this.bookmarkIdOf(id)
       const wc = this.views.get(id)?.webContents
+      const customTitle = this.customTitles.get(id) ?? null
       if (wc) {
         const url = wc.getURL()
         tabs[id] = {
           id,
-          title: wc.getTitle() || slot?.title || 'New Tab',
+          title: customTitle || wc.getTitle() || slot?.title || 'New Tab',
+          customTitle,
           url,
           favicon: this.favicons.get(id) ?? slot?.favicon ?? null,
           isLoading: wc.isLoading(),
@@ -824,7 +847,8 @@ export class TabManager {
       } else if (slot) {
         tabs[id] = {
           id,
-          title: slot.title,
+          title: customTitle || slot.title,
+          customTitle,
           url: slot.url,
           favicon: slot.favicon,
           isLoading: false,

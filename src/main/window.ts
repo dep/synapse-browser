@@ -161,7 +161,7 @@ export function createWindow(
       deps.tabsStore.save(
         snap.order.map((id) => {
           const t = snap.tabs[id]!
-          return { url: t.url, profile: t.profile }
+          return { url: t.url, profile: t.profile, ...(t.customTitle ? { title: t.customTitle } : {}) }
         }),
         snap.activeId ? snap.order.indexOf(snap.activeId) : -1,
       )

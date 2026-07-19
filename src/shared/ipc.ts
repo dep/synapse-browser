@@ -22,6 +22,9 @@ export interface PinSlot {
 export interface TabInfo {
   id: string
   title: string
+  // user-set name (double-click rename); title already reflects it — carried
+  // separately so persistence can tell a custom name from a page title
+  customTitle: string | null
   url: string
   favicon: string | null
   isLoading: boolean
@@ -151,6 +154,8 @@ export interface SynapseApi {
     openNavInNewTab(id: string, offset: -1 | 0 | 1): void
     stop(id: string): void
     reorder(id: string, toIndex: number): void
+    // double-click rename in the sidebar; '' reverts to the page title
+    rename(id: string, title: string): void
     // tear the tab out into its own window at the given screen point
     detach(id: string, screenX: number, screenY: number): void
     // ⌘-click: tile the tab next to the focused pane (vertical split)

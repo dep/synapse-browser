@@ -30,6 +30,51 @@ describe('TabsStore', () => {
     expect(new TabsStore(dir).load()).toEqual({ tabs, active: 1 })
   })
 
+  it('round-trips a custom title and drops absent ones', () => {
+    const store = new TabsStore(dir)
+    store.save(
+      [
+        { url: 'https://a.test/', profile: 'default', title: 'My Tab' },
+        { url: 'https://b.test/', profile: 'work' },
+      ],
+      0,
+    )
+    store.flush()
+    expect(new TabsStore(dir).load().tabs).toEqual([
+      { url: 'https://a.test/', profile: 'default', title: 'My Tab' },
+      { url: 'https://b.test/', profile: 'work' },
+    ])
+  })
+
+  it('loads a v2 file (no titles) unchanged', () => {
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({ v: 2, tabs: [{ url: 'https://a.test/', profile: 'work' }], active: 0 }),
+    )
+    expect(new TabsStore(dir).load()).toEqual({
+      tabs: [{ url: 'https://a.test/', profile: 'work' }],
+      active: 0,
+    })
+  })
+
+  it('ignores a malformed title from a hand-edited file', () => {
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({
+        v: 3,
+        tabs: [
+          { url: 'https://a.test/', profile: 'default', title: 42 },
+          { url: 'https://b.test/', profile: 'default', title: '' },
+        ],
+        active: 0,
+      }),
+    )
+    expect(new TabsStore(dir).load().tabs).toEqual([
+      { url: 'https://a.test/', profile: 'default' },
+      { url: 'https://b.test/', profile: 'default' },
+    ])
+  })
+
   it('keeps non-web urls as blank-tab placeholders', () => {
     const store = new TabsStore(dir)
     store.save(

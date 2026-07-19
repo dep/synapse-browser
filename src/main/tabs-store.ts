@@ -5,6 +5,7 @@ import { JsonStore } from './store'
 export interface TabEntry {
   url: string
   profile: ProfileId
+  title?: string // user-set name (double-click rename); absent = page title
 }
 
 interface TabsFileV1 {
@@ -14,7 +15,7 @@ interface TabsFileV1 {
 }
 
 interface TabsFileV2 {
-  v: 2
+  v: 2 | 3
   tabs: TabEntry[]
   active: number
 }
@@ -29,13 +30,17 @@ export class TabsStore {
   private store: JsonStore<TabsFile>
 
   constructor(dir: string) {
-    this.store = new JsonStore<TabsFile>(path.join(dir, 'tabs.json'), { v: 2, tabs: [], active: -1 })
+    this.store = new JsonStore<TabsFile>(path.join(dir, 'tabs.json'), { v: 3, tabs: [], active: -1 })
   }
 
   save(tabs: TabEntry[], active: number): void {
     this.store.set({
-      v: 2,
-      tabs: tabs.map((t) => ({ url: PERSISTABLE.test(t.url) ? t.url : '', profile: t.profile })),
+      v: 3,
+      tabs: tabs.map((t) => ({
+        url: PERSISTABLE.test(t.url) ? t.url : '',
+        profile: t.profile,
+        ...(t.title ? { title: t.title } : {}),
+      })),
       active,
     })
   }
@@ -51,9 +56,15 @@ export class TabsStore {
           : []
     const clean = raw.flatMap((t): TabEntry[] => {
       if (typeof t !== 'object' || t === null) return []
-      const { url, profile } = t as { url?: unknown; profile?: unknown }
+      const { url, profile, title } = t as { url?: unknown; profile?: unknown; title?: unknown }
       if (typeof url !== 'string') return []
-      return [{ url, profile: profile === 'work' ? 'work' : 'default' }]
+      return [
+        {
+          url,
+          profile: profile === 'work' ? 'work' : 'default',
+          ...(typeof title === 'string' && title ? { title } : {}),
+        },
+      ]
     })
     const idx = Number.isInteger(data.active) ? data.active : 0
     return { tabs: clean, active: Math.min(Math.max(idx, 0), clean.length - 1) }

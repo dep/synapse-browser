@@ -243,7 +243,10 @@ function inlineEditor(
   // clicking away saves (Esc is the cancel gesture)
   input.addEventListener('blur', () => finish(true))
   row.append(input)
-  queueMicrotask(() => input.focus())
+  queueMicrotask(() => {
+    input.focus()
+    input.select() // preselect the old name so typing replaces it
+  })
   return row
 }
 

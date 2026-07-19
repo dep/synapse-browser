@@ -211,6 +211,10 @@ app.whenReady().then(async () => {
   ipcMain.on('tabs:reorder', (e, id: string, toIndex: number) => {
     if (typeof id === 'string') forSender(e)?.tabs.reorderTab(id, Number(toIndex))
   })
+  ipcMain.on('tabs:rename', (e, id: string, title: string) => {
+    if (typeof id === 'string' && typeof title === 'string')
+      forSender(e)?.tabs.renameTab(id, title)
+  })
   ipcMain.on('tabs:open-in-split', (e, id: string) => {
     if (typeof id === 'string') forSender(e)?.tabs.openInSplit(id)
   })
