@@ -6,6 +6,24 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.8.2</title>
+            <pubDate>Sun, 19 Jul 2026 17:27:53 +0000</pubDate>
+            <sparkle:version>0.8.2</sparkle:version>
+            <sparkle:shortVersionString>0.8.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <ul>
+                    <li>New: rename any tab &#8212; double-click a tab in the sidebar to give it a custom name. Enter or click away saves, Esc cancels, and saving an empty name goes back to the page&#8217;s own title. Custom names survive restarts and moving a tab to another window.</li>
+                    <li>Improved: double-clicking to rename a tab, bookmark, or folder now preselects the current name, so you can just type the new one.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+              url="https://github.com/dep/synapse-browser/releases/download/0.8.2/Synapse.Browser-0.8.2-universal.dmg"
+              sparkle:edSignature="nk8dyNotfhtdTHFVl8kx3ACk2lr31A5/3pfhkIeGfl7VpGLtbFZUldBe4Bef7dMJBLMEBe/PGqHKYyOYdm+aDA=="
+              length="219233722"
+              type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.8.0</title>
             <pubDate>Sat, 18 Jul 2026 12:13:10 +0000</pubDate>
             <sparkle:version>0.8.0</sparkle:version>
