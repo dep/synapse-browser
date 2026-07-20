@@ -150,6 +150,24 @@ export class TabModel {
     this.normalizeGroups()
   }
 
+  // multi-select drag (issue #37): move the whole selection as one block,
+  // preserving sidebar order. toIndex is the insertion index after removal;
+  // group mirrors reorder() (undefined keep, null clear, id join).
+  moveMany(ids: string[], toIndex: number, group?: string | null): void {
+    const moving = this.order.filter((t) => ids.includes(t))
+    if (moving.length === 0) return
+    const rest = this.order.filter((t) => !moving.includes(t))
+    rest.splice(Math.min(Math.max(Math.round(toIndex), 0), rest.length), 0, ...moving)
+    this.order = rest
+    if (group !== undefined) {
+      for (const id of moving) {
+        if (group === null) this.groups.delete(id)
+        else this.groups.set(id, group)
+      }
+    }
+    this.normalizeGroups()
+  }
+
   // "Ungroup Tabs": every membership goes, every tab keeps its position
   dissolveGroup(groupId: string): void {
     for (const [t, g] of [...this.groups]) if (g === groupId) this.groups.delete(t)

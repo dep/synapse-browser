@@ -218,6 +218,12 @@ app.whenReady().then(async () => {
     if (group !== undefined && group !== null && typeof group !== 'string') return
     forSender(e)?.tabs.reorderTab(id, Number(toIndex), group)
   })
+  ipcMain.on('tabs:reorder-many', (e, ids: unknown, toIndex: number, group?: unknown) => {
+    if (!Array.isArray(ids)) return
+    if (group !== undefined && group !== null && typeof group !== 'string') return
+    const clean = ids.filter((x): x is string => typeof x === 'string')
+    if (clean.length > 0) forSender(e)?.tabs.reorderTabs(clean, Number(toIndex), group)
+  })
   ipcMain.on('tabs:rename', (e, id: string, title: string) => {
     if (typeof id === 'string' && typeof title === 'string')
       forSender(e)?.tabs.renameTab(id, title)
@@ -249,7 +255,10 @@ app.whenReady().then(async () => {
           label: `Group ${sel.length} Tabs`,
           click: () => {
             const gid = b.tabs.groupSelection(sel)
-            if (gid) b.win.webContents.send('ui:edit-group', gid)
+            if (gid) {
+              b.win.webContents.send('ui:clear-tab-selection')
+              b.win.webContents.send('ui:edit-group', gid)
+            }
           },
         },
       ]
@@ -261,7 +270,11 @@ app.whenReady().then(async () => {
           label: 'Add to Group',
           submenu: targets.map((g) => ({
             label: g.name,
-            click: () => void b.tabs.groupSelection(sel, g.id),
+            click: () => {
+              if (b.tabs.groupSelection(sel, g.id)) {
+                b.win.webContents.send('ui:clear-tab-selection')
+              }
+            },
           })),
         })
       }
@@ -368,9 +381,10 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('groups:create', (e) => forSender(e)?.tabs.createGroupWithTab() ?? null)
-  ipcMain.on('groups:create-from-drop', (e, targetId: string, draggedId: string) => {
-    if (typeof targetId === 'string' && typeof draggedId === 'string')
-      forSender(e)?.tabs.groupFromDrop(targetId, draggedId)
+  ipcMain.on('groups:create-from-drop', (e, targetId: string, draggedIds: unknown) => {
+    if (typeof targetId !== 'string' || !Array.isArray(draggedIds)) return
+    const clean = draggedIds.filter((x): x is string => typeof x === 'string')
+    if (clean.length > 0) forSender(e)?.tabs.groupFromDrop(targetId, clean)
   })
   ipcMain.on('groups:close', (e, id: string) => {
     if (typeof id === 'string') forSender(e)?.tabs.closeGroup(id)

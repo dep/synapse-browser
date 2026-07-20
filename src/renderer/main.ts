@@ -4,7 +4,7 @@ import type { BookmarksData, TabsSnapshot } from '../shared/ipc'
 import type { PaneRect } from '../shared/split-layout'
 import { renderBookmarks, startItemEdit } from './bookmarks-section'
 import { PanelMode, renderPanel } from './panel'
-import { renderPins, renderTabList, startGroupEdit } from './sidebar'
+import { clearTabSelection, renderPins, renderTabList, startGroupEdit } from './sidebar'
 import { cancelRecording, renderSettings } from './settings'
 import { initTopbar } from './topbar'
 import { initFindBar } from './find-bar'
@@ -146,6 +146,7 @@ document.getElementById('new-group')!.addEventListener('click', () => {
   })
 })
 window.synapse.ui.onEditGroup((id) => startGroupEdit(id))
+window.synapse.ui.onClearTabSelection(() => clearTabSelection())
 document.getElementById('show-history')!.addEventListener('click', () => setPanel('history'))
 window.synapse.ui.onToggleHistory(() => setPanel('history'))
 window.synapse.ui.onBookmarksChanged(() => void refreshBookmarks())

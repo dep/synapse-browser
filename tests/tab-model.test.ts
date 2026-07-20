@@ -930,6 +930,52 @@ describe('TabModel groupMany', () => {
   })
 })
 
+describe('TabModel moveMany', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    for (const id of ['a', 'b', 'c', 'd', 'e']) m.add(id)
+  })
+
+  it('moves the selection as one block, preserving sidebar order', () => {
+    m.moveMany(['d', 'b'], 0) // selection click-order must not matter
+    expect(m.order).toEqual(['b', 'd', 'a', 'c', 'e'])
+  })
+
+  it('drops the block into a group at the target position', () => {
+    m.setGroup('c', 'g1')
+    m.moveMany(['e', 'a'], 2, 'g1') // rest after removal: b, c, d
+    expect(m.groupTabs('g1')).toEqual(['c', 'a', 'e'])
+    expect(m.order).toEqual(['b', 'c', 'a', 'e', 'd'])
+  })
+
+  it('an explicit null destination clears membership', () => {
+    m.setGroup('a', 'g1')
+    m.setGroup('b', 'g1')
+    m.moveMany(['a', 'b'], 3, null)
+    expect(m.groupOf('a')).toBeNull()
+    expect(m.groupOf('b')).toBeNull()
+    expect(m.order).toEqual(['c', 'd', 'e', 'a', 'b'])
+  })
+
+  it('keeps membership when no group argument is given', () => {
+    m.setGroup('a', 'g1')
+    m.setGroup('b', 'g1')
+    m.moveMany(['a', 'b'], 3)
+    expect(m.groupTabs('g1')).toEqual(['a', 'b'])
+  })
+
+  it('ignores unknown ids and slots, clamps out-of-range indices', () => {
+    m.pin('a')
+    m.moveMany(['a', 'ghost', 'e', 'c'], 99)
+    expect(m.order).toEqual(['b', 'd', 'c', 'e'])
+    expect(m.pinned).toEqual(['a'])
+    m.moveMany(['e'], -5)
+    expect(m.order).toEqual(['e', 'b', 'd', 'c'])
+  })
+})
+
 describe('TabModel dissolveGroup', () => {
   it('clears every membership and leaves positions untouched', () => {
     const m = new TabModel()

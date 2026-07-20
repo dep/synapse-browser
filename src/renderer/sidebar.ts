@@ -77,10 +77,28 @@ export function renderPins(el: HTMLElement, snap: TabsSnapshot): void {
   })
 }
 
-// insertion index into snap.order after the dragged tab is removed
-function adjustedIndex(snap: TabsSnapshot, draggedId: string, to: number): number {
-  const from = snap.order.indexOf(draggedId)
-  return from !== -1 && from < to ? to - 1 : to
+// insertion index into snap.order after the dragged tabs are removed
+function adjustedIndex(snap: TabsSnapshot, draggedIds: string[], to: number): number {
+  const above = draggedIds.filter((t) => {
+    const from = snap.order.indexOf(t)
+    return from !== -1 && from < to
+  }).length
+  return to - above
+}
+
+// a drag that starts inside the multi-selection carries the whole selection
+// (issue #37), in sidebar order; any other drag carries just itself
+function dragTabIds(snap: TabsSnapshot, draggedId: string): string[] {
+  if (!selectedTabs.has(draggedId) || selectedTabs.size < 2) return [draggedId]
+  return snap.order.filter((t) => selectedTabs.has(t))
+}
+
+// a drop or main-side action consumed the selection: clear the highlights
+export function clearTabSelection(): void {
+  if (selectedTabs.size === 0) return
+  selectedTabs.clear()
+  selectionAnchor = null
+  if (lastEl && lastSnap) renderTabList(lastEl, lastSnap)
 }
 
 // move a whole group block before/after an anchor tab's position; indices
@@ -117,8 +135,13 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     onDrop: (d) => {
       // empty space below the rows: tabs go to the end, ungrouped; group
       // blocks move to the end wholesale
-      if (d.kind === 'group') window.synapse.groups.reorder(d.id, lastOrder.length)
-      else window.synapse.tabs.reorder(d.id, lastOrder.length - 1, null)
+      if (d.kind === 'group') {
+        window.synapse.groups.reorder(d.id, lastOrder.length)
+        return
+      }
+      const ids = dragTabIds(lastSnap!, d.id)
+      window.synapse.tabs.reorderMany(ids, lastOrder.length - ids.length, null)
+      clearTabSelection()
     },
   })
   lastOrder = snap.order
@@ -215,15 +238,17 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
           moveGroupNextTo(snap, d.id, id, before)
           return
         }
+        const ids = dragTabIds(snap, d.id)
         if (into) {
           // onto a grouped tab: join right behind it; onto a loose tab:
-          // found a new group around the pair
-          if (gid) window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, i + 1), gid)
-          else window.synapse.groups.createFromDrop(id, d.id)
-          return
+          // found a new group around target + dragged
+          if (gid) window.synapse.tabs.reorderMany(ids, adjustedIndex(snap, ids, i + 1), gid)
+          else window.synapse.groups.createFromDrop(id, ids)
+        } else {
+          // edges reorder; the destination membership follows this row's group
+          window.synapse.tabs.reorderMany(ids, adjustedIndex(snap, ids, i + (before ? 0 : 1)), gid)
         }
-        // edges reorder; the destination membership follows this row's group
-        window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, i + (before ? 0 : 1)), gid)
+        clearTabSelection()
       },
       // released past the window edge: tear the tab into its own window
       onDragOut: (e) => window.synapse.tabs.detach(id, e.screenX, e.screenY),
@@ -291,7 +316,9 @@ function groupHeader(
     onDrop: (d, before, into) => {
       if (into && d.kind === 'tab') {
         collapsedGroups.delete(gid) // auto-expand so the drop is visible
-        window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, firstIndex), gid)
+        const ids = dragTabIds(snap, d.id)
+        window.synapse.tabs.reorderMany(ids, adjustedIndex(snap, ids, firstIndex), gid)
+        clearTabSelection()
         return
       }
       // group onto group header: whole-block reorder around this block

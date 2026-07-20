@@ -190,6 +190,9 @@ export interface SynapseApi {
     // group is the drop destination's tab group: a groupId joins it, null
     // leaves any group, undefined keeps the current membership
     reorder(id: string, toIndex: number, group?: string | null): void
+    // multi-select drag (issue #37): the ids move as one block in sidebar
+    // order; toIndex is the insertion index after removal
+    reorderMany(ids: string[], toIndex: number, group?: string | null): void
     // double-click rename in the sidebar; '' reverts to the page title
     rename(id: string, title: string): void
     // tear the tab out into its own window at the given screen point
@@ -204,8 +207,9 @@ export interface SynapseApi {
     // ＋ Group button: a fresh group around a fresh blank tab; resolves to
     // the new group's id so the renderer can open its rename editor
     create(): Promise<string>
-    // drop a tab onto the middle of another: group them (or join the target's)
-    createFromDrop(targetId: string, draggedId: string): void
+    // tabs dropped onto the middle of another: group them (or join the
+    // target's); a multi-select drag passes the whole selection
+    createFromDrop(targetId: string, draggedIds: string[]): void
     close(id: string): void // close every member tab, group goes with them
     ungroup(id: string): void // dissolve: members stay as loose tabs
     rename(id: string, name: string): void
@@ -299,5 +303,7 @@ export interface SynapseApi {
     onEditFolder(cb: (folderId: string) => void): void
     onEditBookmark(cb: (bookmarkId: string) => void): void
     onEditGroup(cb: (groupId: string) => void): void
+    // a main-side action consumed the multi-selection (Group N Tabs, …)
+    onClearTabSelection(cb: () => void): void
   }
 }

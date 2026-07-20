@@ -442,21 +442,25 @@ export class TabManager {
     return gid
   }
 
-  // a tab dropped onto the middle of another: join the target's group, or
-  // found a new one around the pair. Slots (pins, bookmarks) can't group.
-  groupFromDrop(targetId: string, draggedId: string): void {
-    if (targetId === draggedId) return
-    if (this.model.isSlot(targetId) || this.model.isSlot(draggedId)) return
-    if (!this.model.order.includes(targetId) || !this.model.order.includes(draggedId)) return
+  // tabs dropped onto the middle of another: join the target's group, or
+  // found a new one around them. A multi-select drag carries every selected
+  // tab (issue #37). Slots (pins, bookmarks) can't group.
+  groupFromDrop(targetId: string, draggedIds: string[]): void {
+    if (this.model.isSlot(targetId) || !this.model.order.includes(targetId)) return
+    const dragged = this.model.order.filter(
+      (t) => draggedIds.includes(t) && t !== targetId && !this.model.isSlot(t),
+    )
+    if (dragged.length === 0) return
     let gid = this.model.groupOf(targetId)
     if (!gid) {
       gid = nextGroupId()
       this.groupMeta.set(gid, { name: 'New Group', profile: this.profileOf(targetId) })
       this.model.setGroup(targetId, gid)
     }
+    // moveMany's toIndex is post-removal: discount dragged tabs above the slot
     const to = this.model.order.indexOf(targetId) + 1
-    const from = this.model.order.indexOf(draggedId)
-    this.model.reorder(draggedId, from < to ? to - 1 : to, gid)
+    const above = dragged.filter((t) => this.model.order.indexOf(t) < to).length
+    this.model.moveMany(dragged, to - above, gid)
     this.refresh()
   }
 
@@ -914,6 +918,14 @@ export class TabManager {
     // a stale renderer can name a group that just reaped; treat as ungrouped
     const dest = group && this.groupMeta.has(group) ? group : group === undefined ? undefined : null
     this.model.reorder(id, Math.round(toIndex), dest)
+    this.refresh()
+  }
+
+  // multi-select drag (issue #37): the whole selection moves as one block
+  reorderTabs(ids: string[], toIndex: number, group?: string | null): void {
+    if (!Number.isFinite(toIndex)) return
+    const dest = group && this.groupMeta.has(group) ? group : group === undefined ? undefined : null
+    this.model.moveMany(ids, Math.round(toIndex), dest)
     this.refresh()
   }
 
