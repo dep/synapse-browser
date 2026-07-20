@@ -183,8 +183,13 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
         window.synapse.tabs.openInSplit(id)
         return
       }
-      selectedTabs.clear()
-      selectionAnchor = null
+      // repaint now — activating the already-active tab emits no snapshot,
+      // which would leave stale .selected highlights behind
+      if (selectedTabs.size > 0) {
+        selectedTabs.clear()
+        selectionAnchor = null
+        renderTabList(el, snap)
+      }
       window.synapse.tabs.activate(id)
     })
     item.addEventListener('dblclick', () => startTabRename(el, snap, item, title, id))
