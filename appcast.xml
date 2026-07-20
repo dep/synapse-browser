@@ -6,6 +6,29 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.9.0</title>
+            <pubDate>Mon, 20 Jul 2026 13:39:54 GMT</pubDate>
+            <sparkle:version>0.9.0</sparkle:version>
+            <sparkle:shortVersionString>0.9.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <h3>Tab Groups</h3>
+                <ul>
+                    <li>Group tabs in the sidebar: drag a tab onto the middle of another, or use the new + Group button</li>
+                    <li>Double-click a group to rename it; click to collapse or expand</li>
+                    <li>Close a whole group with its X button or right-click menu</li>
+                    <li>Assign a Default/Work profile to a group from its right-click menu</li>
+                    <li>Drag a group into your bookmarks to save it as a bookmark folder</li>
+                    <li>Groups are restored with your session across restarts</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/dep/synapse-browser/releases/download/0.9.0/Synapse.Browser-0.9.0-universal.dmg"
+                sparkle:edSignature="Vjwflih8g2CCERHFu8dtbN9eR8EN3MTttZAj1EnMbpbvmjOJRgqgy141t1MHiWZsZhRChaHWa5ef292D0T2DCA=="
+                length="219226597"
+                type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.8.2</title>
             <pubDate>Sun, 19 Jul 2026 17:27:53 +0000</pubDate>
             <sparkle:version>0.8.2</sparkle:version>
