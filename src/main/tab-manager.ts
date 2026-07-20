@@ -913,6 +913,10 @@ export class TabManager {
     const root = showsSplit(this.splitRoot, anchor) ? this.splitRoot! : { leaf: anchor }
     this.splitRoot = splitLeaf(root, anchor, id, dir)
     this.model.add(id, true, anchor)
+    // the new pane is the anchor's sibling in every sense: it stays in the
+    // anchor's tab group instead of dangling at the end of the list (#36)
+    const gid = this.model.groupOf(anchor)
+    if (gid && this.groupMeta.has(gid)) this.model.setGroup(id, gid)
     this.syncViews()
   }
 
