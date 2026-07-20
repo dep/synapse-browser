@@ -48,6 +48,8 @@ export interface WindowDeps {
   bookmarksChanged(): void
   // persistence gate: snapshots during startup must not clobber the stores
   isSessionRestored(): boolean
+  // profile auto-routing (issue #33): rule lookup for new-tab URLs
+  routeProfile(url: string): ProfileId | null
 }
 
 const bundles = new Map<number, WindowBundle>() // win.id → bundle
@@ -151,6 +153,7 @@ export function createWindow(
     },
     onNavigated: (url, title) => deps.history.add(url, title, Date.now()),
     onPageFavicon: (url, favicon) => deps.favicons.set(url, favicon),
+    routeProfile: (url) => deps.routeProfile(url),
     onSnapshot: (snap) => {
       win.webContents.send('tabs:updated', snap)
       // only the primary window persists; secondaries are ephemeral. The

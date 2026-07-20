@@ -1,4 +1,5 @@
 import type { AiChatMessage } from './ai'
+import type { ProfileRule } from './profile-routing'
 import type { PaneRect } from './split-layout'
 
 export type ProfileId = 'default' | 'work'
@@ -257,6 +258,12 @@ export interface SynapseApi {
     get(): Promise<AiSettings>
     set(patch: Partial<AiSettings>): Promise<void>
     open(): void
+  }
+  // profile auto-routing rules (issue #33); save replaces the whole list —
+  // the settings screen is the only writer and edits are atomic that way
+  profileRules: {
+    list(): Promise<ProfileRule[]>
+    save(rules: ProfileRule[]): Promise<void>
   }
   ai: {
     send(messages: AiChatMessage[]): void

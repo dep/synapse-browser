@@ -52,6 +52,9 @@ export interface TabManagerOptions {
   onTabActivated?(wc: WebContents, profile: ProfileId): void
   onSettingsClosed?(): void
   onFindResult?(result: { matches: number; active: number }): void
+  // profile auto-routing (issue #33): the first rule matching `url` names
+  // the container a new tab should open in; null = no rule, caller decides
+  routeProfile?(url: string): ProfileId | null
   // called instead of auto-creating a fresh tab when the last one goes away;
   // secondary windows close themselves here
   onEmpty?(): void
@@ -135,6 +138,9 @@ export class TabManager {
       this.opts.onSettingsClosed?.()
     }
     const id = nextTabId()
+    // a routing rule on a known-at-creation URL beats the caller's container
+    // (issue #33); blank tabs route later, on their first real navigation
+    if (url) profile = this.opts.routeProfile?.(classifyInput(url)) ?? profile
     this.profiles.set(id, profile)
     // spawned tabs (cmd+click, window.open) stay in their opener's group.
     // Membership lands right after model.add, but createView's host callbacks
@@ -770,7 +776,24 @@ export class TabManager {
   }
 
   navigate(id: string, input: string): void {
-    this.views.get(id)?.webContents.loadURL(classifyInput(input))
+    const view = this.views.get(id)
+    if (!view) return
+    const url = classifyInput(input)
+    // profile auto-routing (issue #33): the first navigation out of a blank
+    // tab can still move containers; established tabs stay where they are
+    // (mid-session conversion would tear down the page under the user)
+    const routed = this.opts.routeProfile?.(url)
+    if (routed && routed !== this.profileOf(id) && isBlankUrl(view.webContents.getURL())) {
+      this.suppressUrlbarFocus = true // setProfile's blank-tab focus steal
+      try {
+        this.setProfile(id, routed)
+      } finally {
+        this.suppressUrlbarFocus = false
+      }
+      this.views.get(id)?.webContents.loadURL(url)
+      return
+    }
+    view.webContents.loadURL(url)
   }
 
   back(id: string): void {

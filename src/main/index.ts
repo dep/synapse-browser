@@ -21,6 +21,8 @@ import { attachPermissionPrompts } from './media-permissions'
 import { PermissionsStore } from './permissions-store'
 import { PinsStore } from './pins-store'
 import { ShortcutsStore } from './shortcuts-store'
+import { ProfileRulesStore } from './profile-rules-store'
+import { routeProfile } from '../shared/profile-routing'
 import { WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { UiStore } from './ui-store'
@@ -97,6 +99,7 @@ app.whenReady().then(async () => {
   const shortcutsStore = new ShortcutsStore(userData)
   const permissionsStore = new PermissionsStore(userData)
   const settingsStore = new SettingsStore(userData)
+  const profileRulesStore = new ProfileRulesStore(userData)
   const weather = new WeatherService()
 
   // IPC only ever arrives from a window's chrome renderer or its suggestions
@@ -131,6 +134,7 @@ app.whenReady().then(async () => {
     extensions,
     bookmarksChanged,
     isSessionRestored: () => sessionRestored,
+    routeProfile: (url) => routeProfile(profileRulesStore.list(), url),
   }
 
   const primary = createWindow('primary', deps)
@@ -865,6 +869,9 @@ app.whenReady().then(async () => {
     if (typeof patch?.model === 'string') settingsStore.setAiModel(patch.model)
   })
 
+  ipcMain.handle('profile-rules:list', () => profileRulesStore.list())
+  ipcMain.handle('profile-rules:save', (_e, rules: unknown) => profileRulesStore.save(rules))
+
   ipcMain.on('ai:send', (_e, messages: unknown) => void ai.start(sanitizeMessages(messages)))
   ipcMain.on('ai:stop', () => ai.stop())
 
@@ -896,6 +903,7 @@ app.whenReady().then(async () => {
     shortcutsStore.flush()
     permissionsStore.flush()
     settingsStore.flush()
+    profileRulesStore.flush()
   })
 })
 

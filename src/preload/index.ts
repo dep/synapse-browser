@@ -87,6 +87,10 @@ const api: SynapseApi = {
     set: (patch) => ipcRenderer.invoke('settings:set', patch),
     open: () => ipcRenderer.send('ui:open-settings'),
   },
+  profileRules: {
+    list: () => ipcRenderer.invoke('profile-rules:list'),
+    save: (rules) => ipcRenderer.invoke('profile-rules:save', rules),
+  },
   ai: {
     send: (messages) => ipcRenderer.send('ai:send', messages),
     stop: () => ipcRenderer.send('ai:stop'),

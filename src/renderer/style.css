@@ -974,6 +974,14 @@ browser-action-list {
   gap: 12px;
   padding: 6px 0;
 }
+/* profile auto-routing rules (issue #33) */
+.rule-row .rule-pattern {
+  flex: 1;
+}
+.rule-row .rule-profile {
+  flex: none;
+  width: 110px;
+}
 .settings-row label {
   min-width: 150px;
   color: var(--fg-dim);
