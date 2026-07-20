@@ -76,6 +76,18 @@ describe('TabsStore', () => {
     ])
   })
 
+  it('keeps the settings tab url so it restores as itself', () => {
+    const store = new TabsStore(dir)
+    store.save(
+      [
+        { url: 'synapse://settings', profile: 'default' },
+        { url: 'https://a.test/', profile: 'default' },
+      ],
+      0,
+    )
+    expect(store.load().tabs.map((t) => t.url)).toEqual(['synapse://settings', 'https://a.test/'])
+  })
+
   it('keeps non-web urls as blank-tab placeholders', () => {
     const store = new TabsStore(dir)
     store.save(
@@ -192,6 +204,45 @@ describe('TabsStore tab groups', () => {
     const loaded = new TabsStore(dir).load()
     expect(loaded.groups).toEqual([{ id: 'g1', name: 'Ok' }])
     expect(loaded.tabs[0]).toEqual({ url: 'https://a.test/', profile: 'default', group: 'g1' })
+  })
+
+  it('round-trips a group color and drops absent ones', () => {
+    const store = new TabsStore(dir)
+    store.save(
+      [
+        { url: 'https://a.test/', profile: 'default', group: 'g1' },
+        { url: 'https://b.test/', profile: 'default', group: 'g2' },
+      ],
+      0,
+      [
+        { id: 'g1', name: 'Colored', color: 'blue' },
+        { id: 'g2', name: 'Plain' },
+      ],
+    )
+    store.flush()
+    expect(new TabsStore(dir).load().groups).toEqual([
+      { id: 'g1', name: 'Colored', color: 'blue' },
+      { id: 'g2', name: 'Plain' },
+    ])
+  })
+
+  it('ignores an unknown group color from a hand-edited file', () => {
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({
+        v: 4,
+        tabs: [{ url: 'https://a.test/', profile: 'default', group: 'g1' }],
+        groups: [
+          { id: 'g1', name: 'Ok', color: 'hotdog' },
+          { id: 'g2', name: 'Num', color: 42 },
+        ],
+        active: 0,
+      }),
+    )
+    expect(new TabsStore(dir).load().groups).toEqual([
+      { id: 'g1', name: 'Ok' },
+      { id: 'g2', name: 'Num' },
+    ])
   })
 
   it('loads v3 files (no groups) with an empty group list', () => {

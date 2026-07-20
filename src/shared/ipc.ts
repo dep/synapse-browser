@@ -1,7 +1,12 @@
 import type { AiChatMessage } from './ai'
+import type { ProfileRule } from './profile-routing'
 import type { PaneRect } from './split-layout'
 
 export type ProfileId = 'default' | 'work'
+
+// Settings lives in a real tab (issue #33). The tab has no WebContentsView;
+// this marker URL identifies it in snapshots, the urlbar, and the tabs store.
+export const SETTINGS_URL = 'synapse://settings'
 
 // primary = the persistent launch window (pins, bookmarks, AI sidebar);
 // secondary = an ephemeral Cmd+N / torn-out window showing only its own tabs
@@ -37,6 +42,24 @@ export interface TabInfo {
   profile: ProfileId
 }
 
+// the 12 preset tab-group colors (issue #34); a group may also have none.
+// Ids are stable store/IPC tokens — the renderer maps them to actual paint
+export const GROUP_COLORS = [
+  'red',
+  'orange',
+  'yellow',
+  'green',
+  'teal',
+  'cyan',
+  'blue',
+  'indigo',
+  'purple',
+  'pink',
+  'brown',
+  'grey',
+] as const
+export type GroupColor = (typeof GROUP_COLORS)[number]
+
 // a tab group: contiguous run of tab-list tabs under a named header.
 // profile is the group's last-assigned container — joining a group never
 // converts a tab; picking a profile in the group menu converts all members
@@ -44,6 +67,7 @@ export interface TabGroupInfo {
   id: string
   name: string
   profile: ProfileId
+  color?: GroupColor
 }
 
 export interface TabsSnapshot {
@@ -114,10 +138,13 @@ export interface SuggestionsOverlayApi {
   pick(url: string): void
 }
 
+// user-facing language calls these "bookmark groups"; the folder name is
+// historical and stays in code/store for compatibility
 export interface BookmarkFolder {
   id: string
   name: string
   profile?: ProfileId // absent = default; members without their own profile inherit it
+  color?: GroupColor // same 12-hue palette as tab groups (issue #34)
 }
 
 export interface Bookmark {
@@ -167,20 +194,26 @@ export interface SynapseApi {
     // group is the drop destination's tab group: a groupId joins it, null
     // leaves any group, undefined keeps the current membership
     reorder(id: string, toIndex: number, group?: string | null): void
+    // multi-select drag (issue #37): the ids move as one block in sidebar
+    // order; toIndex is the insertion index after removal
+    reorderMany(ids: string[], toIndex: number, group?: string | null): void
     // double-click rename in the sidebar; '' reverts to the page title
     rename(id: string, title: string): void
     // tear the tab out into its own window at the given screen point
     detach(id: string, screenX: number, screenY: number): void
-    // ⌘-click: tile the tab next to the focused pane (vertical split)
+    // ⌥-click: tile the tab next to the focused pane (vertical split)
     openInSplit(id: string): void
-    showContextMenu(id: string): void
+    // selection rides along when the row is part of a ⌘/⇧ multi-select
+    // (issue #37); the menu then offers group-the-selection actions
+    showContextMenu(id: string, selection?: string[]): void
   }
   groups: {
     // ＋ Group button: a fresh group around a fresh blank tab; resolves to
     // the new group's id so the renderer can open its rename editor
     create(): Promise<string>
-    // drop a tab onto the middle of another: group them (or join the target's)
-    createFromDrop(targetId: string, draggedId: string): void
+    // tabs dropped onto the middle of another: group them (or join the
+    // target's); a multi-select drag passes the whole selection
+    createFromDrop(targetId: string, draggedIds: string[]): void
     close(id: string): void // close every member tab, group goes with them
     ungroup(id: string): void // dissolve: members stay as loose tabs
     rename(id: string, name: string): void
@@ -237,6 +270,12 @@ export interface SynapseApi {
     set(patch: Partial<AiSettings>): Promise<void>
     open(): void
   }
+  // profile auto-routing rules (issue #33); save replaces the whole list —
+  // the settings screen is the only writer and edits are atomic that way
+  profileRules: {
+    list(): Promise<ProfileRule[]>
+    save(rules: ProfileRule[]): Promise<void>
+  }
   ai: {
     send(messages: AiChatMessage[]): void
     stop(): void
@@ -255,7 +294,6 @@ export interface SynapseApi {
     onSidebarVisible(cb: (visible: boolean) => void): void
     onAiSidebarWidth(cb: (px: number) => void): void
     onAiSidebarVisible(cb: (visible: boolean) => void): void
-    onSettings(cb: (open: boolean) => void): void
     onFindOpen(cb: () => void): void
     onFindStep(cb: (dir: 1 | -1) => void): void
     onFindResult(cb: (r: { matches: number; active: number }) => void): void
@@ -268,5 +306,7 @@ export interface SynapseApi {
     onEditFolder(cb: (folderId: string) => void): void
     onEditBookmark(cb: (bookmarkId: string) => void): void
     onEditGroup(cb: (groupId: string) => void): void
+    // a main-side action consumed the multi-selection (Group N Tabs, …)
+    onClearTabSelection(cb: () => void): void
   }
 }

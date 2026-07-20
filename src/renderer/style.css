@@ -290,6 +290,11 @@ body {
   background: var(--accent-wash);
   color: var(--active-fg);
 }
+/* ⌘/⇧ multi-select (issue #37) */
+.tab.selected {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .tab.active.work {
   background: var(--work-wash);
   color: var(--work-active-fg);
@@ -484,7 +489,9 @@ browser-action-list {
   flex: none;
   display: flex;
   justify-content: flex-end;
-  padding: 0 2px 2px;
+  /* same side inset as .panel-heading so ＋ Group and the bookmarks'
+     ＋ Group button share one right edge */
+  padding: 0 8px 2px;
 }
 #tab-tools[hidden] {
   display: none;
@@ -510,6 +517,42 @@ browser-action-list {
 .tab.grouped {
   margin-left: 14px;
 }
+/* tab-group colors (issue #34): 12 preset hues tuned for the dark shell */
+.gc-red { --group-color: #f7768e; }
+.gc-orange { --group-color: #ff9e64; }
+.gc-yellow { --group-color: #e0af68; }
+.gc-green { --group-color: #9ece6a; }
+.gc-teal { --group-color: #73daca; }
+.gc-cyan { --group-color: #7dcfff; }
+.gc-blue { --group-color: #7aa2f7; }
+.gc-indigo { --group-color: #7c85f3; }
+.gc-purple { --group-color: #bb9af7; }
+.gc-pink { --group-color: #ff75a0; }
+.gc-brown { --group-color: #c0946e; }
+.gc-grey { --group-color: #9a9aa3; }
+/* .folder covers both tab-group headers and bookmark-group rows. The color
+   paints a subtle wash behind the header — never its text — and yields to
+   the stronger active-tab highlight on collapsed groups */
+.folder.colored:not(.active) {
+  background: color-mix(in srgb, var(--group-color) 14%, transparent);
+}
+.folder.colored:not(.active):hover {
+  background: color-mix(in srgb, var(--group-color) 24%, transparent);
+}
+/* member rows hang off a rail in the group's color; the 2px border eats
+   into the margin so colored and plain grouped rows align */
+.tab.grouped.colored,
+.tab.indent.colored {
+  border-left: 2px solid var(--group-color);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.tab.grouped.colored {
+  margin-left: 12px;
+}
+.tab.indent.colored {
+  margin-left: 14px;
+}
 /* the middle-band group drop draws a box around the target pair-to-be */
 .tab.drop-into {
   box-shadow: inset 0 0 0 1.5px var(--accent);
@@ -519,6 +562,10 @@ browser-action-list {
 }
 .tab.asleep .favicon {
   opacity: 0.45;
+}
+/* unloaded background tabs (issue #35) read as dormant */
+.tab.asleep .tab-title {
+  color: var(--fg-dim);
 }
 .tab.indent {
   margin-left: 16px;
@@ -942,6 +989,14 @@ browser-action-list {
   align-items: center;
   gap: 12px;
   padding: 6px 0;
+}
+/* profile auto-routing rules (issue #33) */
+.rule-row .rule-pattern {
+  flex: 1;
+}
+.rule-row .rule-profile {
+  flex: none;
+  width: 110px;
 }
 .settings-row label {
   min-width: 150px;

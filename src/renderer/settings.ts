@@ -1,8 +1,9 @@
 import { acceleratorFromKeyEvent } from '../shared/accelerator'
 import { AI_MODELS } from '../shared/ai'
 import type { ShortcutRow } from '../shared/ipc'
+import type { ProfileRule } from '../shared/profile-routing'
 
-export type SettingsSection = 'general' | 'shortcuts'
+export type SettingsSection = 'general' | 'profiles' | 'shortcuts'
 
 // only one chord recording can be live; re-renders and settings close must
 // tear down its window-level capture listener or it would swallow keydowns
@@ -23,6 +24,7 @@ export function renderSettings(el: HTMLElement, section: SettingsSection): void 
 
   const sections: Array<{ id: SettingsSection; label: string }> = [
     { id: 'general', label: 'General' },
+    { id: 'profiles', label: 'Profiles' },
     { id: 'shortcuts', label: 'Keyboard Shortcuts' },
   ]
   for (const s of sections) {
@@ -39,6 +41,8 @@ export function renderSettings(el: HTMLElement, section: SettingsSection): void 
 
   if (section === 'general') {
     renderGeneralSection(body)
+  } else if (section === 'profiles') {
+    renderProfilesSection(body)
   } else {
     renderShortcutsSection(body)
   }
@@ -122,6 +126,101 @@ function renderGeneralSection(body: HTMLElement): void {
   })
   modelSelect.addEventListener('change', () => {
     void window.synapse.settings.set({ model: modelSelect.value })
+  })
+}
+
+// profile auto-routing rules (issue #33): a CRUD list of pattern → profile
+// rows. Edits save the whole list — the store debounces the disk write.
+function renderProfilesSection(body: HTMLElement): void {
+  const group = document.createElement('div')
+  group.className = 'settings-group'
+
+  const heading = document.createElement('h2')
+  heading.textContent = 'Auto-routing rules'
+  const hint = document.createElement('p')
+  hint.className = 'settings-hint'
+  hint.textContent =
+    'A new tab whose URL contains a pattern opens in that rule’s profile. ' +
+    'The first matching rule wins.'
+
+  const list = document.createElement('div')
+  list.id = 'profile-rules'
+
+  const toolbar = document.createElement('div')
+  toolbar.className = 'settings-toolbar'
+  const add = document.createElement('button')
+  add.className = 'settings-action'
+  add.textContent = 'Add Rule'
+  toolbar.append(add)
+
+  group.append(heading, hint, list, toolbar)
+  body.append(group)
+
+  let rules: ProfileRule[] = []
+  const save = (): void => void window.synapse.profileRules.save(rules)
+
+  const render = (): void => {
+    list.innerHTML = ''
+    if (rules.length === 0) {
+      const empty = document.createElement('p')
+      empty.className = 'settings-hint'
+      empty.textContent = 'No rules yet — add one to route matching tabs into a profile.'
+      list.append(empty)
+      return
+    }
+    for (const rule of rules) {
+      const row = document.createElement('div')
+      row.className = 'settings-row rule-row'
+
+      const pattern = document.createElement('input')
+      pattern.className = 'settings-input rule-pattern'
+      pattern.placeholder = 'e.g. github.com'
+      pattern.autocomplete = 'off'
+      pattern.spellcheck = false
+      pattern.value = rule.pattern
+      pattern.addEventListener('change', () => {
+        rule.pattern = pattern.value.trim()
+        save()
+      })
+
+      const profile = document.createElement('select')
+      profile.className = 'settings-input rule-profile'
+      for (const p of ['default', 'work'] as const) {
+        const opt = document.createElement('option')
+        opt.value = p
+        opt.textContent = p === 'default' ? 'Default' : 'Work'
+        profile.append(opt)
+      }
+      profile.value = rule.profile
+      profile.addEventListener('change', () => {
+        rule.profile = profile.value === 'work' ? 'work' : 'default'
+        save()
+      })
+
+      const remove = document.createElement('button')
+      remove.className = 'settings-action'
+      remove.textContent = 'Remove'
+      remove.addEventListener('click', () => {
+        rules = rules.filter((r) => r !== rule)
+        save()
+        render()
+      })
+
+      row.append(pattern, profile, remove)
+      list.append(row)
+    }
+  }
+
+  add.addEventListener('click', () => {
+    rules.push({ id: crypto.randomUUID(), pattern: '', profile: 'work' })
+    render()
+    const inputs = list.querySelectorAll<HTMLInputElement>('.rule-pattern')
+    inputs[inputs.length - 1]?.focus()
+  })
+
+  void window.synapse.profileRules.list().then((r) => {
+    rules = r
+    render()
   })
 }
 

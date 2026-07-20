@@ -77,6 +77,21 @@ describe('BookmarksStore', () => {
     expect(store.list().folders[1]!.id).toBe(b.id)
   })
 
+  it('setFolderColor sets, keeps on rename, and clears back to none', () => {
+    const f = store.addFolder('Work')
+    store.setFolderColor(f.id, 'teal')
+    expect(store.list().folders[0]!.color).toBe('teal')
+    store.renameFolder(f.id, 'Werk')
+    expect(store.list().folders[0]!.color).toBe('teal')
+    store.setFolderColor(f.id, null)
+    expect(store.list().folders[0]!.color).toBeUndefined()
+  })
+
+  it('addFolder carries an explicit color (group → bookmark-group save)', () => {
+    const f = store.addFolder('Tinted', 'default', 'pink')
+    expect(store.list().folders).toEqual([{ id: f.id, name: 'Tinted', color: 'pink' }])
+  })
+
   it('renameFolder renames in place', () => {
     const f = store.addFolder('Work')
     store.renameFolder(f.id, 'Werk')

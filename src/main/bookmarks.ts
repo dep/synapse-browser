@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import * as path from 'node:path'
-import type { Bookmark, BookmarkFolder, BookmarksData, ProfileId } from '../shared/ipc'
+import type { Bookmark, BookmarkFolder, BookmarksData, GroupColor, ProfileId } from '../shared/ipc'
 import { JsonStore } from './store'
 
 interface BookmarksFileV1 {
@@ -120,12 +120,13 @@ export class BookmarksStore {
     })
   }
 
-  addFolder(name: string, profile: ProfileId = 'default'): BookmarkFolder {
+  addFolder(name: string, profile: ProfileId = 'default', color?: GroupColor): BookmarkFolder {
     const { folders, bookmarks } = this.data
     const folder: BookmarkFolder = {
       id: randomUUID(),
       name,
       ...(profile !== 'default' ? { profile } : {}),
+      ...(color ? { color } : {}),
     }
     this.store.set({ v: 2, folders: [...folders, folder], bookmarks })
     return folder
@@ -140,6 +141,22 @@ export class BookmarksStore {
         const next = { ...f }
         if (profile === 'default') delete next.profile
         else next.profile = profile
+        return next
+      }),
+      bookmarks,
+    })
+  }
+
+  // the bookmark-group context menu's Color pick (issue #34); null clears
+  setFolderColor(id: string, color: GroupColor | null): void {
+    const { folders, bookmarks } = this.data
+    this.store.set({
+      v: 2,
+      folders: folders.map((f) => {
+        if (f.id !== id) return f
+        const next = { ...f }
+        if (color) next.color = color
+        else delete next.color
         return next
       }),
       bookmarks,

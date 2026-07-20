@@ -1,7 +1,8 @@
 import { app, dialog, ipcMain, Menu, session } from 'electron'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ProfileId, ShortcutRow, SuggestionsPayload } from '../shared/ipc'
+import type { GroupColor, ProfileId, ShortcutRow, SuggestionsPayload } from '../shared/ipc'
+import { GROUP_COLORS } from '../shared/ipc'
 import { normalizeAccelerator } from '../shared/accelerator'
 import { FIXED_SHORTCUTS, RESERVED_ACCELERATORS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
 import { parseBookmarksExport, planImport } from '../shared/bookmarks-io'
@@ -20,6 +21,8 @@ import { attachPermissionPrompts } from './media-permissions'
 import { PermissionsStore } from './permissions-store'
 import { PinsStore } from './pins-store'
 import { ShortcutsStore } from './shortcuts-store'
+import { ProfileRulesStore } from './profile-rules-store'
+import { routeProfile } from '../shared/profile-routing'
 import { WORK_PARTITION } from './tab-manager'
 import { TabsStore } from './tabs-store'
 import { UiStore } from './ui-store'
@@ -96,6 +99,7 @@ app.whenReady().then(async () => {
   const shortcutsStore = new ShortcutsStore(userData)
   const permissionsStore = new PermissionsStore(userData)
   const settingsStore = new SettingsStore(userData)
+  const profileRulesStore = new ProfileRulesStore(userData)
   const weather = new WeatherService()
 
   // IPC only ever arrives from a window's chrome renderer or its suggestions
@@ -130,6 +134,7 @@ app.whenReady().then(async () => {
     extensions,
     bookmarksChanged,
     isSessionRestored: () => sessionRestored,
+    routeProfile: (url) => routeProfile(profileRulesStore.list(), url),
   }
 
   const primary = createWindow('primary', deps)
@@ -151,8 +156,10 @@ app.whenReady().then(async () => {
     b.tabs.setAiSidebarVisible(b.aiVisible)
     b.win.webContents.send('ui:ai-visible', b.aiVisible)
   }
+  // Settings is a tab (issue #33): ⌘,/menu focuses it, minting it on demand;
+  // the renderer derives the settings screen from the snapshot's active URL
   const toggleSettings = (b: WindowBundle): void => {
-    b.win.webContents.send('ui:settings', b.tabs.toggleSettings())
+    b.tabs.openSettings()
   }
 
   const ai = new AiChatController({
@@ -213,6 +220,12 @@ app.whenReady().then(async () => {
     if (group !== undefined && group !== null && typeof group !== 'string') return
     forSender(e)?.tabs.reorderTab(id, Number(toIndex), group)
   })
+  ipcMain.on('tabs:reorder-many', (e, ids: unknown, toIndex: number, group?: unknown) => {
+    if (!Array.isArray(ids)) return
+    if (group !== undefined && group !== null && typeof group !== 'string') return
+    const clean = ids.filter((x): x is string => typeof x === 'string')
+    if (clean.length > 0) forSender(e)?.tabs.reorderTabs(clean, Number(toIndex), group)
+  })
   ipcMain.on('tabs:rename', (e, id: string, title: string) => {
     if (typeof id === 'string' && typeof title === 'string')
       forSender(e)?.tabs.renameTab(id, title)
@@ -231,9 +244,54 @@ app.whenReady().then(async () => {
     detachTabToNewWindow(b, id, x, y, deps)
   })
 
-  ipcMain.on('tabs:context-menu', (e, id: string) => {
+  ipcMain.on('tabs:context-menu', (e, id: string, selection?: unknown) => {
     const b = forSender(e)
     if (!b || typeof id !== 'string') return
+    // a ⌘/⇧ multi-select (issue #37): the menu acts on the whole selection
+    const sel = Array.isArray(selection)
+      ? [...new Set(selection.filter((s): s is string => typeof s === 'string'))]
+      : []
+    if (sel.length > 1 && sel.includes(id)) {
+      const items: Electron.MenuItemConstructorOptions[] = [
+        {
+          label: `Group ${sel.length} Tabs`,
+          click: () => {
+            const gid = b.tabs.groupSelection(sel)
+            if (gid) {
+              b.win.webContents.send('ui:clear-tab-selection')
+              b.win.webContents.send('ui:edit-group', gid)
+            }
+          },
+        },
+      ]
+      const targets = b.tabs
+        .groupIds()
+        .flatMap((g) => b.tabs.groupInfo(g) ?? [])
+      if (targets.length > 0) {
+        items.push({
+          label: 'Add to Group',
+          submenu: targets.map((g) => ({
+            label: g.name,
+            click: () => {
+              if (b.tabs.groupSelection(sel, g.id)) {
+                b.win.webContents.send('ui:clear-tab-selection')
+              }
+            },
+          })),
+        })
+      }
+      items.push(
+        { type: 'separator' },
+        {
+          label: `Close ${sel.length} Tabs`,
+          click: () => {
+            for (const t of sel) b.tabs.closeTab(t)
+          },
+        },
+      )
+      Menu.buildFromTemplate(items).popup({ window: b.win })
+      return
+    }
     const pinned = b.tabs.isPinned(id)
     const profile = b.tabs.profileOf(id)
     const template: Electron.MenuItemConstructorOptions[] = [
@@ -268,6 +326,11 @@ app.whenReady().then(async () => {
     if (b.tabs.groupOf(id)) {
       template.push({ label: 'Remove from Group', click: () => b.tabs.ungroupTab(id) })
     }
+    // ⌘-click now multi-selects (issue #37), so split tiling lives here
+    // (and on ⌥-click) instead
+    if (b.tabs.activeId && b.tabs.activeId !== id) {
+      template.push({ label: 'Open in Split View', click: () => b.tabs.openInSplit(id) })
+    }
     template.push(
       { type: 'separator' },
       // closing a pin puts it to sleep; the slot stays in the row
@@ -287,7 +350,8 @@ app.whenReady().then(async () => {
     if (!info) return
     const members = b.tabs.groupTabIds(gid)
     if (members.length === 0) return
-    const folder = bookmarks.addFolder(info.name, info.profile)
+    // the group's color survives the conversion into a bookmark group (#34)
+    const folder = bookmarks.addFolder(info.name, info.profile, info.color)
     for (const tid of members) {
       const page = b.tabs.infoFor(tid)
       if (!page || !/^https?:\/\//.test(page.url)) continue // blank/error tabs stay tabs
@@ -299,10 +363,30 @@ app.whenReady().then(async () => {
     bookmarksChanged()
   }
 
+  // shared by tab-group and bookmark-group context menus (issue #34)
+  const colorSubmenu = (
+    current: GroupColor | undefined,
+    pick: (c: GroupColor | null) => void,
+  ): Electron.MenuItemConstructorOptions => ({
+    label: 'Color',
+    submenu: [
+      { label: 'None', type: 'radio', checked: !current, click: () => pick(null) },
+      ...GROUP_COLORS.map(
+        (c): Electron.MenuItemConstructorOptions => ({
+          label: c[0]!.toUpperCase() + c.slice(1),
+          type: 'radio',
+          checked: current === c,
+          click: () => pick(c),
+        }),
+      ),
+    ],
+  })
+
   ipcMain.handle('groups:create', (e) => forSender(e)?.tabs.createGroupWithTab() ?? null)
-  ipcMain.on('groups:create-from-drop', (e, targetId: string, draggedId: string) => {
-    if (typeof targetId === 'string' && typeof draggedId === 'string')
-      forSender(e)?.tabs.groupFromDrop(targetId, draggedId)
+  ipcMain.on('groups:create-from-drop', (e, targetId: string, draggedIds: unknown) => {
+    if (typeof targetId !== 'string' || !Array.isArray(draggedIds)) return
+    const clean = draggedIds.filter((x): x is string => typeof x === 'string')
+    if (clean.length > 0) forSender(e)?.tabs.groupFromDrop(targetId, clean)
   })
   ipcMain.on('groups:close', (e, id: string) => {
     if (typeof id === 'string') forSender(e)?.tabs.closeGroup(id)
@@ -347,6 +431,7 @@ app.whenReady().then(async () => {
           },
         ],
       },
+      colorSubmenu(info.color, (c) => b.tabs.setGroupColor(id, c)),
       { type: 'separator' },
     ]
     if (b.role === 'primary') {
@@ -598,7 +683,11 @@ app.whenReady().then(async () => {
             },
           ],
         },
-        { label: 'Delete Folder…', click: () => void removeFolderWithConfirm(id) },
+        colorSubmenu(folder.color, (c) => {
+          bookmarks.setFolderColor(id, c)
+          bookmarksChanged()
+        }),
+        { label: 'Delete Group…', click: () => void removeFolderWithConfirm(id) },
       ]).popup({ window: b.win })
     } else if (kind === 'bookmark') {
       const { folders, bookmarks: all } = bookmarks.list()
@@ -789,8 +878,7 @@ app.whenReady().then(async () => {
 
   // the AI sidebar's "Open Settings" shortcut must open, never close
   ipcMain.on('ui:open-settings', (e) => {
-    const b = forSender(e)
-    if (b && !b.tabs.isSettingsOpen()) toggleSettings(b)
+    forSender(e)?.tabs.openSettings()
   })
 
   ipcMain.handle('settings:get', () => ({
@@ -801,6 +889,9 @@ app.whenReady().then(async () => {
     if (typeof patch?.apiKey === 'string') settingsStore.setAiApiKey(patch.apiKey.trim())
     if (typeof patch?.model === 'string') settingsStore.setAiModel(patch.model)
   })
+
+  ipcMain.handle('profile-rules:list', () => profileRulesStore.list())
+  ipcMain.handle('profile-rules:save', (_e, rules: unknown) => profileRulesStore.save(rules))
 
   ipcMain.on('ai:send', (_e, messages: unknown) => void ai.start(sanitizeMessages(messages)))
   ipcMain.on('ai:stop', () => ai.stop())
@@ -833,6 +924,7 @@ app.whenReady().then(async () => {
     shortcutsStore.flush()
     permissionsStore.flush()
     settingsStore.flush()
+    profileRulesStore.flush()
   })
 })
 

@@ -1,10 +1,11 @@
 import './style.css'
 import { CANVAS_GAP, CANVAS_RADIUS } from '../shared/canvas-layout'
 import type { BookmarksData, TabsSnapshot } from '../shared/ipc'
+import { SETTINGS_URL } from '../shared/ipc'
 import type { PaneRect } from '../shared/split-layout'
 import { renderBookmarks, startItemEdit } from './bookmarks-section'
 import { PanelMode, renderPanel } from './panel'
-import { renderPins, renderTabList, startGroupEdit } from './sidebar'
+import { clearTabSelection, renderPins, renderTabList, startGroupEdit } from './sidebar'
 import { cancelRecording, renderSettings } from './settings'
 import { initTopbar } from './topbar'
 import { initFindBar } from './find-bar'
@@ -113,14 +114,18 @@ aiResizeEl.addEventListener('mousedown', (e) => {
   e.preventDefault()
   window.synapse.ui.startAiSidebarDrag()
 })
-window.synapse.ui.onSettings((open) => {
-  settingsOpen = open
+// Settings is a tab (issue #33): its visibility is derived from the active
+// tab's URL, so it opens, closes, and restores like any other tab
+function syncSettingsView(): void {
+  const active = snap.activeId ? snap.tabs[snap.activeId] : undefined
+  const show = active?.url === SETTINGS_URL
+  if (show === settingsOpen) return
+  settingsOpen = show
   findBar.close()
-  settingsEl.hidden = !open
-  if (open) renderSettings(settingsEl, 'general')
+  settingsEl.hidden = !show
+  if (show) renderSettings(settingsEl, 'general')
   else cancelRecording()
-  render()
-})
+}
 sidebarResizeEl.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return
   e.preventDefault()
@@ -146,6 +151,7 @@ document.getElementById('new-group')!.addEventListener('click', () => {
   })
 })
 window.synapse.ui.onEditGroup((id) => startGroupEdit(id))
+window.synapse.ui.onClearTabSelection(() => clearTabSelection())
 document.getElementById('show-history')!.addEventListener('click', () => setPanel('history'))
 window.synapse.ui.onToggleHistory(() => setPanel('history'))
 window.synapse.ui.onBookmarksChanged(() => void refreshBookmarks())
@@ -160,6 +166,7 @@ function setPanel(mode: PanelMode): void {
 }
 
 function render(): void {
+  syncSettingsView()
   // chrome-aware accents (urlbar focus ring, canvas ring) follow the active
   // tab's profile
   const activeProfile = snap.activeId ? snap.tabs[snap.activeId]?.profile : undefined

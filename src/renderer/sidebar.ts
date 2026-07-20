@@ -18,6 +18,12 @@ let editingGroup: string | null = null
 let lastEl: HTMLElement | null = null
 let lastSnap: TabsSnapshot | null = null
 
+// multi-select (issue #37): ⌘-click toggles, ⇧-click ranges from the anchor.
+// Presentation-only state like collapse — a plain click clears it, and ids
+// that leave the tab list are pruned each render.
+const selectedTabs = new Set<string>()
+let selectionAnchor: string | null = null
+
 // open a group's rename editor (＋ Group button, context-menu Rename); the
 // editor appears on this render if the group is known, else when its
 // snapshot arrives
@@ -71,10 +77,28 @@ export function renderPins(el: HTMLElement, snap: TabsSnapshot): void {
   })
 }
 
-// insertion index into snap.order after the dragged tab is removed
-function adjustedIndex(snap: TabsSnapshot, draggedId: string, to: number): number {
-  const from = snap.order.indexOf(draggedId)
-  return from !== -1 && from < to ? to - 1 : to
+// insertion index into snap.order after the dragged tabs are removed
+function adjustedIndex(snap: TabsSnapshot, draggedIds: string[], to: number): number {
+  const above = draggedIds.filter((t) => {
+    const from = snap.order.indexOf(t)
+    return from !== -1 && from < to
+  }).length
+  return to - above
+}
+
+// a drag that starts inside the multi-selection carries the whole selection
+// (issue #37), in sidebar order; any other drag carries just itself
+function dragTabIds(snap: TabsSnapshot, draggedId: string): string[] {
+  if (!selectedTabs.has(draggedId) || selectedTabs.size < 2) return [draggedId]
+  return snap.order.filter((t) => selectedTabs.has(t))
+}
+
+// a drop or main-side action consumed the selection: clear the highlights
+export function clearTabSelection(): void {
+  if (selectedTabs.size === 0) return
+  selectedTabs.clear()
+  selectionAnchor = null
+  if (lastEl && lastSnap) renderTabList(lastEl, lastSnap)
 }
 
 // move a whole group block before/after an anchor tab's position; indices
@@ -104,13 +128,20 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
   // a group that vanished (closed, saved to bookmarks) drops its local state
   if (editingGroup && !snap.groups[editingGroup]) editingGroup = null
   for (const gid of [...collapsedGroups]) if (!snap.groups[gid]) collapsedGroups.delete(gid)
+  for (const id of [...selectedTabs]) if (!snap.order.includes(id)) selectedTabs.delete(id)
+  if (selectionAnchor && !snap.order.includes(selectionAnchor)) selectionAnchor = null
   wireDropZone(el, {
     accepts: (d) => d.kind === 'tab' || d.kind === 'group',
     onDrop: (d) => {
       // empty space below the rows: tabs go to the end, ungrouped; group
       // blocks move to the end wholesale
-      if (d.kind === 'group') window.synapse.groups.reorder(d.id, lastOrder.length)
-      else window.synapse.tabs.reorder(d.id, lastOrder.length - 1, null)
+      if (d.kind === 'group') {
+        window.synapse.groups.reorder(d.id, lastOrder.length)
+        return
+      }
+      const ids = dragTabIds(lastSnap!, d.id)
+      window.synapse.tabs.reorderMany(ids, lastOrder.length - ids.length, null)
+      clearTabSelection()
     },
   })
   lastOrder = snap.order
@@ -122,10 +153,14 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     if (gid && gid !== prevGroup) el.append(groupHeader(el, snap, gid, i))
     prevGroup = gid
     if (gid && collapsedGroups.has(gid)) return
+    const groupColor = gid ? snap.groups[gid]?.color : undefined
     const item = document.createElement('div')
     item.className =
       'tab' +
       (gid ? ' grouped' : '') +
+      (groupColor ? ` colored gc-${groupColor}` : '') +
+      (selectedTabs.has(id) ? ' selected' : '') +
+      (tab.isAsleep ? ' asleep' : '') +
       (id === snap.activeId ? ' active' : '') +
       (tab.profile === 'work' ? ' work' : '') +
       (snap.panes.includes(id) ? ' in-split' : '')
@@ -147,9 +182,38 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
 
     item.append(icon, title, close)
     item.addEventListener('click', (e) => {
-      // ⌘-click tiles the tab next to the current pane instead of switching
-      if (e.metaKey || e.ctrlKey) window.synapse.tabs.openInSplit(id)
-      else window.synapse.tabs.activate(id)
+      // ⌘-click toggles selection, ⇧-click selects the anchor→here range
+      // (issue #37); ⌥-click keeps the old split-tiling gesture
+      if (e.metaKey || e.ctrlKey) {
+        if (selectedTabs.has(id)) selectedTabs.delete(id)
+        else selectedTabs.add(id)
+        selectionAnchor = id
+        renderTabList(el, snap)
+        return
+      }
+      if (e.shiftKey) {
+        const from = selectionAnchor ?? snap.activeId ?? id
+        const a = snap.order.indexOf(from)
+        const b = snap.order.indexOf(id)
+        const [lo, hi] = a <= b ? [a, b] : [b, a]
+        selectedTabs.clear()
+        for (const t of snap.order.slice(Math.max(lo, 0), hi + 1)) selectedTabs.add(t)
+        selectionAnchor = from
+        renderTabList(el, snap)
+        return
+      }
+      if (e.altKey) {
+        window.synapse.tabs.openInSplit(id)
+        return
+      }
+      // repaint now — activating the already-active tab emits no snapshot,
+      // which would leave stale .selected highlights behind
+      if (selectedTabs.size > 0) {
+        selectedTabs.clear()
+        selectionAnchor = null
+        renderTabList(el, snap)
+      }
+      window.synapse.tabs.activate(id)
     })
     item.addEventListener('dblclick', () => startTabRename(el, snap, item, title, id))
     // middle click doesn't fire 'click' in browsers; it's reported via auxclick
@@ -158,7 +222,12 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     })
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault()
-      window.synapse.tabs.showContextMenu(id)
+      // right-clicking inside the selection acts on all of it; outside, on
+      // this row alone
+      window.synapse.tabs.showContextMenu(
+        id,
+        selectedTabs.has(id) && selectedTabs.size > 1 ? [...selectedTabs] : undefined,
+      )
     })
     wireDragItem(item, { kind: 'tab', id }, {
       accepts: (d) => d.kind === 'tab' || (d.kind === 'group' && d.id !== gid),
@@ -169,15 +238,17 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
           moveGroupNextTo(snap, d.id, id, before)
           return
         }
+        const ids = dragTabIds(snap, d.id)
         if (into) {
           // onto a grouped tab: join right behind it; onto a loose tab:
-          // found a new group around the pair
-          if (gid) window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, i + 1), gid)
-          else window.synapse.groups.createFromDrop(id, d.id)
-          return
+          // found a new group around target + dragged
+          if (gid) window.synapse.tabs.reorderMany(ids, adjustedIndex(snap, ids, i + 1), gid)
+          else window.synapse.groups.createFromDrop(id, ids)
+        } else {
+          // edges reorder; the destination membership follows this row's group
+          window.synapse.tabs.reorderMany(ids, adjustedIndex(snap, ids, i + (before ? 0 : 1)), gid)
         }
-        // edges reorder; the destination membership follows this row's group
-        window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, i + (before ? 0 : 1)), gid)
+        clearTabSelection()
       },
       // released past the window edge: tear the tab into its own window
       onDragOut: (e) => window.synapse.tabs.detach(id, e.screenX, e.screenY),
@@ -200,6 +271,7 @@ function groupHeader(
   row.className =
     'panel-item folder group-header' +
     (group.profile === 'work' ? ' work' : '') +
+    (group.color ? ` colored gc-${group.color}` : '') +
     // a collapsed group hides its rows; carry the hidden active tab's
     // highlight on the header so focus never disappears from the sidebar
     (collapsed && snap.activeId && members.includes(snap.activeId) ? ' active' : '')
@@ -244,7 +316,9 @@ function groupHeader(
     onDrop: (d, before, into) => {
       if (into && d.kind === 'tab') {
         collapsedGroups.delete(gid) // auto-expand so the drop is visible
-        window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, firstIndex), gid)
+        const ids = dragTabIds(snap, d.id)
+        window.synapse.tabs.reorderMany(ids, adjustedIndex(snap, ids, firstIndex), gid)
+        clearTabSelection()
         return
       }
       // group onto group header: whole-block reorder around this block

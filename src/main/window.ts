@@ -48,6 +48,8 @@ export interface WindowDeps {
   bookmarksChanged(): void
   // persistence gate: snapshots during startup must not clobber the stores
   isSessionRestored(): boolean
+  // profile auto-routing (issue #33): rule lookup for new-tab URLs
+  routeProfile(url: string): ProfileId | null
 }
 
 const bundles = new Map<number, WindowBundle>() // win.id → bundle
@@ -151,6 +153,7 @@ export function createWindow(
     },
     onNavigated: (url, title) => deps.history.add(url, title, Date.now()),
     onPageFavicon: (url, favicon) => deps.favicons.set(url, favicon),
+    routeProfile: (url) => deps.routeProfile(url),
     onSnapshot: (snap) => {
       win.webContents.send('tabs:updated', snap)
       // only the primary window persists; secondaries are ephemeral. The
@@ -200,7 +203,6 @@ export function createWindow(
     onTabActivated: (wc, profile) => {
       if (profile === 'default') deps.extensions.selectTab(wc)
     },
-    onSettingsClosed: () => win.webContents.send('ui:settings', false),
     onFindResult: (r) => win.webContents.send('ui:find-result', r),
     // a tab tearing out of this window: drop this window's cycle-hook and
     // context-menu listeners, and its extension registration — the
@@ -289,7 +291,6 @@ export function createWindow(
     win.webContents.send('ui:sidebar-visible', bundle.sidebarVisible)
     win.webContents.send('ui:ai-width', aiSidebarResize.current)
     win.webContents.send('ui:ai-visible', bundle.aiVisible)
-    win.webContents.send('ui:settings', tabs.isSettingsOpen())
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {

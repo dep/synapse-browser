@@ -14,15 +14,16 @@ const api: SynapseApi = {
     openNavInNewTab: (id, offset) => ipcRenderer.send('tabs:nav-new-tab', id, offset),
     stop: (id) => ipcRenderer.send('tabs:stop', id),
     reorder: (id, toIndex, group) => ipcRenderer.send('tabs:reorder', id, toIndex, group),
+    reorderMany: (ids, toIndex, group) => ipcRenderer.send('tabs:reorder-many', ids, toIndex, group),
     rename: (id, title) => ipcRenderer.send('tabs:rename', id, title),
     detach: (id, screenX, screenY) => ipcRenderer.send('tabs:detach', id, screenX, screenY),
     openInSplit: (id) => ipcRenderer.send('tabs:open-in-split', id),
-    showContextMenu: (id) => ipcRenderer.send('tabs:context-menu', id),
+    showContextMenu: (id, selection) => ipcRenderer.send('tabs:context-menu', id, selection),
   },
   groups: {
     create: () => ipcRenderer.invoke('groups:create'),
-    createFromDrop: (targetId, draggedId) =>
-      ipcRenderer.send('groups:create-from-drop', targetId, draggedId),
+    createFromDrop: (targetId, draggedIds) =>
+      ipcRenderer.send('groups:create-from-drop', targetId, draggedIds),
     close: (id) => ipcRenderer.send('groups:close', id),
     ungroup: (id) => ipcRenderer.send('groups:ungroup', id),
     rename: (id, name) => ipcRenderer.send('groups:rename', id, name),
@@ -87,6 +88,10 @@ const api: SynapseApi = {
     set: (patch) => ipcRenderer.invoke('settings:set', patch),
     open: () => ipcRenderer.send('ui:open-settings'),
   },
+  profileRules: {
+    list: () => ipcRenderer.invoke('profile-rules:list'),
+    save: (rules) => ipcRenderer.invoke('profile-rules:save', rules),
+  },
   ai: {
     send: (messages) => ipcRenderer.send('ai:send', messages),
     stop: () => ipcRenderer.send('ai:stop'),
@@ -119,9 +124,6 @@ const api: SynapseApi = {
     onAiSidebarVisible: (cb) => {
       ipcRenderer.on('ui:ai-visible', (_e, visible) => cb(visible))
     },
-    onSettings: (cb) => {
-      ipcRenderer.on('ui:settings', (_e, open) => cb(open))
-    },
     onFindOpen: (cb) => {
       ipcRenderer.on('ui:find-open', () => cb())
     },
@@ -151,6 +153,9 @@ const api: SynapseApi = {
     },
     onEditGroup: (cb) => {
       ipcRenderer.on('ui:edit-group', (_e, groupId) => cb(groupId))
+    },
+    onClearTabSelection: (cb) => {
+      ipcRenderer.on('ui:clear-tab-selection', () => cb())
     },
   },
 }

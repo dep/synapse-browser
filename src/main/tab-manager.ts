@@ -15,6 +15,7 @@ import { isBlankUrl } from '../shared/newtab'
 import { routeWindowOpen } from '../shared/popup-router'
 import type {
   Bookmark,
+  GroupColor,
   PinSlot,
   ProfileId,
   TabGroupInfo,
@@ -22,15 +23,22 @@ import type {
   TabsSnapshot,
   WindowRole,
 } from '../shared/ipc'
+import { SETTINGS_URL } from '../shared/ipc'
 import { ClosedTabsStack } from './closed-tabs'
 import { nextGroupId, nextTabId } from './tab-ids'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
+import { staleTabs, UNLOAD_AFTER_MS, UNLOAD_SWEEP_MS } from '../shared/tab-unload'
 import { AI_SIDEBAR_WIDTH_DEFAULT, clampAiSidebarWidth } from '../shared/ai'
 
 export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
+
+// issue #35 timings, env-overridable so a dev run can verify unloading in
+// seconds instead of hours (SYNAPSE_UNLOAD_AFTER_MS / SYNAPSE_UNLOAD_SWEEP_MS)
+const UNLOAD_AFTER = Number(process.env.SYNAPSE_UNLOAD_AFTER_MS) || UNLOAD_AFTER_MS
+const UNLOAD_SWEEP = Number(process.env.SYNAPSE_UNLOAD_SWEEP_MS) || UNLOAD_SWEEP_MS
 
 // When a page destroys its own view (window.close() on a script-opened tab)
 // Electron nulls the view's `webContents` getter; an already-torn-down view
@@ -49,8 +57,10 @@ export interface TabManagerOptions {
   onSnapshot(snap: TabsSnapshot): void
   onTabCreated?(wc: WebContents, profile: ProfileId): void
   onTabActivated?(wc: WebContents, profile: ProfileId): void
-  onSettingsClosed?(): void
   onFindResult?(result: { matches: number; active: number }): void
+  // profile auto-routing (issue #33): the first rule matching `url` names
+  // the container a new tab should open in; null = no rule, caller decides
+  routeProfile?(url: string): ProfileId | null
   // called instead of auto-creating a fresh tab when the last one goes away;
   // secondary windows close themselves here
   onEmpty?(): void
@@ -78,7 +88,7 @@ export class TabManager {
   private customTitles = new Map<string, string>()
   // tab-group meta; membership and ordering live in the model. Meta for a
   // group whose last member left is reaped at the next snapshot.
-  private groupMeta = new Map<string, { name: string; profile: ProfileId }>()
+  private groupMeta = new Map<string, { name: string; profile: ProfileId; color?: GroupColor }>()
   // true while a createTab is between meta-mint and first-member join; the
   // snapshot reap must not collect group meta in that window
   private creatingTab = false
@@ -103,11 +113,24 @@ export class TabManager {
   private sidebarVisible = true
   private aiSidebarWidth = AI_SIDEBAR_WIDTH_DEFAULT
   private aiSidebarVisible = false
-  private settingsOpen = false
+  // Settings is a real tab (issue #33): a model entry with NO view. While
+  // it's active, syncViews attaches no page view and the chrome renderer
+  // draws the settings UI in the page cell. Exit = activate any other tab;
+  // close it like any tab.
+  private settingsTabId: string | null = null
+
+  private get settingsOpen(): boolean {
+    return this.settingsTabId !== null && this.model.activeId === this.settingsTabId
+  }
   private blankActivatedId: string | null = null
   // per-tab listener disposers, so a tab moving to another window (tear-out)
   // leaves none of this window's listeners behind on its WebContents
   private wired = new Map<string, Array<() => void>>()
+  // unloaded background tabs (issue #35): view destroyed to free memory, tab
+  // entry kept; the next activation recreates the view and reloads the page
+  private discarded = new Map<string, { url: string; title: string; favicon: string | null }>()
+  private lastActive = new Map<string, number>()
+  private unloadTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(
     private win: BrowserWindow,
@@ -115,6 +138,46 @@ export class TabManager {
   ) {
     this.paneButtons = new PaneOverlays(win)
     win.on('resize', () => this.layout())
+    this.unloadTimer = setInterval(() => this.unloadStaleTabs(), UNLOAD_SWEEP)
+  }
+
+  // the 5-minute sweep behind background-tab unloading (issue #35)
+  private unloadStaleTabs(): void {
+    const now = Date.now()
+    const stale = staleTabs(
+      this.model.order
+        .filter((id) => this.views.has(id) && !isDeadView(this.views.get(id)!))
+        .map((id) => {
+          const wc = this.views.get(id)!.webContents
+          return {
+            id,
+            lastActiveAt: this.lastActive.get(id) ?? now,
+            isActive: this.model.activeId === id,
+            isVisible: this.attachedAll.has(id),
+            isAudible: wc.isCurrentlyAudible(),
+            isLoading: wc.isLoading(),
+          }
+        }),
+      now,
+      UNLOAD_AFTER,
+    )
+    if (stale.length === 0) return
+    for (const id of stale) this.discardTab(id)
+    this.refresh()
+  }
+
+  // destroy a background tab's view but keep its tab entry; never called on
+  // the active tab, visible panes, or slots (those sleep via sleepSlot)
+  private discardTab(id: string): void {
+    const view = this.views.get(id)
+    if (!view || isDeadView(view) || this.model.isSlot(id)) return
+    const wc = view.webContents
+    this.discarded.set(id, {
+      url: wc.getURL(),
+      title: wc.getTitle() || 'New Tab',
+      favicon: this.favicons.get(id) ?? null,
+    })
+    this.destroyView(id, view, false)
   }
 
   get activeId(): string | null {
@@ -128,12 +191,10 @@ export class TabManager {
     opener?: string | null,
     group?: string | null,
   ): string {
-    // background tabs must not dismiss the settings screen
-    if (activate && this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
-    }
     const id = nextTabId()
+    // a routing rule on a known-at-creation URL beats the caller's container
+    // (issue #33); blank tabs route later, on their first real navigation
+    if (url) profile = this.opts.routeProfile?.(classifyInput(url)) ?? profile
     this.profiles.set(id, profile)
     // spawned tabs (cmd+click, window.open) stay in their opener's group.
     // Membership lands right after model.add, but createView's host callbacks
@@ -204,6 +265,7 @@ export class TabManager {
     view.setBorderRadius(CANVAS_RADIUS)
     this.views.set(id, view)
     this.favicons.set(id, null)
+    this.lastActive.set(id, Date.now())
     this.wireEvents(id, view.webContents)
     this.opts.onTabCreated?.(view.webContents, profile)
     this.wirePopupRouting(view.webContents, id)
@@ -213,6 +275,38 @@ export class TabManager {
   closeTab(id: string): void {
     if (this.model.isSlot(id)) {
       this.sleepSlot(id)
+      return
+    }
+    // the settings tab closes like any tab; there's no view to tear down
+    if (id === this.settingsTabId) {
+      this.settingsTabId = null
+      this.lastActive.delete(id)
+      this.model.close(id)
+      if (!this.model.activeId) {
+        this.handleEmpty()
+        return
+      }
+      this.syncViews()
+      return
+    }
+    // an unloaded tab (issue #35) has no view to tear down — just bookkeeping
+    const unloaded = this.discarded.get(id)
+    if (unloaded) {
+      this.discarded.delete(id)
+      this.lastActive.delete(id)
+      this.closed.push({
+        url: unloaded.url,
+        profile: this.profileOf(id),
+        index: this.model.order.indexOf(id),
+      })
+      this.model.close(id)
+      this.profiles.delete(id)
+      this.customTitles.delete(id)
+      if (!this.model.activeId) {
+        this.handleEmpty()
+        return
+      }
+      this.syncViews()
       return
     }
     const view = this.views.get(id)
@@ -243,6 +337,7 @@ export class TabManager {
     this.destroyView(id, view, wasAttached)
     this.profiles.delete(id)
     this.customTitles.delete(id)
+    this.lastActive.delete(id)
     if (!this.model.activeId) {
       this.handleEmpty()
       return
@@ -286,6 +381,7 @@ export class TabManager {
     this.favicons.delete(id)
     this.profiles.delete(id)
     this.customTitles.delete(id)
+    this.lastActive.delete(id)
     if (!this.model.activeId) {
       this.handleEmpty()
       return { id, view, profile, favicon, customTitle }
@@ -313,6 +409,10 @@ export class TabManager {
   // window teardown: close every view without model bookkeeping; ids are
   // cleared first so the resulting 'destroyed' events find nothing to reconcile
   dispose(): void {
+    if (this.unloadTimer) clearInterval(this.unloadTimer)
+    this.unloadTimer = null
+    this.discarded.clear()
+    this.lastActive.clear()
     for (const id of [...this.wired.keys()]) this.unwire(id)
     const views = [...this.views.values()]
     this.views.clear()
@@ -357,21 +457,25 @@ export class TabManager {
     return gid
   }
 
-  // a tab dropped onto the middle of another: join the target's group, or
-  // found a new one around the pair. Slots (pins, bookmarks) can't group.
-  groupFromDrop(targetId: string, draggedId: string): void {
-    if (targetId === draggedId) return
-    if (this.model.isSlot(targetId) || this.model.isSlot(draggedId)) return
-    if (!this.model.order.includes(targetId) || !this.model.order.includes(draggedId)) return
+  // tabs dropped onto the middle of another: join the target's group, or
+  // found a new one around them. A multi-select drag carries every selected
+  // tab (issue #37). Slots (pins, bookmarks) can't group.
+  groupFromDrop(targetId: string, draggedIds: string[]): void {
+    if (this.model.isSlot(targetId) || !this.model.order.includes(targetId)) return
+    const dragged = this.model.order.filter(
+      (t) => draggedIds.includes(t) && t !== targetId && !this.model.isSlot(t),
+    )
+    if (dragged.length === 0) return
     let gid = this.model.groupOf(targetId)
     if (!gid) {
       gid = nextGroupId()
       this.groupMeta.set(gid, { name: 'New Group', profile: this.profileOf(targetId) })
       this.model.setGroup(targetId, gid)
     }
+    // moveMany's toIndex is post-removal: discount dragged tabs above the slot
     const to = this.model.order.indexOf(targetId) + 1
-    const from = this.model.order.indexOf(draggedId)
-    this.model.reorder(draggedId, from < to ? to - 1 : to, gid)
+    const above = dragged.filter((t) => this.model.order.indexOf(t) < to).length
+    this.model.moveMany(dragged, to - above, gid)
     this.refresh()
   }
 
@@ -414,6 +518,38 @@ export class TabManager {
     if (!meta) return
     meta.profile = profile
     for (const t of this.model.groupTabs(gid)) this.setProfile(t, profile)
+    this.refresh()
+  }
+
+  groupIds(): string[] {
+    return this.model.groupIds()
+  }
+
+  // multi-select "Group N Tabs" (issue #37): move the selection into `gid`,
+  // or found a fresh group around it. Returns the destination group id, or
+  // null when nothing joined (unknown group, selection of slots/ghosts).
+  groupSelection(ids: string[], gid?: string): string | null {
+    let target = gid ?? null
+    if (target && !this.groupMeta.has(target)) return null
+    if (!target) {
+      target = nextGroupId()
+      this.groupMeta.set(target, { name: 'New Group', profile: 'default' })
+    }
+    this.model.groupMany(ids, target)
+    if (this.model.groupTabs(target).length === 0) {
+      this.groupMeta.delete(target) // founded around nothing; take the meta back
+      return null
+    }
+    this.refresh()
+    return target
+  }
+
+  // the group menu's Color pick (issue #34); null clears back to neutral
+  setGroupColor(gid: string, color: GroupColor | null): void {
+    const meta = this.groupMeta.get(gid)
+    if (!meta) return
+    if (color) meta.color = color
+    else delete meta.color
     this.refresh()
   }
 
@@ -488,13 +624,19 @@ export class TabManager {
   }
 
   activateTab(id: string): void {
-    if (this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
-    }
     if (!this.views.has(id)) {
       if (this.model.isPinned(id)) this.wakePin(id)
       else if (this.model.isBookmarkSlot(id)) this.wakeBookmark(id)
+      else if (id === this.settingsTabId) {
+        this.model.activate(id)
+        this.syncViews()
+      } else if (this.discarded.has(id)) {
+        // clicking an unloaded tab refreshes it (issue #35): syncViews sees
+        // the view-less active tab and recreates it from the saved state
+        this.model.activate(id)
+        this.syncViews()
+        this.attached?.webContents.focus()
+      }
       return
     }
     this.model.activate(id)
@@ -537,7 +679,7 @@ export class TabManager {
   restoreTabs(
     tabs: { url: string; profile: ProfileId; title?: string; group?: string }[],
     active: number,
-    groups: { id: string; name: string; profile?: ProfileId }[] = [],
+    groups: { id: string; name: string; profile?: ProfileId; color?: GroupColor }[] = [],
   ): void {
     if (tabs.length === 0) {
       this.createTab()
@@ -555,10 +697,21 @@ export class TabManager {
       if (!meta) return null
       const gid = nextGroupId()
       gidFor.set(savedId, gid)
-      this.groupMeta.set(gid, { name: meta.name, profile: meta.profile ?? 'default' })
+      this.groupMeta.set(gid, {
+        name: meta.name,
+        profile: meta.profile ?? 'default',
+        ...(meta.color ? { color: meta.color } : {}),
+      })
       return gid
     }
     const ids = tabs.map((t) => {
+      // a saved settings tab comes back as the settings tab, not a web page
+      if (t.url === SETTINGS_URL && !this.settingsTabId) {
+        const id = nextTabId()
+        this.settingsTabId = id
+        this.model.add(id, false)
+        return id
+      }
       const id = this.createTab(t.url || undefined, false, t.profile, null, runtimeGid(t.group))
       if (t.title) this.customTitles.set(id, t.title)
       return id
@@ -733,7 +886,24 @@ export class TabManager {
   }
 
   navigate(id: string, input: string): void {
-    this.views.get(id)?.webContents.loadURL(classifyInput(input))
+    const view = this.views.get(id)
+    if (!view) return
+    const url = classifyInput(input)
+    // profile auto-routing (issue #33): the first navigation out of a blank
+    // tab can still move containers; established tabs stay where they are
+    // (mid-session conversion would tear down the page under the user)
+    const routed = this.opts.routeProfile?.(url)
+    if (routed && routed !== this.profileOf(id) && isBlankUrl(view.webContents.getURL())) {
+      this.suppressUrlbarFocus = true // setProfile's blank-tab focus steal
+      try {
+        this.setProfile(id, routed)
+      } finally {
+        this.suppressUrlbarFocus = false
+      }
+      this.views.get(id)?.webContents.loadURL(url)
+      return
+    }
+    view.webContents.loadURL(url)
   }
 
   back(id: string): void {
@@ -772,11 +942,15 @@ export class TabManager {
     this.refresh()
   }
 
+  // multi-select drag (issue #37): the whole selection moves as one block
+  reorderTabs(ids: string[], toIndex: number, group?: string | null): void {
+    if (!Number.isFinite(toIndex)) return
+    const dest = group && this.groupMeta.has(group) ? group : group === undefined ? undefined : null
+    this.model.moveMany(ids, Math.round(toIndex), dest)
+    this.refresh()
+  }
+
   cycleStep(list: CycleList, dir: Direction): void {
-    if (this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
-    }
     if (!this.model.cycleStep(list, dir)) return
     this.syncViews()
     // keep native focus on the newly attached view: the modifier keyUp that
@@ -829,12 +1003,16 @@ export class TabManager {
     this.layout()
   }
 
-  // while settings is open no page view is attached, so the chrome renderer
-  // (which draws the settings UI in the page cell) is fully visible
-  toggleSettings(): boolean {
-    this.settingsOpen = !this.settingsOpen
+  // ⌘, / menu Settings…: focus the settings tab, or mint it (issue #33)
+  openSettings(): void {
+    if (this.settingsTabId) {
+      this.activateTab(this.settingsTabId)
+      return
+    }
+    const id = nextTabId()
+    this.settingsTabId = id
+    this.model.add(id, true)
     this.syncViews()
-    return this.settingsOpen
   }
 
   isSettingsOpen(): boolean {
@@ -902,10 +1080,6 @@ export class TabManager {
   splitActive(dir: SplitDir): void {
     const anchor = this.model.activeId
     if (!anchor || !this.views.has(anchor)) return
-    if (this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
-    }
     const id = nextTabId()
     this.profiles.set(id, this.profileOf(anchor))
     this.createView(id)
@@ -913,6 +1087,10 @@ export class TabManager {
     const root = showsSplit(this.splitRoot, anchor) ? this.splitRoot! : { leaf: anchor }
     this.splitRoot = splitLeaf(root, anchor, id, dir)
     this.model.add(id, true, anchor)
+    // the new pane is the anchor's sibling in every sense: it stays in the
+    // anchor's tab group instead of dangling at the end of the list (#36)
+    const gid = this.model.groupOf(anchor)
+    if (gid && this.groupMeta.has(gid)) this.model.setGroup(id, gid)
     this.syncViews()
   }
 
@@ -927,9 +1105,10 @@ export class TabManager {
       return
     }
     if (!this.views.has(id) && !this.wakeSlotView(id, false)) return
-    if (this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
+    // a view-less anchor (the settings tab) can't tile; just switch over
+    if (!this.views.has(anchor)) {
+      this.activateTab(id)
+      return
     }
     // splitting from a tab outside the old tiling starts a fresh one
     const root = showsSplit(this.splitRoot, anchor) ? this.splitRoot! : { leaf: anchor }
@@ -1011,8 +1190,46 @@ export class TabManager {
           anchorUrl: slot.url,
           profile: this.profileOf(id),
         }
+      } else if (id === this.settingsTabId) {
+        tabs[id] = {
+          id,
+          title: 'Settings',
+          customTitle: null,
+          url: SETTINGS_URL,
+          favicon: null,
+          isLoading: false,
+          canGoBack: false,
+          canGoForward: false,
+          isBookmarked: false,
+          isPinned: false,
+          isAsleep: false,
+          anchorUrl: null,
+          profile: 'default',
+        }
+      } else {
+        // an unloaded background tab (issue #35): render from the saved state
+        const saved = this.discarded.get(id)
+        if (saved) {
+          tabs[id] = {
+            id,
+            title: customTitle || saved.title,
+            customTitle,
+            url: saved.url,
+            favicon: saved.favicon,
+            isLoading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isBookmarked: false,
+            isPinned: false,
+            isAsleep: true,
+            anchorUrl: null,
+            profile: this.profileOf(id),
+          }
+        }
       }
     }
+    // the active tab is, by definition, in use right now (issue #35)
+    if (this.model.activeId) this.lastActive.set(this.model.activeId, Date.now())
     const bookmarkTabs: Record<string, string> = {}
     for (const [bid, tid] of this.bmTabId) if (this.views.has(tid)) bookmarkTabs[bid] = tid
     // a group lives exactly as long as its members: reap meta whose last
@@ -1025,7 +1242,14 @@ export class TabManager {
     const groups: Record<string, TabGroupInfo> = {}
     for (const gid of this.model.groupIds()) {
       const meta = this.groupMeta.get(gid)
-      if (meta) groups[gid] = { id: gid, name: meta.name, profile: meta.profile }
+      if (meta) {
+        groups[gid] = {
+          id: gid,
+          name: meta.name,
+          profile: meta.profile,
+          ...(meta.color ? { color: meta.color } : {}),
+        }
+      }
     }
     const tabGroups: Record<string, string> = {}
     for (const id of this.model.order) {
@@ -1063,6 +1287,20 @@ export class TabManager {
     // `destroyed` still fires later, finds the id already gone, and no-ops.
     for (const [id, view] of [...this.views]) {
       if (isDeadView(view)) this.dropDeadView(id)
+    }
+    // an unloaded tab (issue #35) became active by ANY route — click, MRU
+    // cycle, close-successor: recreate its view here, the one choke point.
+    // The map entry goes first so re-entrant syncViews (createView's host
+    // callbacks) can't double-create.
+    const act = this.model.activeId
+    if (act && !this.views.has(act)) {
+      const saved = this.discarded.get(act)
+      if (saved) {
+        this.discarded.delete(act)
+        const view = this.createView(act)
+        this.favicons.set(act, saved.favicon)
+        if (isHttpUrl(saved.url)) view.webContents.loadURL(saved.url)
+      }
     }
     this.reconcileSplit()
     // One desired set for every visible view: all split leaves, or just the
