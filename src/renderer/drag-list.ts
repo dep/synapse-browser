@@ -26,9 +26,11 @@ export interface DragItemOpts {
   vertical?: boolean // default true
   accepts(drag: DragItem): boolean
   // when true for a drag, it drops INTO this element (e.g. a folder row)
-  // instead of before/after it
-  into?(drag: DragItem): boolean
-  onDrop(drag: DragItem, before: boolean): void
+  // instead of before/after it. The event and element let zone-sensitive
+  // targets split the row: tab rows group on the middle band, reorder on
+  // the edges (dragging a tab onto a tab creates a tab group).
+  into?(drag: DragItem, e: DragEvent, el: HTMLElement): boolean
+  onDrop(drag: DragItem, before: boolean, into: boolean): void
   // the drag ended outside the window with no internal drop having consumed
   // it (tab tear-out); e carries the final screen coordinates
   onDragOut?(e: DragEvent): void
@@ -54,14 +56,15 @@ export function wireDragItem(el: HTMLElement, self: DragItem, opts: DragItemOpts
     if (!drag || drag.id === self.id || !opts.accepts(drag)) return
     e.preventDefault()
     clearIndicators()
-    if (opts.into?.(drag)) el.classList.add('drop-into')
+    if (opts.into?.(drag, e, el)) el.classList.add('drop-into')
     else el.classList.add(isBefore(e, el, opts.vertical ?? true) ? 'drop-before' : 'drop-after')
   })
   el.addEventListener('drop', (e) => {
     if (!drag || drag.id === self.id || !opts.accepts(drag)) return
     e.preventDefault()
     e.stopPropagation() // containers would otherwise treat this as an append
-    opts.onDrop(drag, opts.into?.(drag) ? false : isBefore(e, el, opts.vertical ?? true))
+    const into = opts.into?.(drag, e, el) ?? false
+    opts.onDrop(drag, into ? false : isBefore(e, el, opts.vertical ?? true), into)
     drag = null
     clearIndicators()
   })

@@ -4,7 +4,7 @@ import type { BookmarksData, TabsSnapshot } from '../shared/ipc'
 import type { PaneRect } from '../shared/split-layout'
 import { renderBookmarks, startItemEdit } from './bookmarks-section'
 import { PanelMode, renderPanel } from './panel'
-import { renderPins, renderTabList } from './sidebar'
+import { renderPins, renderTabList, startGroupEdit } from './sidebar'
 import { cancelRecording, renderSettings } from './settings'
 import { initTopbar } from './topbar'
 import { initFindBar } from './find-bar'
@@ -35,6 +35,8 @@ let snap: TabsSnapshot = {
   order: [],
   pinned: [],
   bookmarkTabs: {},
+  groups: {},
+  tabGroups: {},
   activeId: null,
   panes: [],
   role: 'primary',
@@ -137,6 +139,13 @@ async function refreshBookmarks(): Promise<void> {
 }
 
 document.getElementById('new-tab')!.addEventListener('click', () => window.synapse.tabs.create())
+// ＋ Group: a fresh group around a fresh blank tab, rename editor pre-opened
+document.getElementById('new-group')!.addEventListener('click', () => {
+  void window.synapse.groups.create().then((gid) => {
+    if (gid) startGroupEdit(gid)
+  })
+})
+window.synapse.ui.onEditGroup((id) => startGroupEdit(id))
 document.getElementById('show-history')!.addEventListener('click', () => setPanel('history'))
 window.synapse.ui.onToggleHistory(() => setPanel('history'))
 window.synapse.ui.onBookmarksChanged(() => void refreshBookmarks())
@@ -168,6 +177,7 @@ function render(): void {
   const showSidebar = panelMode === 'none'
   pinGridEl.hidden = secondary || !showSidebar || snap.pinned.length === 0
   bookmarksEl.hidden = secondary || !showSidebar
+  document.getElementById('tab-tools')!.hidden = !showSidebar
   tabListEl.hidden = !showSidebar
   panelEl.hidden = showSidebar
   renderPaneChrome()

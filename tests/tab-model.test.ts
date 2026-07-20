@@ -771,3 +771,139 @@ describe('TabModel sibling traversal', () => {
     expect(fresh.sibling(-1)).toBe('y')
   })
 })
+
+describe('TabModel tab groups', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    m.add('a')
+    m.add('b')
+    m.add('c')
+    m.add('d')
+    m.add('e') // order a..e, active e
+  })
+
+  it('grouping pulls members together at the first member’s position', () => {
+    m.setGroup('a', 'g1')
+    m.setGroup('d', 'g1')
+    expect(m.order).toEqual(['a', 'd', 'b', 'c', 'e'])
+    expect(m.groupOf('a')).toBe('g1')
+    expect(m.groupOf('d')).toBe('g1')
+    expect(m.groupOf('b')).toBeNull()
+    expect(m.groupTabs('g1')).toEqual(['a', 'd'])
+  })
+
+  it('ungrouping a middle member moves it just past the block', () => {
+    for (const id of ['a', 'b', 'c']) m.setGroup(id, 'g1')
+    m.setGroup('b', null)
+    expect(m.groupOf('b')).toBeNull()
+    expect(m.order).toEqual(['a', 'c', 'b', 'd', 'e'])
+    expect(m.groupTabs('g1')).toEqual(['a', 'c'])
+  })
+
+  it('grouping is for tab-list tabs only: slots refuse membership', () => {
+    m.pin('a')
+    m.setGroup('a', 'g1')
+    expect(m.groupOf('a')).toBeNull()
+    expect(m.groupTabs('g1')).toEqual([])
+  })
+
+  it('reorder with a group destination joins the group at that index', () => {
+    m.setGroup('b', 'g1')
+    m.setGroup('c', 'g1')
+    m.reorder('e', 3, 'g1') // drop e after c, inside the group
+    expect(m.groupOf('e')).toBe('g1')
+    expect(m.order).toEqual(['a', 'b', 'c', 'e', 'd'])
+    expect(m.groupTabs('g1')).toEqual(['b', 'c', 'e'])
+  })
+
+  it('reorder with an explicit null destination leaves the group', () => {
+    m.setGroup('a', 'g1')
+    m.setGroup('b', 'g1')
+    m.reorder('b', 3, null) // drop before e (insertion index after removal)
+    expect(m.groupOf('b')).toBeNull()
+    expect(m.order).toEqual(['a', 'c', 'd', 'b', 'e'])
+  })
+
+  it('reorder without a group argument keeps membership', () => {
+    m.setGroup('a', 'g1')
+    m.setGroup('b', 'g1')
+    m.reorder('b', 0)
+    expect(m.groupOf('b')).toBe('g1')
+    expect(m.groupTabs('g1')).toEqual(['b', 'a'])
+    expect(m.order).toEqual(['b', 'a', 'c', 'd', 'e'])
+  })
+
+  it('an ungrouped tab dropped inside a block lands just after it', () => {
+    m.setGroup('b', 'g1')
+    m.setGroup('c', 'g1')
+    m.reorder('e', 2, null) // aim between grouped b and c, but stay ungrouped
+    expect(m.order).toEqual(['a', 'b', 'c', 'e', 'd'])
+    expect(m.groupOf('e')).toBeNull()
+  })
+
+  it('moveGroup relocates the whole block, preserving member order', () => {
+    m.setGroup('a', 'g1')
+    m.setGroup('b', 'g1')
+    m.moveGroup('g1', 3) // past c and d (indices after removal)
+    expect(m.order).toEqual(['c', 'd', 'e', 'a', 'b'])
+    expect(m.groupTabs('g1')).toEqual(['a', 'b'])
+  })
+
+  it('moveGroup clamps out-of-range indices', () => {
+    m.setGroup('d', 'g1')
+    m.setGroup('e', 'g1')
+    m.moveGroup('g1', 99)
+    expect(m.order).toEqual(['a', 'b', 'c', 'd', 'e'])
+    m.moveGroup('g1', -5)
+    expect(m.order).toEqual(['d', 'e', 'a', 'b', 'c'])
+  })
+
+  it('closing a member drops its membership', () => {
+    m.setGroup('a', 'g1')
+    m.setGroup('b', 'g1')
+    m.close('a')
+    expect(m.groupOf('a')).toBeNull()
+    expect(m.groupTabs('g1')).toEqual(['b'])
+  })
+
+  it('pinning or bookmarking a member drops its membership', () => {
+    m.setGroup('a', 'g1')
+    m.setGroup('b', 'g1')
+    m.pin('a')
+    m.bookmark('b')
+    expect(m.groupOf('a')).toBeNull()
+    expect(m.groupOf('b')).toBeNull()
+    expect(m.groupTabs('g1')).toEqual([])
+  })
+
+  it('groupIds lists distinct groups in sidebar order', () => {
+    m.setGroup('d', 'g2')
+    m.setGroup('e', 'g2')
+    m.setGroup('a', 'g1')
+    m.setGroup('b', 'g1')
+    expect(m.groupIds()).toEqual(['g1', 'g2'])
+  })
+
+  it('a tab added at the end stays ungrouped even when the active tab is grouped', () => {
+    m.setGroup('e', 'g1')
+    m.add('f')
+    expect(m.groupOf('f')).toBeNull()
+    expect(m.order).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
+  })
+})
+
+describe('TabModel dissolveGroup', () => {
+  it('clears every membership and leaves positions untouched', () => {
+    const m = new TabModel()
+    for (const id of ['a', 'b', 'c', 'd']) m.add(id)
+    m.setGroup('b', 'g1')
+    m.setGroup('c', 'g1')
+    m.dissolveGroup('g1')
+    expect(m.order).toEqual(['a', 'b', 'c', 'd'])
+    expect(m.groupOf('b')).toBeNull()
+    expect(m.groupOf('c')).toBeNull()
+    expect(m.groupIds()).toEqual([])
+  })
+})

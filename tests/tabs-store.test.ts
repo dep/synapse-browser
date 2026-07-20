@@ -16,7 +16,7 @@ describe('TabsStore', () => {
   })
 
   it('starts empty with no saved file', () => {
-    expect(new TabsStore(dir).load()).toEqual({ tabs: [], active: -1 })
+    expect(new TabsStore(dir).load()).toEqual({ tabs: [], active: -1, groups: [] })
   })
 
   it('round-trips urls, profiles, and active index across instances', () => {
@@ -27,7 +27,7 @@ describe('TabsStore', () => {
     ]
     store.save(tabs, 1)
     store.flush()
-    expect(new TabsStore(dir).load()).toEqual({ tabs, active: 1 })
+    expect(new TabsStore(dir).load()).toEqual({ tabs, active: 1, groups: [] })
   })
 
   it('round-trips a custom title and drops absent ones', () => {
@@ -54,6 +54,7 @@ describe('TabsStore', () => {
     expect(new TabsStore(dir).load()).toEqual({
       tabs: [{ url: 'https://a.test/', profile: 'work' }],
       active: 0,
+      groups: [],
     })
   })
 
@@ -108,6 +109,7 @@ describe('TabsStore', () => {
         { url: 'https://b.test/', profile: 'default' },
       ],
       active: 1,
+      groups: [],
     })
   })
 
@@ -123,12 +125,80 @@ describe('TabsStore', () => {
     expect(new TabsStore(dir).load()).toEqual({
       tabs: [{ url: 'https://a.test/', profile: 'default' }],
       active: 0,
+      groups: [],
     })
   })
 
   it('recovers from a corrupt file', () => {
     fs.writeFileSync(path.join(dir, 'tabs.json'), '{nope')
-    expect(new TabsStore(dir).load()).toEqual({ tabs: [], active: -1 })
+    expect(new TabsStore(dir).load()).toEqual({ tabs: [], active: -1, groups: [] })
     expect(fs.existsSync(path.join(dir, 'tabs.json.bad'))).toBe(true)
+  })
+})
+
+describe('TabsStore tab groups', () => {
+  let dir: string
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tabsstore-'))
+  })
+
+  afterEach(() => {
+    fs.rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('round-trips group membership and group meta', () => {
+    const store = new TabsStore(dir)
+    store.save(
+      [
+        { url: 'https://a.test/', profile: 'default', group: 'g1' },
+        { url: 'https://b.test/', profile: 'work', group: 'g1' },
+        { url: 'https://c.test/', profile: 'default' },
+      ],
+      0,
+      [{ id: 'g1', name: 'Research', profile: 'work' }],
+    )
+    store.flush()
+    const loaded = new TabsStore(dir).load()
+    expect(loaded.tabs.map((t) => t.group ?? null)).toEqual(['g1', 'g1', null])
+    expect(loaded.groups).toEqual([{ id: 'g1', name: 'Research', profile: 'work' }])
+  })
+
+  it('drops group refs that point at no saved group', () => {
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({
+        v: 4,
+        tabs: [{ url: 'https://a.test/', profile: 'default', group: 'ghost' }],
+        groups: [],
+        active: 0,
+      }),
+    )
+    expect(new TabsStore(dir).load().tabs).toEqual([
+      { url: 'https://a.test/', profile: 'default' },
+    ])
+  })
+
+  it('ignores malformed groups from a hand-edited file', () => {
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({
+        v: 4,
+        tabs: [{ url: 'https://a.test/', profile: 'default', group: 'g1' }],
+        groups: [{ id: 'g1', name: 'Ok' }, { id: 42, name: 'bad' }, 'junk', { id: 'g2' }],
+        active: 0,
+      }),
+    )
+    const loaded = new TabsStore(dir).load()
+    expect(loaded.groups).toEqual([{ id: 'g1', name: 'Ok' }])
+    expect(loaded.tabs[0]).toEqual({ url: 'https://a.test/', profile: 'default', group: 'g1' })
+  })
+
+  it('loads v3 files (no groups) with an empty group list', () => {
+    fs.writeFileSync(
+      path.join(dir, 'tabs.json'),
+      JSON.stringify({ v: 3, tabs: [{ url: 'https://a.test/', profile: 'default' }], active: 0 }),
+    )
+    expect(new TabsStore(dir).load().groups).toEqual([])
   })
 })

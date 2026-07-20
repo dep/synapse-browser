@@ -13,9 +13,17 @@ import type { PaneRect, SplitDir, SplitNode } from '../shared/split-layout'
 import { PaneOverlays } from './pane-overlay'
 import { isBlankUrl } from '../shared/newtab'
 import { routeWindowOpen } from '../shared/popup-router'
-import type { Bookmark, PinSlot, ProfileId, TabInfo, TabsSnapshot, WindowRole } from '../shared/ipc'
+import type {
+  Bookmark,
+  PinSlot,
+  ProfileId,
+  TabGroupInfo,
+  TabInfo,
+  TabsSnapshot,
+  WindowRole,
+} from '../shared/ipc'
 import { ClosedTabsStack } from './closed-tabs'
-import { nextTabId } from './tab-ids'
+import { nextGroupId, nextTabId } from './tab-ids'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
@@ -68,6 +76,15 @@ export class TabManager {
   private pins = new Map<string, PinSlot>()
   // user-set names (double-click rename); win over page titles in snapshots
   private customTitles = new Map<string, string>()
+  // tab-group meta; membership and ordering live in the model. Meta for a
+  // group whose last member left is reaped at the next snapshot.
+  private groupMeta = new Map<string, { name: string; profile: ProfileId }>()
+  // true while a createTab is between meta-mint and first-member join; the
+  // snapshot reap must not collect group meta in that window
+  private creatingTab = false
+  // ＋ Group's blank tab must not steal focus into the urlbar (the group
+  // rename editor is about to take it)
+  private suppressUrlbarFocus = false
   private profiles = new Map<string, ProfileId>()
   private bmTabId = new Map<string, string>() // bookmarkId → tabId
   private closed = new ClosedTabsStack()
@@ -104,7 +121,13 @@ export class TabManager {
     return this.model.activeId
   }
 
-  createTab(url?: string, activate = true, profile: ProfileId = 'default', opener?: string | null): string {
+  createTab(
+    url?: string,
+    activate = true,
+    profile: ProfileId = 'default',
+    opener?: string | null,
+    group?: string | null,
+  ): string {
     // background tabs must not dismiss the settings screen
     if (activate && this.settingsOpen) {
       this.settingsOpen = false
@@ -112,10 +135,21 @@ export class TabManager {
     }
     const id = nextTabId()
     this.profiles.set(id, profile)
-    const view = this.createView(id)
-    this.model.add(id, activate, opener)
-    if (url) view.webContents.loadURL(classifyInput(url))
-    else if (activate) this.focusUrlBar()
+    // spawned tabs (cmd+click, window.open) stay in their opener's group.
+    // Membership lands right after model.add, but createView's host callbacks
+    // (extensions.addTab) can re-enter syncViews first — creatingTab keeps
+    // the snapshot reap from collecting meta whose first member is mid-flight.
+    const gid = group ?? (opener ? this.model.groupOf(opener) : null)
+    this.creatingTab = true
+    try {
+      const view = this.createView(id)
+      this.model.add(id, activate, opener)
+      if (gid && this.groupMeta.has(gid)) this.model.setGroup(id, gid)
+      if (url) view.webContents.loadURL(classifyInput(url))
+      else if (activate) this.focusUrlBar()
+    } finally {
+      this.creatingTab = false
+    }
     this.syncViews()
     return id
   }
@@ -288,6 +322,7 @@ export class TabManager {
     this.attached = null
     this.attachedAll.clear()
     this.splitRoot = null
+    this.groupMeta.clear()
     this.paneButtons.dispose()
     for (const view of views) {
       if (!isDeadView(view)) view.webContents.close()
@@ -301,6 +336,95 @@ export class TabManager {
     if (next) this.customTitles.set(id, next)
     else this.customTitles.delete(id)
     this.refresh()
+  }
+
+  // ── tab groups (issue #31) ───────────────────────────────────────────
+
+  // ＋ Group button: a fresh group holding a fresh blank tab (groups are
+  // never empty — a group's life is exactly its members'). The blank tab
+  // must NOT pull focus into the urlbar: the renderer opens the group's
+  // rename editor right after this resolves, and the focus steal would
+  // blur-commit it before the user types a letter.
+  createGroupWithTab(): string {
+    const gid = nextGroupId()
+    this.groupMeta.set(gid, { name: 'New Group', profile: 'default' })
+    this.suppressUrlbarFocus = true
+    try {
+      this.createTab(undefined, true, 'default', null, gid)
+    } finally {
+      this.suppressUrlbarFocus = false
+    }
+    return gid
+  }
+
+  // a tab dropped onto the middle of another: join the target's group, or
+  // found a new one around the pair. Slots (pins, bookmarks) can't group.
+  groupFromDrop(targetId: string, draggedId: string): void {
+    if (targetId === draggedId) return
+    if (this.model.isSlot(targetId) || this.model.isSlot(draggedId)) return
+    if (!this.model.order.includes(targetId) || !this.model.order.includes(draggedId)) return
+    let gid = this.model.groupOf(targetId)
+    if (!gid) {
+      gid = nextGroupId()
+      this.groupMeta.set(gid, { name: 'New Group', profile: this.profileOf(targetId) })
+      this.model.setGroup(targetId, gid)
+    }
+    const to = this.model.order.indexOf(targetId) + 1
+    const from = this.model.order.indexOf(draggedId)
+    this.model.reorder(draggedId, from < to ? to - 1 : to, gid)
+    this.refresh()
+  }
+
+  groupInfo(gid: string): TabGroupInfo | null {
+    const meta = this.groupMeta.get(gid)
+    return meta ? { id: gid, ...meta } : null
+  }
+
+  groupTabIds(gid: string): string[] {
+    return this.model.groupTabs(gid)
+  }
+
+  closeGroup(gid: string): void {
+    for (const t of this.model.groupTabs(gid)) this.closeTab(t)
+  }
+
+  ungroup(gid: string): void {
+    this.model.dissolveGroup(gid)
+    this.groupMeta.delete(gid)
+    this.refresh()
+  }
+
+  ungroupTab(id: string): void {
+    this.model.setGroup(id, null)
+    this.refresh()
+  }
+
+  renameGroup(gid: string, name: string): void {
+    const meta = this.groupMeta.get(gid)
+    const next = name.trim()
+    if (!meta || !next) return // groups have no fallback title; empty keeps the old
+    meta.name = next
+    this.refresh()
+  }
+
+  // the group menu's Profile pick: converts every member (view recreation,
+  // same as per-tab profile switching); new members are never auto-converted
+  setGroupProfile(gid: string, profile: ProfileId): void {
+    const meta = this.groupMeta.get(gid)
+    if (!meta) return
+    meta.profile = profile
+    for (const t of this.model.groupTabs(gid)) this.setProfile(t, profile)
+    this.refresh()
+  }
+
+  moveGroup(gid: string, toIndex: number): void {
+    if (!Number.isFinite(toIndex)) return
+    this.model.moveGroup(gid, Math.round(toIndex))
+    this.refresh()
+  }
+
+  groupOf(id: string): string | null {
+    return this.model.groupOf(id)
   }
 
   // Cmd+Shift+T: recreate the last closed tab at its old sidebar position.
@@ -407,14 +531,35 @@ export class TabManager {
     this.attached?.webContents.focus()
   }
 
-  // recreate a saved session: tabs in sidebar order, then the active one
-  restoreTabs(tabs: { url: string; profile: ProfileId; title?: string }[], active: number): void {
+  // recreate a saved session: tabs in sidebar order, then the active one.
+  // Saved group ids are only stable within the file; runtime ids are minted
+  // fresh here and membership remapped.
+  restoreTabs(
+    tabs: { url: string; profile: ProfileId; title?: string; group?: string }[],
+    active: number,
+    groups: { id: string; name: string; profile?: ProfileId }[] = [],
+  ): void {
     if (tabs.length === 0) {
       this.createTab()
       return
     }
+    // meta is minted at each group's FIRST member: every createTab snapshots,
+    // and the reap would collect meta created ahead of its members
+    const saved = new Map(groups.map((g) => [g.id, g]))
+    const gidFor = new Map<string, string>()
+    const runtimeGid = (savedId: string | undefined): string | null => {
+      if (!savedId) return null
+      const known = gidFor.get(savedId)
+      if (known) return known
+      const meta = saved.get(savedId)
+      if (!meta) return null
+      const gid = nextGroupId()
+      gidFor.set(savedId, gid)
+      this.groupMeta.set(gid, { name: meta.name, profile: meta.profile ?? 'default' })
+      return gid
+    }
     const ids = tabs.map((t) => {
-      const id = this.createTab(t.url || undefined, false, t.profile)
+      const id = this.createTab(t.url || undefined, false, t.profile, null, runtimeGid(t.group))
       if (t.title) this.customTitles.set(id, t.title)
       return id
     })
@@ -579,7 +724,11 @@ export class TabManager {
   focusUrlBar(): void {
     // DOM focus() in the chrome renderer is not enough while a page view
     // holds native focus — the window must focus its own webContents first.
+    // ＋ Group suppresses only the urlbar targeting: the chrome document
+    // still needs native focus or the group rename editor can't take DOM
+    // focus (typing would go nowhere and the preselect wouldn't show).
     this.win.webContents.focus()
+    if (this.suppressUrlbarFocus) return
     this.win.webContents.send('ui:focus-urlbar')
   }
 
@@ -615,9 +764,11 @@ export class TabManager {
     this.views.get(id)?.webContents.stop()
   }
 
-  reorderTab(id: string, toIndex: number): void {
+  reorderTab(id: string, toIndex: number, group?: string | null): void {
     if (!Number.isFinite(toIndex)) return
-    this.model.reorder(id, Math.round(toIndex))
+    // a stale renderer can name a group that just reaped; treat as ungrouped
+    const dest = group && this.groupMeta.has(group) ? group : group === undefined ? undefined : null
+    this.model.reorder(id, Math.round(toIndex), dest)
     this.refresh()
   }
 
@@ -864,6 +1015,23 @@ export class TabManager {
     }
     const bookmarkTabs: Record<string, string> = {}
     for (const [bid, tid] of this.bmTabId) if (this.views.has(tid)) bookmarkTabs[bid] = tid
+    // a group lives exactly as long as its members: reap meta whose last
+    // member closed/left (guarded while a first member is still mid-create)
+    if (!this.creatingTab) {
+      for (const gid of [...this.groupMeta.keys()]) {
+        if (this.model.groupTabs(gid).length === 0) this.groupMeta.delete(gid)
+      }
+    }
+    const groups: Record<string, TabGroupInfo> = {}
+    for (const gid of this.model.groupIds()) {
+      const meta = this.groupMeta.get(gid)
+      if (meta) groups[gid] = { id: gid, name: meta.name, profile: meta.profile }
+    }
+    const tabGroups: Record<string, string> = {}
+    for (const id of this.model.order) {
+      const gid = this.model.groupOf(id)
+      if (gid && groups[gid] && tabs[id]) tabGroups[id] = gid
+    }
     // A page can destroy its own view (window.close() on a script-opened tab)
     // between snapshots; `destroyed` reconciles the model, but that event is
     // async and a synchronous snapshot can land in the gap. Emit only ids that
@@ -878,6 +1046,8 @@ export class TabManager {
       order: emit(this.model.order),
       pinned: emit(this.model.pinned),
       bookmarkTabs,
+      groups,
+      tabGroups,
       activeId,
       panes: this.splitRoot ? emit(leafIds(this.splitRoot)) : [],
       role: this.opts.role ?? 'primary',

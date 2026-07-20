@@ -479,6 +479,41 @@ browser-action-list {
   padding-bottom: 4px;
   border-bottom: 1px solid var(--line);
 }
+/* tab groups (issue #31) */
+#tab-tools {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 2px 2px;
+}
+#tab-tools[hidden] {
+  display: none;
+}
+.group-header {
+  margin-bottom: 2px;
+}
+.group-header .tab-close {
+  visibility: hidden;
+}
+.group-header:hover .tab-close {
+  visibility: visible;
+}
+.group-header.active {
+  background: var(--accent-wash);
+}
+.group-header.active.work {
+  background: var(--work-wash);
+}
+.group-header.drop-into {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.tab.grouped {
+  margin-left: 14px;
+}
+/* the middle-band group drop draws a box around the target pair-to-be */
+.tab.drop-into {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
 #bookmarks[hidden] {
   display: none;
 }
