@@ -1,4 +1,11 @@
-import type { Bookmark, BookmarkFolder, BookmarksData, ProfileId, TabsSnapshot } from '../shared/ipc'
+import type {
+  Bookmark,
+  BookmarkFolder,
+  BookmarksData,
+  GroupColor,
+  ProfileId,
+  TabsSnapshot,
+} from '../shared/ipc'
 import { wireDragItem, wireDropZone } from './drag-list'
 import { rowIcon } from './row-icon'
 
@@ -36,8 +43,8 @@ export function renderBookmarks(
   label.textContent = 'Bookmarks'
   const newFolder = document.createElement('button')
   newFolder.className = 'panel-action'
-  newFolder.textContent = '＋ Folder'
-  newFolder.title = 'New Folder'
+  newFolder.textContent = '＋ Group'
+  newFolder.title = 'New Bookmark Group'
   newFolder.addEventListener('click', () => startItemEdit('new'))
   heading.append(label, newFolder)
   el.append(heading)
@@ -56,7 +63,7 @@ export function renderBookmarks(
         el.append(
           editing === bm.id
             ? bookmarkEditor(bm, true)
-            : bookmarkRow(bm, j, members, true, snap, folder.profile ?? 'default'),
+            : bookmarkRow(bm, j, members, true, snap, folder.profile ?? 'default', folder.color),
         ),
       )
     }
@@ -98,6 +105,7 @@ function bookmarkRow(
   indented: boolean,
   snap: TabsSnapshot,
   containerProfile: ProfileId,
+  containerColor?: GroupColor,
 ): HTMLDivElement {
   const tabId = snap.bookmarkTabs[bm.id]
   const tab = tabId ? snap.tabs[tabId] : undefined
@@ -107,6 +115,7 @@ function bookmarkRow(
     (tabId && tabId === snap.activeId ? ' active' : '') +
     (tab ? '' : ' asleep') +
     (indented ? ' indent' : '') +
+    (indented && containerColor ? ` colored gc-${containerColor}` : '') +
     ((tab?.profile ?? bm.profile) === 'work' ? ' work' : '')
 
   // main hydrates bm.profile to the effective profile, so a mark is only
@@ -177,7 +186,7 @@ function folderRow(
   count: number,
 ): HTMLDivElement {
   const row = document.createElement('div')
-  row.className = 'panel-item folder'
+  row.className = 'panel-item folder' + (folder.color ? ` colored gc-${folder.color}` : '')
   const twist = document.createElement('span')
   twist.className = 'folder-twist'
   twist.textContent = collapsed.has(folder.id) ? '▸' : '▾'
@@ -268,7 +277,7 @@ function inlineEditor(
 }
 
 function folderEditor(folder: BookmarkFolder | null): HTMLDivElement {
-  return inlineEditor(folder?.name ?? '', 'Folder name', (name) => {
+  return inlineEditor(folder?.name ?? '', 'Group name', (name) => {
     if (folder) window.synapse.bookmarks.renameFolder(folder.id, name)
     else window.synapse.bookmarks.addFolder(name)
   })

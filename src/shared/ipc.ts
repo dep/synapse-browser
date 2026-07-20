@@ -134,10 +134,13 @@ export interface SuggestionsOverlayApi {
   pick(url: string): void
 }
 
+// user-facing language calls these "bookmark groups"; the folder name is
+// historical and stays in code/store for compatibility
 export interface BookmarkFolder {
   id: string
   name: string
   profile?: ProfileId // absent = default; members without their own profile inherit it
+  color?: GroupColor // same 12-hue palette as tab groups (issue #34)
 }
 
 export interface Bookmark {

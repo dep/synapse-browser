@@ -1,7 +1,7 @@
 import { app, dialog, ipcMain, Menu, session } from 'electron'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ProfileId, ShortcutRow, SuggestionsPayload } from '../shared/ipc'
+import type { GroupColor, ProfileId, ShortcutRow, SuggestionsPayload } from '../shared/ipc'
 import { GROUP_COLORS } from '../shared/ipc'
 import { normalizeAccelerator } from '../shared/accelerator'
 import { FIXED_SHORTCUTS, RESERVED_ACCELERATORS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
@@ -335,7 +335,8 @@ app.whenReady().then(async () => {
     if (!info) return
     const members = b.tabs.groupTabIds(gid)
     if (members.length === 0) return
-    const folder = bookmarks.addFolder(info.name, info.profile)
+    // the group's color survives the conversion into a bookmark group (#34)
+    const folder = bookmarks.addFolder(info.name, info.profile, info.color)
     for (const tid of members) {
       const page = b.tabs.infoFor(tid)
       if (!page || !/^https?:\/\//.test(page.url)) continue // blank/error tabs stay tabs
@@ -346,6 +347,25 @@ app.whenReady().then(async () => {
     // members left the tab list, so the group reaps itself at the next snapshot
     bookmarksChanged()
   }
+
+  // shared by tab-group and bookmark-group context menus (issue #34)
+  const colorSubmenu = (
+    current: GroupColor | undefined,
+    pick: (c: GroupColor | null) => void,
+  ): Electron.MenuItemConstructorOptions => ({
+    label: 'Color',
+    submenu: [
+      { label: 'None', type: 'radio', checked: !current, click: () => pick(null) },
+      ...GROUP_COLORS.map(
+        (c): Electron.MenuItemConstructorOptions => ({
+          label: c[0]!.toUpperCase() + c.slice(1),
+          type: 'radio',
+          checked: current === c,
+          click: () => pick(c),
+        }),
+      ),
+    ],
+  })
 
   ipcMain.handle('groups:create', (e) => forSender(e)?.tabs.createGroupWithTab() ?? null)
   ipcMain.on('groups:create-from-drop', (e, targetId: string, draggedId: string) => {
@@ -395,25 +415,7 @@ app.whenReady().then(async () => {
           },
         ],
       },
-      {
-        label: 'Color',
-        submenu: [
-          {
-            label: 'None',
-            type: 'radio',
-            checked: !info.color,
-            click: () => b.tabs.setGroupColor(id, null),
-          },
-          ...GROUP_COLORS.map(
-            (c): Electron.MenuItemConstructorOptions => ({
-              label: c[0]!.toUpperCase() + c.slice(1),
-              type: 'radio',
-              checked: info.color === c,
-              click: () => b.tabs.setGroupColor(id, c),
-            }),
-          ),
-        ],
-      },
+      colorSubmenu(info.color, (c) => b.tabs.setGroupColor(id, c)),
       { type: 'separator' },
     ]
     if (b.role === 'primary') {
@@ -665,7 +667,11 @@ app.whenReady().then(async () => {
             },
           ],
         },
-        { label: 'Delete Folder…', click: () => void removeFolderWithConfirm(id) },
+        colorSubmenu(folder.color, (c) => {
+          bookmarks.setFolderColor(id, c)
+          bookmarksChanged()
+        }),
+        { label: 'Delete Group…', click: () => void removeFolderWithConfirm(id) },
       ]).popup({ window: b.win })
     } else if (kind === 'bookmark') {
       const { folders, bookmarks: all } = bookmarks.list()

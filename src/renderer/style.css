@@ -489,7 +489,9 @@ browser-action-list {
   flex: none;
   display: flex;
   justify-content: flex-end;
-  padding: 0 2px 2px;
+  /* same side inset as .panel-heading so ＋ Group and the bookmarks'
+     ＋ Group button share one right edge */
+  padding: 0 8px 2px;
 }
 #tab-tools[hidden] {
   display: none;
@@ -528,18 +530,25 @@ browser-action-list {
 .gc-pink { --group-color: #ff75a0; }
 .gc-brown { --group-color: #c0946e; }
 .gc-grey { --group-color: #9a9aa3; }
-.group-header.colored .folder-twist,
-.group-header.colored .folder-name,
-.group-header.colored .folder-count {
+/* .folder covers both tab-group headers and bookmark-group rows */
+.folder.colored .folder-twist,
+.folder.colored .folder-name,
+.folder.colored .folder-count {
   color: var(--group-color);
 }
 /* member rows hang off a rail in the group's color; the 2px border eats
    into the margin so colored and plain grouped rows align */
-.tab.grouped.colored {
-  margin-left: 12px;
+.tab.grouped.colored,
+.tab.indent.colored {
   border-left: 2px solid var(--group-color);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
+}
+.tab.grouped.colored {
+  margin-left: 12px;
+}
+.tab.indent.colored {
+  margin-left: 14px;
 }
 /* the middle-band group drop draws a box around the target pair-to-be */
 .tab.drop-into {
