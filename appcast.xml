@@ -6,6 +6,30 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.10.0</title>
+            <pubDate>Mon, 20 Jul 2026 17:17:22 GMT</pubDate>
+            <sparkle:version>0.10.0</sparkle:version>
+            <sparkle:shortVersionString>0.10.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <h3>Groups, Multi-Select, and More</h3>
+                <ul>
+                    <li>Group colors: right-click any tab group or bookmark group to pick from 12 colors &#8212; a subtle header wash plus a colored rail on member tabs</li>
+                    <li>Bookmark folders are now bookmark groups, with the same coloring; a saved tab group keeps its color</li>
+                    <li>Multi-select tabs with Cmd-click and Shift-click, then drag them together or right-click to group or close them all at once</li>
+                    <li>Split view moves to Option-click (and an Open in Split View menu item); a split opened from a grouped tab stays in the group</li>
+                    <li>Profile auto-routing: add rules in Settings &#8594; Profiles so matching new tabs open in the right container automatically</li>
+                    <li>Settings now opens as a real tab &#8212; switch away or close it like any other tab</li>
+                    <li>Memory saver: background tabs unload after 4 idle hours and reload when clicked</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/dep/synapse-browser/releases/download/0.10.0/Synapse.Browser-0.10.0-universal.dmg"
+                sparkle:edSignature="ynMtE4uLC0diuUQ1oGslEVkGyhXHcYrpo+EIHOECz+Ztr3u0jvTWQukvO9F0uU06xTFTc28D+Jk5l/7iv9KQCw=="
+                length="219217390"
+                type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.9.0</title>
             <pubDate>Mon, 20 Jul 2026 13:39:54 GMT</pubDate>
             <sparkle:version>0.9.0</sparkle:version>
