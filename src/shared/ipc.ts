@@ -190,9 +190,11 @@ export interface SynapseApi {
     rename(id: string, title: string): void
     // tear the tab out into its own window at the given screen point
     detach(id: string, screenX: number, screenY: number): void
-    // ⌘-click: tile the tab next to the focused pane (vertical split)
+    // ⌥-click: tile the tab next to the focused pane (vertical split)
     openInSplit(id: string): void
-    showContextMenu(id: string): void
+    // selection rides along when the row is part of a ⌘/⇧ multi-select
+    // (issue #37); the menu then offers group-the-selection actions
+    showContextMenu(id: string, selection?: string[]): void
   }
   groups: {
     // ＋ Group button: a fresh group around a fresh blank tab; resolves to

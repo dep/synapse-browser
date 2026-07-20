@@ -17,7 +17,7 @@ const api: SynapseApi = {
     rename: (id, title) => ipcRenderer.send('tabs:rename', id, title),
     detach: (id, screenX, screenY) => ipcRenderer.send('tabs:detach', id, screenX, screenY),
     openInSplit: (id) => ipcRenderer.send('tabs:open-in-split', id),
-    showContextMenu: (id) => ipcRenderer.send('tabs:context-menu', id),
+    showContextMenu: (id, selection) => ipcRenderer.send('tabs:context-menu', id, selection),
   },
   groups: {
     create: () => ipcRenderer.invoke('groups:create'),

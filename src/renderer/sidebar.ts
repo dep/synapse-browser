@@ -18,6 +18,12 @@ let editingGroup: string | null = null
 let lastEl: HTMLElement | null = null
 let lastSnap: TabsSnapshot | null = null
 
+// multi-select (issue #37): ⌘-click toggles, ⇧-click ranges from the anchor.
+// Presentation-only state like collapse — a plain click clears it, and ids
+// that leave the tab list are pruned each render.
+const selectedTabs = new Set<string>()
+let selectionAnchor: string | null = null
+
 // open a group's rename editor (＋ Group button, context-menu Rename); the
 // editor appears on this render if the group is known, else when its
 // snapshot arrives
@@ -104,6 +110,8 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
   // a group that vanished (closed, saved to bookmarks) drops its local state
   if (editingGroup && !snap.groups[editingGroup]) editingGroup = null
   for (const gid of [...collapsedGroups]) if (!snap.groups[gid]) collapsedGroups.delete(gid)
+  for (const id of [...selectedTabs]) if (!snap.order.includes(id)) selectedTabs.delete(id)
+  if (selectionAnchor && !snap.order.includes(selectionAnchor)) selectionAnchor = null
   wireDropZone(el, {
     accepts: (d) => d.kind === 'tab' || d.kind === 'group',
     onDrop: (d) => {
@@ -128,6 +136,7 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
       'tab' +
       (gid ? ' grouped' : '') +
       (groupColor ? ` colored gc-${groupColor}` : '') +
+      (selectedTabs.has(id) ? ' selected' : '') +
       (id === snap.activeId ? ' active' : '') +
       (tab.profile === 'work' ? ' work' : '') +
       (snap.panes.includes(id) ? ' in-split' : '')
@@ -149,9 +158,33 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
 
     item.append(icon, title, close)
     item.addEventListener('click', (e) => {
-      // ⌘-click tiles the tab next to the current pane instead of switching
-      if (e.metaKey || e.ctrlKey) window.synapse.tabs.openInSplit(id)
-      else window.synapse.tabs.activate(id)
+      // ⌘-click toggles selection, ⇧-click selects the anchor→here range
+      // (issue #37); ⌥-click keeps the old split-tiling gesture
+      if (e.metaKey || e.ctrlKey) {
+        if (selectedTabs.has(id)) selectedTabs.delete(id)
+        else selectedTabs.add(id)
+        selectionAnchor = id
+        renderTabList(el, snap)
+        return
+      }
+      if (e.shiftKey) {
+        const from = selectionAnchor ?? snap.activeId ?? id
+        const a = snap.order.indexOf(from)
+        const b = snap.order.indexOf(id)
+        const [lo, hi] = a <= b ? [a, b] : [b, a]
+        selectedTabs.clear()
+        for (const t of snap.order.slice(Math.max(lo, 0), hi + 1)) selectedTabs.add(t)
+        selectionAnchor = from
+        renderTabList(el, snap)
+        return
+      }
+      if (e.altKey) {
+        window.synapse.tabs.openInSplit(id)
+        return
+      }
+      selectedTabs.clear()
+      selectionAnchor = null
+      window.synapse.tabs.activate(id)
     })
     item.addEventListener('dblclick', () => startTabRename(el, snap, item, title, id))
     // middle click doesn't fire 'click' in browsers; it's reported via auxclick
@@ -160,7 +193,12 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     })
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault()
-      window.synapse.tabs.showContextMenu(id)
+      // right-clicking inside the selection acts on all of it; outside, on
+      // this row alone
+      window.synapse.tabs.showContextMenu(
+        id,
+        selectedTabs.has(id) && selectedTabs.size > 1 ? [...selectedTabs] : undefined,
+      )
     })
     wireDragItem(item, { kind: 'tab', id }, {
       accepts: (d) => d.kind === 'tab' || (d.kind === 'group' && d.id !== gid),

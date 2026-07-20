@@ -290,6 +290,11 @@ body {
   background: var(--accent-wash);
   color: var(--active-fg);
 }
+/* ⌘/⇧ multi-select (issue #37) */
+.tab.selected {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
 .tab.active.work {
   background: var(--work-wash);
   color: var(--work-active-fg);

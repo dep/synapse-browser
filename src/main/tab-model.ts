@@ -132,6 +132,24 @@ export class TabModel {
     this.normalizeGroups()
   }
 
+  // group a multi-selection (issue #37): membership lands in sidebar order —
+  // selection click-order must not matter — and the contiguity sweep settles
+  // the block at its first member's position. Unknown ids and slots drop out.
+  groupMany(ids: string[], groupId: string): void {
+    const joining = this.order.filter((t) => ids.includes(t) && this.groups.get(t) !== groupId)
+    if (joining.length === 0) return
+    // an existing block stays put: joiners file in behind its last member.
+    // A brand-new group instead anchors at its first member's position.
+    const existing = this.groupTabs(groupId)
+    const anchor = existing[existing.length - 1]
+    if (anchor !== undefined) {
+      this.order = this.order.filter((t) => !joining.includes(t))
+      this.order.splice(this.order.indexOf(anchor) + 1, 0, ...joining)
+    }
+    for (const id of joining) this.groups.set(id, groupId)
+    this.normalizeGroups()
+  }
+
   // "Ungroup Tabs": every membership goes, every tab keeps its position
   dissolveGroup(groupId: string): void {
     for (const [t, g] of [...this.groups]) if (g === groupId) this.groups.delete(t)

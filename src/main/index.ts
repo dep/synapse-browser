@@ -232,9 +232,47 @@ app.whenReady().then(async () => {
     detachTabToNewWindow(b, id, x, y, deps)
   })
 
-  ipcMain.on('tabs:context-menu', (e, id: string) => {
+  ipcMain.on('tabs:context-menu', (e, id: string, selection?: unknown) => {
     const b = forSender(e)
     if (!b || typeof id !== 'string') return
+    // a ⌘/⇧ multi-select (issue #37): the menu acts on the whole selection
+    const sel = Array.isArray(selection)
+      ? [...new Set(selection.filter((s): s is string => typeof s === 'string'))]
+      : []
+    if (sel.length > 1 && sel.includes(id)) {
+      const items: Electron.MenuItemConstructorOptions[] = [
+        {
+          label: `Group ${sel.length} Tabs`,
+          click: () => {
+            const gid = b.tabs.groupSelection(sel)
+            if (gid) b.win.webContents.send('ui:edit-group', gid)
+          },
+        },
+      ]
+      const targets = b.tabs
+        .groupIds()
+        .flatMap((g) => b.tabs.groupInfo(g) ?? [])
+      if (targets.length > 0) {
+        items.push({
+          label: 'Add to Group',
+          submenu: targets.map((g) => ({
+            label: g.name,
+            click: () => void b.tabs.groupSelection(sel, g.id),
+          })),
+        })
+      }
+      items.push(
+        { type: 'separator' },
+        {
+          label: `Close ${sel.length} Tabs`,
+          click: () => {
+            for (const t of sel) b.tabs.closeTab(t)
+          },
+        },
+      )
+      Menu.buildFromTemplate(items).popup({ window: b.win })
+      return
+    }
     const pinned = b.tabs.isPinned(id)
     const profile = b.tabs.profileOf(id)
     const template: Electron.MenuItemConstructorOptions[] = [
@@ -268,6 +306,11 @@ app.whenReady().then(async () => {
     )
     if (b.tabs.groupOf(id)) {
       template.push({ label: 'Remove from Group', click: () => b.tabs.ungroupTab(id) })
+    }
+    // ⌘-click now multi-selects (issue #37), so split tiling lives here
+    // (and on ⌥-click) instead
+    if (b.tabs.activeId && b.tabs.activeId !== id) {
+      template.push({ label: 'Open in Split View', click: () => b.tabs.openInSplit(id) })
     }
     template.push(
       { type: 'separator' },

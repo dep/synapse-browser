@@ -894,6 +894,42 @@ describe('TabModel tab groups', () => {
   })
 })
 
+describe('TabModel groupMany', () => {
+  let m: TabModel
+
+  beforeEach(() => {
+    m = new TabModel()
+    for (const id of ['a', 'b', 'c', 'd', 'e']) m.add(id)
+  })
+
+  it('groups a selection in sidebar order at the first member’s position', () => {
+    m.groupMany(['d', 'b'], 'g1') // selection order must not matter
+    expect(m.groupTabs('g1')).toEqual(['b', 'd'])
+    expect(m.order).toEqual(['a', 'b', 'd', 'c', 'e'])
+  })
+
+  it('adds a selection to an existing group block', () => {
+    m.setGroup('c', 'g1')
+    m.groupMany(['e', 'a'], 'g1')
+    expect(m.groupTabs('g1')).toEqual(['c', 'a', 'e'])
+    expect(m.order).toEqual(['b', 'c', 'a', 'e', 'd'])
+  })
+
+  it('ignores unknown ids and slots', () => {
+    m.pin('a')
+    m.groupMany(['a', 'ghost', 'c'], 'g1')
+    expect(m.groupTabs('g1')).toEqual(['c'])
+    expect(m.groupOf('a')).toBeNull()
+  })
+
+  it('members already in the group keep their standing', () => {
+    m.setGroup('b', 'g1')
+    m.setGroup('c', 'g1')
+    m.groupMany(['c', 'e'], 'g1')
+    expect(m.groupTabs('g1')).toEqual(['b', 'c', 'e'])
+  })
+})
+
 describe('TabModel dissolveGroup', () => {
   it('clears every membership and leaves positions untouched', () => {
     const m = new TabModel()

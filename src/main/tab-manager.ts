@@ -418,6 +418,29 @@ export class TabManager {
     this.refresh()
   }
 
+  groupIds(): string[] {
+    return this.model.groupIds()
+  }
+
+  // multi-select "Group N Tabs" (issue #37): move the selection into `gid`,
+  // or found a fresh group around it. Returns the destination group id, or
+  // null when nothing joined (unknown group, selection of slots/ghosts).
+  groupSelection(ids: string[], gid?: string): string | null {
+    let target = gid ?? null
+    if (target && !this.groupMeta.has(target)) return null
+    if (!target) {
+      target = nextGroupId()
+      this.groupMeta.set(target, { name: 'New Group', profile: 'default' })
+    }
+    this.model.groupMany(ids, target)
+    if (this.model.groupTabs(target).length === 0) {
+      this.groupMeta.delete(target) // founded around nothing; take the meta back
+      return null
+    }
+    this.refresh()
+    return target
+  }
+
   // the group menu's Color pick (issue #34); null clears back to neutral
   setGroupColor(gid: string, color: GroupColor | null): void {
     const meta = this.groupMeta.get(gid)
