@@ -722,10 +722,13 @@ export class TabManager {
   }
 
   focusUrlBar(): void {
-    if (this.suppressUrlbarFocus) return
     // DOM focus() in the chrome renderer is not enough while a page view
     // holds native focus — the window must focus its own webContents first.
+    // ＋ Group suppresses only the urlbar targeting: the chrome document
+    // still needs native focus or the group rename editor can't take DOM
+    // focus (typing would go nowhere and the preselect wouldn't show).
     this.win.webContents.focus()
+    if (this.suppressUrlbarFocus) return
     this.win.webContents.send('ui:focus-urlbar')
   }
 
