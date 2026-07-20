@@ -510,6 +510,32 @@ browser-action-list {
 .tab.grouped {
   margin-left: 14px;
 }
+/* tab-group colors (issue #34): 12 preset hues tuned for the dark shell */
+.gc-red { --group-color: #f7768e; }
+.gc-orange { --group-color: #ff9e64; }
+.gc-yellow { --group-color: #e0af68; }
+.gc-green { --group-color: #9ece6a; }
+.gc-teal { --group-color: #73daca; }
+.gc-cyan { --group-color: #7dcfff; }
+.gc-blue { --group-color: #7aa2f7; }
+.gc-indigo { --group-color: #7c85f3; }
+.gc-purple { --group-color: #bb9af7; }
+.gc-pink { --group-color: #ff75a0; }
+.gc-brown { --group-color: #c0946e; }
+.gc-grey { --group-color: #9a9aa3; }
+.group-header.colored .folder-twist,
+.group-header.colored .folder-name,
+.group-header.colored .folder-count {
+  color: var(--group-color);
+}
+/* member rows hang off a rail in the group's color; the 2px border eats
+   into the margin so colored and plain grouped rows align */
+.tab.grouped.colored {
+  margin-left: 12px;
+  border-left: 2px solid var(--group-color);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
 /* the middle-band group drop draws a box around the target pair-to-be */
 .tab.drop-into {
   box-shadow: inset 0 0 0 1.5px var(--accent);

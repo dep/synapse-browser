@@ -2,6 +2,7 @@ import { app, dialog, ipcMain, Menu, session } from 'electron'
 import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ProfileId, ShortcutRow, SuggestionsPayload } from '../shared/ipc'
+import { GROUP_COLORS } from '../shared/ipc'
 import { normalizeAccelerator } from '../shared/accelerator'
 import { FIXED_SHORTCUTS, RESERVED_ACCELERATORS, SHORTCUT_COMMANDS } from '../shared/shortcuts'
 import { parseBookmarksExport, planImport } from '../shared/bookmarks-io'
@@ -345,6 +346,25 @@ app.whenReady().then(async () => {
             checked: info.profile === 'work',
             click: () => b.tabs.setGroupProfile(id, 'work'),
           },
+        ],
+      },
+      {
+        label: 'Color',
+        submenu: [
+          {
+            label: 'None',
+            type: 'radio',
+            checked: !info.color,
+            click: () => b.tabs.setGroupColor(id, null),
+          },
+          ...GROUP_COLORS.map(
+            (c): Electron.MenuItemConstructorOptions => ({
+              label: c[0]!.toUpperCase() + c.slice(1),
+              type: 'radio',
+              checked: info.color === c,
+              click: () => b.tabs.setGroupColor(id, c),
+            }),
+          ),
         ],
       },
       { type: 'separator' },

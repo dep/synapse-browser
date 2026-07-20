@@ -1,5 +1,6 @@
 import * as path from 'node:path'
-import type { ProfileId } from '../shared/ipc'
+import type { GroupColor, ProfileId } from '../shared/ipc'
+import { GROUP_COLORS } from '../shared/ipc'
 import { JsonStore } from './store'
 
 export interface TabEntry {
@@ -15,6 +16,7 @@ export interface TabGroupEntry {
   id: string
   name: string
   profile?: ProfileId
+  color?: GroupColor
 }
 
 interface TabsFileV1 {
@@ -67,6 +69,7 @@ export class TabsStore {
         id: g.id,
         name: g.name,
         ...(g.profile && g.profile !== 'default' ? { profile: g.profile } : {}),
+        ...(g.color ? { color: g.color } : {}),
       })),
       active,
     })
@@ -84,9 +87,23 @@ export class TabsStore {
     const rawGroups: unknown[] = 'groups' in data && Array.isArray(data.groups) ? data.groups : []
     const groups = rawGroups.flatMap((g): TabGroupEntry[] => {
       if (typeof g !== 'object' || g === null) return []
-      const { id, name, profile } = g as { id?: unknown; name?: unknown; profile?: unknown }
+      const { id, name, profile, color } = g as {
+        id?: unknown
+        name?: unknown
+        profile?: unknown
+        color?: unknown
+      }
       if (typeof id !== 'string' || typeof name !== 'string') return []
-      return [{ id, name, ...(profile === 'work' ? { profile: 'work' as const } : {}) }]
+      return [
+        {
+          id,
+          name,
+          ...(profile === 'work' ? { profile: 'work' as const } : {}),
+          ...((GROUP_COLORS as readonly unknown[]).includes(color)
+            ? { color: color as GroupColor }
+            : {}),
+        },
+      ]
     })
     const knownGroups = new Set(groups.map((g) => g.id))
     const clean = raw.flatMap((t): TabEntry[] => {

@@ -15,6 +15,7 @@ import { isBlankUrl } from '../shared/newtab'
 import { routeWindowOpen } from '../shared/popup-router'
 import type {
   Bookmark,
+  GroupColor,
   PinSlot,
   ProfileId,
   TabGroupInfo,
@@ -78,7 +79,7 @@ export class TabManager {
   private customTitles = new Map<string, string>()
   // tab-group meta; membership and ordering live in the model. Meta for a
   // group whose last member left is reaped at the next snapshot.
-  private groupMeta = new Map<string, { name: string; profile: ProfileId }>()
+  private groupMeta = new Map<string, { name: string; profile: ProfileId; color?: GroupColor }>()
   // true while a createTab is between meta-mint and first-member join; the
   // snapshot reap must not collect group meta in that window
   private creatingTab = false
@@ -417,6 +418,15 @@ export class TabManager {
     this.refresh()
   }
 
+  // the group menu's Color pick (issue #34); null clears back to neutral
+  setGroupColor(gid: string, color: GroupColor | null): void {
+    const meta = this.groupMeta.get(gid)
+    if (!meta) return
+    if (color) meta.color = color
+    else delete meta.color
+    this.refresh()
+  }
+
   moveGroup(gid: string, toIndex: number): void {
     if (!Number.isFinite(toIndex)) return
     this.model.moveGroup(gid, Math.round(toIndex))
@@ -537,7 +547,7 @@ export class TabManager {
   restoreTabs(
     tabs: { url: string; profile: ProfileId; title?: string; group?: string }[],
     active: number,
-    groups: { id: string; name: string; profile?: ProfileId }[] = [],
+    groups: { id: string; name: string; profile?: ProfileId; color?: GroupColor }[] = [],
   ): void {
     if (tabs.length === 0) {
       this.createTab()
@@ -555,7 +565,11 @@ export class TabManager {
       if (!meta) return null
       const gid = nextGroupId()
       gidFor.set(savedId, gid)
-      this.groupMeta.set(gid, { name: meta.name, profile: meta.profile ?? 'default' })
+      this.groupMeta.set(gid, {
+        name: meta.name,
+        profile: meta.profile ?? 'default',
+        ...(meta.color ? { color: meta.color } : {}),
+      })
       return gid
     }
     const ids = tabs.map((t) => {
@@ -1029,7 +1043,14 @@ export class TabManager {
     const groups: Record<string, TabGroupInfo> = {}
     for (const gid of this.model.groupIds()) {
       const meta = this.groupMeta.get(gid)
-      if (meta) groups[gid] = { id: gid, name: meta.name, profile: meta.profile }
+      if (meta) {
+        groups[gid] = {
+          id: gid,
+          name: meta.name,
+          profile: meta.profile,
+          ...(meta.color ? { color: meta.color } : {}),
+        }
+      }
     }
     const tabGroups: Record<string, string> = {}
     for (const id of this.model.order) {

@@ -122,10 +122,12 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
     if (gid && gid !== prevGroup) el.append(groupHeader(el, snap, gid, i))
     prevGroup = gid
     if (gid && collapsedGroups.has(gid)) return
+    const groupColor = gid ? snap.groups[gid]?.color : undefined
     const item = document.createElement('div')
     item.className =
       'tab' +
       (gid ? ' grouped' : '') +
+      (groupColor ? ` colored gc-${groupColor}` : '') +
       (id === snap.activeId ? ' active' : '') +
       (tab.profile === 'work' ? ' work' : '') +
       (snap.panes.includes(id) ? ' in-split' : '')
@@ -200,6 +202,7 @@ function groupHeader(
   row.className =
     'panel-item folder group-header' +
     (group.profile === 'work' ? ' work' : '') +
+    (group.color ? ` colored gc-${group.color}` : '') +
     // a collapsed group hides its rows; carry the hidden active tab's
     // highlight on the header so focus never disappears from the sidebar
     (collapsed && snap.activeId && members.includes(snap.activeId) ? ' active' : '')

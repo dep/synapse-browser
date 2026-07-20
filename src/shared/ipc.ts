@@ -37,6 +37,24 @@ export interface TabInfo {
   profile: ProfileId
 }
 
+// the 12 preset tab-group colors (issue #34); a group may also have none.
+// Ids are stable store/IPC tokens — the renderer maps them to actual paint
+export const GROUP_COLORS = [
+  'red',
+  'orange',
+  'yellow',
+  'green',
+  'teal',
+  'cyan',
+  'blue',
+  'indigo',
+  'purple',
+  'pink',
+  'brown',
+  'grey',
+] as const
+export type GroupColor = (typeof GROUP_COLORS)[number]
+
 // a tab group: contiguous run of tab-list tabs under a named header.
 // profile is the group's last-assigned container — joining a group never
 // converts a tab; picking a profile in the group menu converts all members
@@ -44,6 +62,7 @@ export interface TabGroupInfo {
   id: string
   name: string
   profile: ProfileId
+  color?: GroupColor
 }
 
 export interface TabsSnapshot {
