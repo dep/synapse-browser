@@ -28,11 +28,16 @@ import { nextGroupId, nextTabId } from './tab-ids'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
-import { staleTabs, UNLOAD_SWEEP_MS } from '../shared/tab-unload'
+import { staleTabs, UNLOAD_AFTER_MS, UNLOAD_SWEEP_MS } from '../shared/tab-unload'
 import { AI_SIDEBAR_WIDTH_DEFAULT, clampAiSidebarWidth } from '../shared/ai'
 
 export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
+
+// issue #35 timings, env-overridable so a dev run can verify unloading in
+// seconds instead of hours (SYNAPSE_UNLOAD_AFTER_MS / SYNAPSE_UNLOAD_SWEEP_MS)
+const UNLOAD_AFTER = Number(process.env.SYNAPSE_UNLOAD_AFTER_MS) || UNLOAD_AFTER_MS
+const UNLOAD_SWEEP = Number(process.env.SYNAPSE_UNLOAD_SWEEP_MS) || UNLOAD_SWEEP_MS
 
 // When a page destroys its own view (window.close() on a script-opened tab)
 // Electron nulls the view's `webContents` getter; an already-torn-down view
@@ -125,7 +130,7 @@ export class TabManager {
   ) {
     this.paneButtons = new PaneOverlays(win)
     win.on('resize', () => this.layout())
-    this.unloadTimer = setInterval(() => this.unloadStaleTabs(), UNLOAD_SWEEP_MS)
+    this.unloadTimer = setInterval(() => this.unloadStaleTabs(), UNLOAD_SWEEP)
   }
 
   // the 5-minute sweep behind background-tab unloading (issue #35)
@@ -146,6 +151,7 @@ export class TabManager {
           }
         }),
       now,
+      UNLOAD_AFTER,
     )
     if (stale.length === 0) return
     for (const id of stale) this.discardTab(id)
