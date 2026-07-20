@@ -530,11 +530,14 @@ browser-action-list {
 .gc-pink { --group-color: #ff75a0; }
 .gc-brown { --group-color: #c0946e; }
 .gc-grey { --group-color: #9a9aa3; }
-/* .folder covers both tab-group headers and bookmark-group rows */
-.folder.colored .folder-twist,
-.folder.colored .folder-name,
-.folder.colored .folder-count {
-  color: var(--group-color);
+/* .folder covers both tab-group headers and bookmark-group rows. The color
+   paints a subtle wash behind the header — never its text — and yields to
+   the stronger active-tab highlight on collapsed groups */
+.folder.colored:not(.active) {
+  background: color-mix(in srgb, var(--group-color) 14%, transparent);
+}
+.folder.colored:not(.active):hover {
+  background: color-mix(in srgb, var(--group-color) 24%, transparent);
 }
 /* member rows hang off a rail in the group's color; the 2px border eats
    into the margin so colored and plain grouped rows align */
