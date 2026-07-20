@@ -124,9 +124,6 @@ const api: SynapseApi = {
     onAiSidebarVisible: (cb) => {
       ipcRenderer.on('ui:ai-visible', (_e, visible) => cb(visible))
     },
-    onSettings: (cb) => {
-      ipcRenderer.on('ui:settings', (_e, open) => cb(open))
-    },
     onFindOpen: (cb) => {
       ipcRenderer.on('ui:find-open', () => cb())
     },

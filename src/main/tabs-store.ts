@@ -1,6 +1,6 @@
 import * as path from 'node:path'
 import type { GroupColor, ProfileId } from '../shared/ipc'
-import { GROUP_COLORS } from '../shared/ipc'
+import { GROUP_COLORS, SETTINGS_URL } from '../shared/ipc'
 import { JsonStore } from './store'
 
 export interface TabEntry {
@@ -60,7 +60,8 @@ export class TabsStore {
     this.store.set({
       v: 4,
       tabs: tabs.map((t) => ({
-        url: PERSISTABLE.test(t.url) ? t.url : '',
+        // the settings tab survives restarts as itself (issue #33)
+        url: PERSISTABLE.test(t.url) || t.url === SETTINGS_URL ? t.url : '',
         profile: t.profile,
         ...(t.title ? { title: t.title } : {}),
         ...(t.group ? { group: t.group } : {}),

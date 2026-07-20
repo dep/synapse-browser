@@ -76,6 +76,18 @@ describe('TabsStore', () => {
     ])
   })
 
+  it('keeps the settings tab url so it restores as itself', () => {
+    const store = new TabsStore(dir)
+    store.save(
+      [
+        { url: 'synapse://settings', profile: 'default' },
+        { url: 'https://a.test/', profile: 'default' },
+      ],
+      0,
+    )
+    expect(store.load().tabs.map((t) => t.url)).toEqual(['synapse://settings', 'https://a.test/'])
+  })
+
   it('keeps non-web urls as blank-tab placeholders', () => {
     const store = new TabsStore(dir)
     store.save(

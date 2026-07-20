@@ -4,6 +4,10 @@ import type { PaneRect } from './split-layout'
 
 export type ProfileId = 'default' | 'work'
 
+// Settings lives in a real tab (issue #33). The tab has no WebContentsView;
+// this marker URL identifies it in snapshots, the urlbar, and the tabs store.
+export const SETTINGS_URL = 'synapse://settings'
+
 // primary = the persistent launch window (pins, bookmarks, AI sidebar);
 // secondary = an ephemeral Cmd+N / torn-out window showing only its own tabs
 export type WindowRole = 'primary' | 'secondary'
@@ -290,7 +294,6 @@ export interface SynapseApi {
     onSidebarVisible(cb: (visible: boolean) => void): void
     onAiSidebarWidth(cb: (px: number) => void): void
     onAiSidebarVisible(cb: (visible: boolean) => void): void
-    onSettings(cb: (open: boolean) => void): void
     onFindOpen(cb: () => void): void
     onFindStep(cb: (dir: 1 | -1) => void): void
     onFindResult(cb: (r: { matches: number; active: number }) => void): void

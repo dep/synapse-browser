@@ -203,7 +203,6 @@ export function createWindow(
     onTabActivated: (wc, profile) => {
       if (profile === 'default') deps.extensions.selectTab(wc)
     },
-    onSettingsClosed: () => win.webContents.send('ui:settings', false),
     onFindResult: (r) => win.webContents.send('ui:find-result', r),
     // a tab tearing out of this window: drop this window's cycle-hook and
     // context-menu listeners, and its extension registration — the
@@ -292,7 +291,6 @@ export function createWindow(
     win.webContents.send('ui:sidebar-visible', bundle.sidebarVisible)
     win.webContents.send('ui:ai-width', aiSidebarResize.current)
     win.webContents.send('ui:ai-visible', bundle.aiVisible)
-    win.webContents.send('ui:settings', tabs.isSettingsOpen())
   })
 
   if (process.env['ELECTRON_RENDERER_URL']) {

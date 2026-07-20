@@ -23,6 +23,7 @@ import type {
   TabsSnapshot,
   WindowRole,
 } from '../shared/ipc'
+import { SETTINGS_URL } from '../shared/ipc'
 import { ClosedTabsStack } from './closed-tabs'
 import { nextGroupId, nextTabId } from './tab-ids'
 import { CycleList, Direction, TabModel } from './tab-model'
@@ -56,7 +57,6 @@ export interface TabManagerOptions {
   onSnapshot(snap: TabsSnapshot): void
   onTabCreated?(wc: WebContents, profile: ProfileId): void
   onTabActivated?(wc: WebContents, profile: ProfileId): void
-  onSettingsClosed?(): void
   onFindResult?(result: { matches: number; active: number }): void
   // profile auto-routing (issue #33): the first rule matching `url` names
   // the container a new tab should open in; null = no rule, caller decides
@@ -113,7 +113,15 @@ export class TabManager {
   private sidebarVisible = true
   private aiSidebarWidth = AI_SIDEBAR_WIDTH_DEFAULT
   private aiSidebarVisible = false
-  private settingsOpen = false
+  // Settings is a real tab (issue #33): a model entry with NO view. While
+  // it's active, syncViews attaches no page view and the chrome renderer
+  // draws the settings UI in the page cell. Exit = activate any other tab;
+  // close it like any tab.
+  private settingsTabId: string | null = null
+
+  private get settingsOpen(): boolean {
+    return this.settingsTabId !== null && this.model.activeId === this.settingsTabId
+  }
   private blankActivatedId: string | null = null
   // per-tab listener disposers, so a tab moving to another window (tear-out)
   // leaves none of this window's listeners behind on its WebContents
@@ -183,11 +191,6 @@ export class TabManager {
     opener?: string | null,
     group?: string | null,
   ): string {
-    // background tabs must not dismiss the settings screen
-    if (activate && this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
-    }
     const id = nextTabId()
     // a routing rule on a known-at-creation URL beats the caller's container
     // (issue #33); blank tabs route later, on their first real navigation
@@ -272,6 +275,18 @@ export class TabManager {
   closeTab(id: string): void {
     if (this.model.isSlot(id)) {
       this.sleepSlot(id)
+      return
+    }
+    // the settings tab closes like any tab; there's no view to tear down
+    if (id === this.settingsTabId) {
+      this.settingsTabId = null
+      this.lastActive.delete(id)
+      this.model.close(id)
+      if (!this.model.activeId) {
+        this.handleEmpty()
+        return
+      }
+      this.syncViews()
       return
     }
     // an unloaded tab (issue #35) has no view to tear down — just bookkeeping
@@ -609,14 +624,13 @@ export class TabManager {
   }
 
   activateTab(id: string): void {
-    if (this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
-    }
     if (!this.views.has(id)) {
       if (this.model.isPinned(id)) this.wakePin(id)
       else if (this.model.isBookmarkSlot(id)) this.wakeBookmark(id)
-      else if (this.discarded.has(id)) {
+      else if (id === this.settingsTabId) {
+        this.model.activate(id)
+        this.syncViews()
+      } else if (this.discarded.has(id)) {
         // clicking an unloaded tab refreshes it (issue #35): syncViews sees
         // the view-less active tab and recreates it from the saved state
         this.model.activate(id)
@@ -691,6 +705,13 @@ export class TabManager {
       return gid
     }
     const ids = tabs.map((t) => {
+      // a saved settings tab comes back as the settings tab, not a web page
+      if (t.url === SETTINGS_URL && !this.settingsTabId) {
+        const id = nextTabId()
+        this.settingsTabId = id
+        this.model.add(id, false)
+        return id
+      }
       const id = this.createTab(t.url || undefined, false, t.profile, null, runtimeGid(t.group))
       if (t.title) this.customTitles.set(id, t.title)
       return id
@@ -930,10 +951,6 @@ export class TabManager {
   }
 
   cycleStep(list: CycleList, dir: Direction): void {
-    if (this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
-    }
     if (!this.model.cycleStep(list, dir)) return
     this.syncViews()
     // keep native focus on the newly attached view: the modifier keyUp that
@@ -986,12 +1003,16 @@ export class TabManager {
     this.layout()
   }
 
-  // while settings is open no page view is attached, so the chrome renderer
-  // (which draws the settings UI in the page cell) is fully visible
-  toggleSettings(): boolean {
-    this.settingsOpen = !this.settingsOpen
+  // ⌘, / menu Settings…: focus the settings tab, or mint it (issue #33)
+  openSettings(): void {
+    if (this.settingsTabId) {
+      this.activateTab(this.settingsTabId)
+      return
+    }
+    const id = nextTabId()
+    this.settingsTabId = id
+    this.model.add(id, true)
     this.syncViews()
-    return this.settingsOpen
   }
 
   isSettingsOpen(): boolean {
@@ -1059,10 +1080,6 @@ export class TabManager {
   splitActive(dir: SplitDir): void {
     const anchor = this.model.activeId
     if (!anchor || !this.views.has(anchor)) return
-    if (this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
-    }
     const id = nextTabId()
     this.profiles.set(id, this.profileOf(anchor))
     this.createView(id)
@@ -1088,9 +1105,10 @@ export class TabManager {
       return
     }
     if (!this.views.has(id) && !this.wakeSlotView(id, false)) return
-    if (this.settingsOpen) {
-      this.settingsOpen = false
-      this.opts.onSettingsClosed?.()
+    // a view-less anchor (the settings tab) can't tile; just switch over
+    if (!this.views.has(anchor)) {
+      this.activateTab(id)
+      return
     }
     // splitting from a tab outside the old tiling starts a fresh one
     const root = showsSplit(this.splitRoot, anchor) ? this.splitRoot! : { leaf: anchor }
@@ -1171,6 +1189,22 @@ export class TabManager {
           isAsleep: true,
           anchorUrl: slot.url,
           profile: this.profileOf(id),
+        }
+      } else if (id === this.settingsTabId) {
+        tabs[id] = {
+          id,
+          title: 'Settings',
+          customTitle: null,
+          url: SETTINGS_URL,
+          favicon: null,
+          isLoading: false,
+          canGoBack: false,
+          canGoForward: false,
+          isBookmarked: false,
+          isPinned: false,
+          isAsleep: false,
+          anchorUrl: null,
+          profile: 'default',
         }
       } else {
         // an unloaded background tab (issue #35): render from the saved state

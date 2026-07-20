@@ -156,8 +156,10 @@ app.whenReady().then(async () => {
     b.tabs.setAiSidebarVisible(b.aiVisible)
     b.win.webContents.send('ui:ai-visible', b.aiVisible)
   }
+  // Settings is a tab (issue #33): ⌘,/menu focuses it, minting it on demand;
+  // the renderer derives the settings screen from the snapshot's active URL
   const toggleSettings = (b: WindowBundle): void => {
-    b.win.webContents.send('ui:settings', b.tabs.toggleSettings())
+    b.tabs.openSettings()
   }
 
   const ai = new AiChatController({
@@ -876,8 +878,7 @@ app.whenReady().then(async () => {
 
   // the AI sidebar's "Open Settings" shortcut must open, never close
   ipcMain.on('ui:open-settings', (e) => {
-    const b = forSender(e)
-    if (b && !b.tabs.isSettingsOpen()) toggleSettings(b)
+    forSender(e)?.tabs.openSettings()
   })
 
   ipcMain.handle('settings:get', () => ({
