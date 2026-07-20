@@ -75,13 +75,20 @@ export function renderBookmarks(
     ),
   )
   wireDropZone(loose, {
-    accepts: (d) => d.kind === 'bookmark' || d.kind === 'tab',
+    accepts: (d) => d.kind === 'bookmark' || d.kind === 'tab' || d.kind === 'group',
     onDrop: (d) => {
-      if (d.kind === 'tab') window.synapse.bookmarks.createFromTab(d.id, null)
+      if (d.kind === 'group') window.synapse.groups.saveToBookmarks(d.id)
+      else if (d.kind === 'tab') window.synapse.bookmarks.createFromTab(d.id, null)
       else window.synapse.bookmarks.moveToFolder(d.id, null)
     },
   })
   el.append(loose)
+  // a tab group dropped anywhere in the panel (heading, gaps) still saves;
+  // rows add their own acceptance so no landing spot feels dead
+  wireDropZone(el, {
+    accepts: (d) => d.kind === 'group',
+    onDrop: (d) => window.synapse.groups.saveToBookmarks(d.id),
+  })
 }
 
 function bookmarkRow(
@@ -141,9 +148,13 @@ function bookmarkRow(
     window.synapse.bookmarks.showContextMenu('bookmark', bm.id)
   })
   wireDragItem(row, { kind: 'bookmark', id: bm.id }, {
-    accepts: (d) => d.kind === 'bookmark' || d.kind === 'tab',
+    accepts: (d) => d.kind === 'bookmark' || d.kind === 'tab' || d.kind === 'group',
     onDrop: (d, before) => {
       let to = index + (before ? 0 : 1)
+      if (d.kind === 'group') {
+        window.synapse.groups.saveToBookmarks(d.id)
+        return
+      }
       if (d.kind === 'tab') {
         window.synapse.bookmarks.createFromTab(d.id, bm.folderId ?? null)
         return
@@ -192,9 +203,15 @@ function folderRow(
     window.synapse.bookmarks.showContextMenu('folder', folder.id)
   })
   wireDragItem(row, { kind: 'folder', id: folder.id }, {
-    accepts: (d) => d.kind === 'folder' || d.kind === 'bookmark' || d.kind === 'tab',
+    accepts: (d) =>
+      d.kind === 'folder' || d.kind === 'bookmark' || d.kind === 'tab' || d.kind === 'group',
     into: (d) => d.kind === 'bookmark' || d.kind === 'tab',
     onDrop: (d, before) => {
+      if (d.kind === 'group') {
+        // groups can't nest into folders; the drop still saves the group
+        window.synapse.groups.saveToBookmarks(d.id)
+        return
+      }
       if (d.kind === 'tab') {
         collapsed.delete(folder.id) // auto-expand so the drop is visible
         window.synapse.bookmarks.createFromTab(d.id, folder.id)

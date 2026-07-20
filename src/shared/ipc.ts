@@ -37,11 +37,22 @@ export interface TabInfo {
   profile: ProfileId
 }
 
+// a tab group: contiguous run of tab-list tabs under a named header.
+// profile is the group's last-assigned container — joining a group never
+// converts a tab; picking a profile in the group menu converts all members
+export interface TabGroupInfo {
+  id: string
+  name: string
+  profile: ProfileId
+}
+
 export interface TabsSnapshot {
   tabs: Record<string, TabInfo>
   order: string[]
   pinned: string[]
   bookmarkTabs: Record<string, string> // bookmarkId → tabId, awake only
+  groups: Record<string, TabGroupInfo> // groupId → meta, members ≥ 1
+  tabGroups: Record<string, string> // tabId → groupId, grouped tabs only
   activeId: string | null
   panes: string[] // split-pane tab ids in layout order; [] = no split
   role: WindowRole
@@ -153,13 +164,29 @@ export interface SynapseApi {
     // opens in a new background tab instead of navigating this one
     openNavInNewTab(id: string, offset: -1 | 0 | 1): void
     stop(id: string): void
-    reorder(id: string, toIndex: number): void
+    // group is the drop destination's tab group: a groupId joins it, null
+    // leaves any group, undefined keeps the current membership
+    reorder(id: string, toIndex: number, group?: string | null): void
     // double-click rename in the sidebar; '' reverts to the page title
     rename(id: string, title: string): void
     // tear the tab out into its own window at the given screen point
     detach(id: string, screenX: number, screenY: number): void
     // ⌘-click: tile the tab next to the focused pane (vertical split)
     openInSplit(id: string): void
+    showContextMenu(id: string): void
+  }
+  groups: {
+    // ＋ Group button: a fresh group around a fresh blank tab; resolves to
+    // the new group's id so the renderer can open its rename editor
+    create(): Promise<string>
+    // drop a tab onto the middle of another: group them (or join the target's)
+    createFromDrop(targetId: string, draggedId: string): void
+    close(id: string): void // close every member tab, group goes with them
+    ungroup(id: string): void // dissolve: members stay as loose tabs
+    rename(id: string, name: string): void
+    reorder(id: string, toIndex: number): void // move the whole block
+    removeTab(tabId: string): void // pull one tab out of its group
+    saveToBookmarks(id: string): void // group → bookmark folder of slots
     showContextMenu(id: string): void
   }
   onTabsUpdated(cb: (snap: TabsSnapshot) => void): void
@@ -240,5 +267,6 @@ export interface SynapseApi {
     onBookmarksChanged(cb: () => void): void
     onEditFolder(cb: (folderId: string) => void): void
     onEditBookmark(cb: (bookmarkId: string) => void): void
+    onEditGroup(cb: (groupId: string) => void): void
   }
 }

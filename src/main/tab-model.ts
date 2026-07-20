@@ -13,6 +13,10 @@ export class TabModel {
   // only until the user leaves the spawned tab for any other tab, so closing
   // it "immediately" returns focus to the opener instead of the neighbor
   private openers = new Map<string, string>()
+  // tab → tab-group; only order tabs are groupable, and a group's members
+  // stay contiguous in `order` (normalizeGroups) so the sidebar, Option+Tab
+  // cycling, and Close Tabs Below all agree on one sequence
+  private groups = new Map<string, string>()
 
   // pins and bookmarks are both "slots": they sleep instead of closing
   isSlot(id: string): boolean {
@@ -61,6 +65,7 @@ export class TabModel {
     if (this.cycling) this.cycleCommit()
     const opener = this.openers.get(id)
     this.openers.delete(id)
+    this.groups.delete(id)
     this.order = this.order.filter((t) => t !== id)
     this.mru = this.mru.filter((t) => t !== id)
     if (this.activeId === id) {
@@ -80,9 +85,88 @@ export class TabModel {
   private toSlot(id: string, slots: string[]): boolean {
     if (!this.order.includes(id)) return false
     this.openers.delete(id) // a slot is a keeper, not a just-spawned tab
+    this.groups.delete(id) // slots live above the tab list, outside any group
     this.order = this.order.filter((t) => t !== id)
     slots.push(id)
     return true
+  }
+
+  // ── tab groups ───────────────────────────────────────────────────────
+
+  groupOf(id: string): string | null {
+    return this.groups.get(id) ?? null
+  }
+
+  groupTabs(groupId: string): string[] {
+    return this.order.filter((t) => this.groups.get(t) === groupId)
+  }
+
+  // distinct groups in sidebar order (position of each group's first member)
+  groupIds(): string[] {
+    const seen: string[] = []
+    for (const t of this.order) {
+      const g = this.groups.get(t)
+      if (g && !seen.includes(g)) seen.push(g)
+    }
+    return seen
+  }
+
+  // join (or leave, with null) a group in place; membership only — the
+  // contiguity sweep decides the final resting position
+  setGroup(id: string, groupId: string | null): void {
+    if (!this.order.includes(id)) return
+    const from = this.groups.get(id) ?? null
+    if (from === groupId) return
+    if (groupId === null) {
+      // leave: step just past the old block so the tab visibly exits it
+      this.groups.delete(id)
+      const block = this.groupTabs(from!)
+      const last = block[block.length - 1]
+      if (last !== undefined) {
+        this.order = this.order.filter((t) => t !== id)
+        this.order.splice(this.order.indexOf(last) + 1, 0, id)
+      }
+    } else {
+      this.groups.set(id, groupId)
+    }
+    this.normalizeGroups()
+  }
+
+  // "Ungroup Tabs": every membership goes, every tab keeps its position
+  dissolveGroup(groupId: string): void {
+    for (const [t, g] of [...this.groups]) if (g === groupId) this.groups.delete(t)
+  }
+
+  // move a whole group block; toIndex is the insertion index after removal
+  moveGroup(groupId: string, toIndex: number): void {
+    const members = this.groupTabs(groupId)
+    if (members.length === 0) return
+    const rest = this.order.filter((t) => this.groups.get(t) !== groupId)
+    rest.splice(Math.min(Math.max(Math.round(toIndex), 0), rest.length), 0, ...members)
+    this.order = rest
+    this.normalizeGroups()
+  }
+
+  // restore the invariant: each group's members sit contiguously at the
+  // position of its first member, relative order preserved. Ungrouped tabs
+  // caught inside a block surface right after it.
+  private normalizeGroups(): void {
+    const emitted = new Set<string>()
+    const next: string[] = []
+    for (const t of this.order) {
+      if (emitted.has(t)) continue
+      const g = this.groups.get(t)
+      if (!g) {
+        next.push(t)
+        emitted.add(t)
+        continue
+      }
+      for (const member of this.groupTabs(g)) {
+        next.push(member)
+        emitted.add(member)
+      }
+    }
+    this.order = next
   }
 
   pin(id: string): boolean {
@@ -162,12 +246,21 @@ export class TabModel {
 
   // move a tab within its own list (sidebar order or pin row); not a visit,
   // so MRU and activeId are untouched. toIndex is the insertion index after
-  // removal; out-of-range clamps, unknown ids no-op.
-  reorder(id: string, toIndex: number): void {
+  // removal; out-of-range clamps, unknown ids no-op. For tab-list tabs,
+  // `group` is the drop target's group (null = ungrouped, undefined = keep);
+  // the contiguity sweep then settles the final position.
+  reorder(id: string, toIndex: number, group?: string | null): void {
     const list = this.order.includes(id) ? this.order : this.pinned.includes(id) ? this.pinned : null
     if (!list) return
     list.splice(list.indexOf(id), 1)
     list.splice(Math.min(Math.max(toIndex, 0), list.length), 0, id)
+    if (list === this.order) {
+      if (group !== undefined) {
+        if (group === null) this.groups.delete(id)
+        else this.groups.set(id, group)
+      }
+      this.normalizeGroups()
+    }
   }
 
   wake(id: string, activate = true): void {

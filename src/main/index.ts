@@ -208,8 +208,10 @@ app.whenReady().then(async () => {
       forSender(e)?.tabs.openNavInNewTab(id, offset)
   })
   ipcMain.on('tabs:stop', (e, id: string) => forSender(e)?.tabs.stop(id))
-  ipcMain.on('tabs:reorder', (e, id: string, toIndex: number) => {
-    if (typeof id === 'string') forSender(e)?.tabs.reorderTab(id, Number(toIndex))
+  ipcMain.on('tabs:reorder', (e, id: string, toIndex: number, group?: unknown) => {
+    if (typeof id !== 'string') return
+    if (group !== undefined && group !== null && typeof group !== 'string') return
+    forSender(e)?.tabs.reorderTab(id, Number(toIndex), group)
   })
   ipcMain.on('tabs:rename', (e, id: string, title: string) => {
     if (typeof id === 'string' && typeof title === 'string')
@@ -262,9 +264,98 @@ app.whenReady().then(async () => {
           },
         ],
       },
+    )
+    if (b.tabs.groupOf(id)) {
+      template.push({ label: 'Remove from Group', click: () => b.tabs.ungroupTab(id) })
+    }
+    template.push(
       { type: 'separator' },
       // closing a pin puts it to sleep; the slot stays in the row
       { label: pinned ? 'Close' : 'Close Tab', click: () => b.tabs.closeTab(id) },
+    )
+    Menu.buildFromTemplate(template).popup({ window: b.win })
+  })
+
+  // ── tab groups (issue #31) ─────────────────────────────────────────────
+
+  // "bookmark the group": the group becomes a bookmark folder and each
+  // member becomes that folder's bookmark slot in place (the same conversion
+  // as dragging a single tab into the bookmarks section)
+  const saveGroupToBookmarks = (b: WindowBundle, gid: string): void => {
+    if (b.role !== 'primary') return // secondaries render no bookmarks
+    const info = b.tabs.groupInfo(gid)
+    if (!info) return
+    const members = b.tabs.groupTabIds(gid)
+    if (members.length === 0) return
+    const folder = bookmarks.addFolder(info.name, info.profile)
+    for (const tid of members) {
+      const page = b.tabs.infoFor(tid)
+      if (!page || !/^https?:\/\//.test(page.url)) continue // blank/error tabs stay tabs
+      const bm = bookmarks.add(page.url, page.title, Date.now(), b.tabs.profileOf(tid))
+      b.tabs.bookmarkTab(tid, bm.id)
+      bookmarks.moveToFolder(bm.id, folder.id)
+    }
+    // members left the tab list, so the group reaps itself at the next snapshot
+    bookmarksChanged()
+  }
+
+  ipcMain.handle('groups:create', (e) => forSender(e)?.tabs.createGroupWithTab() ?? null)
+  ipcMain.on('groups:create-from-drop', (e, targetId: string, draggedId: string) => {
+    if (typeof targetId === 'string' && typeof draggedId === 'string')
+      forSender(e)?.tabs.groupFromDrop(targetId, draggedId)
+  })
+  ipcMain.on('groups:close', (e, id: string) => {
+    if (typeof id === 'string') forSender(e)?.tabs.closeGroup(id)
+  })
+  ipcMain.on('groups:ungroup', (e, id: string) => {
+    if (typeof id === 'string') forSender(e)?.tabs.ungroup(id)
+  })
+  ipcMain.on('groups:remove-tab', (e, tabId: string) => {
+    if (typeof tabId === 'string') forSender(e)?.tabs.ungroupTab(tabId)
+  })
+  ipcMain.on('groups:rename', (e, id: string, name: string) => {
+    if (typeof id === 'string' && typeof name === 'string') forSender(e)?.tabs.renameGroup(id, name)
+  })
+  ipcMain.on('groups:reorder', (e, id: string, toIndex: number) => {
+    if (typeof id === 'string') forSender(e)?.tabs.moveGroup(id, Number(toIndex))
+  })
+  ipcMain.on('groups:save-to-bookmarks', (e, id: string) => {
+    const b = forSender(e)
+    if (b && typeof id === 'string') saveGroupToBookmarks(b, id)
+  })
+  ipcMain.on('groups:context-menu', (e, id: string) => {
+    const b = forSender(e)
+    if (!b || typeof id !== 'string') return
+    const info = b.tabs.groupInfo(id)
+    if (!info) return
+    const template: Electron.MenuItemConstructorOptions[] = [
+      { label: 'Rename', click: () => b.win.webContents.send('ui:edit-group', id) },
+      {
+        label: 'Profile',
+        submenu: [
+          {
+            label: 'Default',
+            type: 'radio',
+            checked: info.profile === 'default',
+            click: () => b.tabs.setGroupProfile(id, 'default'),
+          },
+          {
+            label: 'Work',
+            type: 'radio',
+            checked: info.profile === 'work',
+            click: () => b.tabs.setGroupProfile(id, 'work'),
+          },
+        ],
+      },
+      { type: 'separator' },
+    ]
+    if (b.role === 'primary') {
+      template.push({ label: 'Save Group to Bookmarks', click: () => saveGroupToBookmarks(b, id) })
+    }
+    template.push(
+      { label: 'Ungroup Tabs', click: () => b.tabs.ungroup(id) },
+      { type: 'separator' },
+      { label: 'Close Group', click: () => b.tabs.closeGroup(id) },
     )
     Menu.buildFromTemplate(template).popup({ window: b.win })
   })
@@ -728,7 +819,7 @@ app.whenReady().then(async () => {
   primary.tabs.restorePins(pinsStore.load())
   primary.tabs.syncBookmarks(bookmarks.ordered())
   const saved = tabsStore.load()
-  primary.tabs.restoreTabs(saved.tabs, saved.active)
+  primary.tabs.restoreTabs(saved.tabs, saved.active, saved.groups)
   sessionRestored = true
   primary.tabs.refresh() // persist the restored state now that saves are unblocked
 

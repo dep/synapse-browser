@@ -13,11 +13,23 @@ const api: SynapseApi = {
     reload: (id) => ipcRenderer.send('tabs:reload', id),
     openNavInNewTab: (id, offset) => ipcRenderer.send('tabs:nav-new-tab', id, offset),
     stop: (id) => ipcRenderer.send('tabs:stop', id),
-    reorder: (id, toIndex) => ipcRenderer.send('tabs:reorder', id, toIndex),
+    reorder: (id, toIndex, group) => ipcRenderer.send('tabs:reorder', id, toIndex, group),
     rename: (id, title) => ipcRenderer.send('tabs:rename', id, title),
     detach: (id, screenX, screenY) => ipcRenderer.send('tabs:detach', id, screenX, screenY),
     openInSplit: (id) => ipcRenderer.send('tabs:open-in-split', id),
     showContextMenu: (id) => ipcRenderer.send('tabs:context-menu', id),
+  },
+  groups: {
+    create: () => ipcRenderer.invoke('groups:create'),
+    createFromDrop: (targetId, draggedId) =>
+      ipcRenderer.send('groups:create-from-drop', targetId, draggedId),
+    close: (id) => ipcRenderer.send('groups:close', id),
+    ungroup: (id) => ipcRenderer.send('groups:ungroup', id),
+    rename: (id, name) => ipcRenderer.send('groups:rename', id, name),
+    reorder: (id, toIndex) => ipcRenderer.send('groups:reorder', id, toIndex),
+    removeTab: (tabId) => ipcRenderer.send('groups:remove-tab', tabId),
+    saveToBookmarks: (id) => ipcRenderer.send('groups:save-to-bookmarks', id),
+    showContextMenu: (id) => ipcRenderer.send('groups:context-menu', id),
   },
   onTabsUpdated: (cb) => {
     ipcRenderer.on('tabs:updated', (_e, snap) => cb(snap))
@@ -136,6 +148,9 @@ const api: SynapseApi = {
     },
     onEditBookmark: (cb) => {
       ipcRenderer.on('ui:edit-bookmark', (_e, bookmarkId) => cb(bookmarkId))
+    },
+    onEditGroup: (cb) => {
+      ipcRenderer.on('ui:edit-group', (_e, groupId) => cb(groupId))
     },
   },
 }

@@ -161,9 +161,15 @@ export function createWindow(
       deps.tabsStore.save(
         snap.order.map((id) => {
           const t = snap.tabs[id]!
-          return { url: t.url, profile: t.profile, ...(t.customTitle ? { title: t.customTitle } : {}) }
+          return {
+            url: t.url,
+            profile: t.profile,
+            ...(t.customTitle ? { title: t.customTitle } : {}),
+            ...(snap.tabGroups[id] ? { group: snap.tabGroups[id] } : {}),
+          }
         }),
         snap.activeId ? snap.order.indexOf(snap.activeId) : -1,
+        Object.values(snap.groups),
       )
       deps.pinsStore.save(
         snap.pinned.map((id) => ({

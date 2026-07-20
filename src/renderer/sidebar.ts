@@ -5,11 +5,26 @@ import { rowIcon } from './row-icon'
 // the tab-list container is wired once but order changes every render
 let lastOrder: string[] = []
 
-// double-click rename: while an editor is up, snapshots keep arriving
-// (loading flicker, page titles) and a repaint would destroy the input
-// mid-typing — hold the latest one and apply it when the edit ends
+// double-click rename (tab or group): while an editor is up, snapshots keep
+// arriving (loading flicker, page titles) and a repaint would destroy the
+// input mid-typing — hold the latest one and apply it when the edit ends
 let renaming: string | null = null
 let pendingSnap: TabsSnapshot | null = null
+
+// tab groups: collapse is presentation-only state, like bookmark folders'.
+// editingGroup renders that group's header as an inline rename editor.
+const collapsedGroups = new Set<string>()
+let editingGroup: string | null = null
+let lastEl: HTMLElement | null = null
+let lastSnap: TabsSnapshot | null = null
+
+// open a group's rename editor (＋ Group button, context-menu Rename); the
+// editor appears on this render if the group is known, else when its
+// snapshot arrives
+export function startGroupEdit(groupId: string): void {
+  editingGroup = groupId
+  if (lastEl && lastSnap) renderTabList(lastEl, lastSnap)
+}
 
 export function renderPins(el: HTMLElement, snap: TabsSnapshot): void {
   el.innerHTML = ''
@@ -56,22 +71,61 @@ export function renderPins(el: HTMLElement, snap: TabsSnapshot): void {
   })
 }
 
+// insertion index into snap.order after the dragged tab is removed
+function adjustedIndex(snap: TabsSnapshot, draggedId: string, to: number): number {
+  const from = snap.order.indexOf(draggedId)
+  return from !== -1 && from < to ? to - 1 : to
+}
+
+// move a whole group block before/after an anchor tab's position; indices
+// are in order-minus-members terms (what the model splices against)
+function moveGroupNextTo(snap: TabsSnapshot, groupId: string, anchorTab: string, before: boolean): void {
+  const rest = snap.order.filter((t) => snap.tabGroups[t] !== groupId)
+  const i = rest.indexOf(anchorTab)
+  if (i === -1) return
+  window.synapse.groups.reorder(groupId, i + (before ? 0 : 1))
+}
+
+// dragging a tab onto the middle band of another tab groups them; the outer
+// bands keep plain reordering
+function middleBand(e: DragEvent, el: HTMLElement): boolean {
+  const r = el.getBoundingClientRect()
+  const frac = (e.clientY - r.top) / r.height
+  return frac > 0.3 && frac < 0.7
+}
+
 export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
   if (renaming) {
     pendingSnap = snap
     return
   }
+  lastEl = el
+  lastSnap = snap
+  // a group that vanished (closed, saved to bookmarks) drops its local state
+  if (editingGroup && !snap.groups[editingGroup]) editingGroup = null
+  for (const gid of [...collapsedGroups]) if (!snap.groups[gid]) collapsedGroups.delete(gid)
   wireDropZone(el, {
-    accepts: (d) => d.kind === 'tab',
-    onDrop: (d) => window.synapse.tabs.reorder(d.id, lastOrder.length - 1),
+    accepts: (d) => d.kind === 'tab' || d.kind === 'group',
+    onDrop: (d) => {
+      // empty space below the rows: tabs go to the end, ungrouped; group
+      // blocks move to the end wholesale
+      if (d.kind === 'group') window.synapse.groups.reorder(d.id, lastOrder.length)
+      else window.synapse.tabs.reorder(d.id, lastOrder.length - 1, null)
+    },
   })
   lastOrder = snap.order
   el.innerHTML = ''
+  let prevGroup: string | null = null
   snap.order.forEach((id, i) => {
     const tab = snap.tabs[id]!
+    const gid = snap.tabGroups[id] ?? null
+    if (gid && gid !== prevGroup) el.append(groupHeader(el, snap, gid, i))
+    prevGroup = gid
+    if (gid && collapsedGroups.has(gid)) return
     const item = document.createElement('div')
     item.className =
       'tab' +
+      (gid ? ' grouped' : '') +
       (id === snap.activeId ? ' active' : '') +
       (tab.profile === 'work' ? ' work' : '') +
       (snap.panes.includes(id) ? ' in-split' : '')
@@ -107,18 +161,133 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
       window.synapse.tabs.showContextMenu(id)
     })
     wireDragItem(item, { kind: 'tab', id }, {
-      accepts: (d) => d.kind === 'tab',
-      onDrop: (d, before) => {
-        const from = snap.order.indexOf(d.id)
-        let to = i + (before ? 0 : 1)
-        if (from !== -1 && from < to) to -= 1
-        window.synapse.tabs.reorder(d.id, to)
+      accepts: (d) => d.kind === 'tab' || (d.kind === 'group' && d.id !== gid),
+      // a tab hovering this row's middle band will group with it
+      into: (d, e, elm) => d.kind === 'tab' && middleBand(e, elm),
+      onDrop: (d, before, into) => {
+        if (d.kind === 'group') {
+          moveGroupNextTo(snap, d.id, id, before)
+          return
+        }
+        if (into) {
+          // onto a grouped tab: join right behind it; onto a loose tab:
+          // found a new group around the pair
+          if (gid) window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, i + 1), gid)
+          else window.synapse.groups.createFromDrop(id, d.id)
+          return
+        }
+        // edges reorder; the destination membership follows this row's group
+        window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, i + (before ? 0 : 1)), gid)
       },
       // released past the window edge: tear the tab into its own window
       onDragOut: (e) => window.synapse.tabs.detach(id, e.screenX, e.screenY),
     })
     el.append(item)
   })
+}
+
+function groupHeader(
+  el: HTMLElement,
+  snap: TabsSnapshot,
+  gid: string,
+  firstIndex: number,
+): HTMLDivElement {
+  const group = snap.groups[gid]!
+  const members = snap.order.filter((t) => snap.tabGroups[t] === gid)
+  if (editingGroup === gid) return groupEditor(el, snap, gid)
+  const row = document.createElement('div')
+  const collapsed = collapsedGroups.has(gid)
+  row.className =
+    'panel-item folder group-header' +
+    (group.profile === 'work' ? ' work' : '') +
+    // a collapsed group hides its rows; carry the hidden active tab's
+    // highlight on the header so focus never disappears from the sidebar
+    (collapsed && snap.activeId && members.includes(snap.activeId) ? ' active' : '')
+
+  const twist = document.createElement('span')
+  twist.className = 'folder-twist'
+  twist.textContent = collapsed ? '▸' : '▾'
+  const name = document.createElement('span')
+  name.className = 'folder-name'
+  name.textContent = group.name
+  const count = document.createElement('span')
+  count.className = 'folder-count'
+  count.textContent = String(members.length)
+  if (group.profile === 'work') count.title = 'Work profile'
+
+  const close = document.createElement('button')
+  close.className = 'tab-close'
+  close.textContent = '×'
+  close.title = 'Close group'
+  close.addEventListener('click', (e) => {
+    e.stopPropagation()
+    window.synapse.groups.close(gid)
+  })
+
+  row.append(twist, name, count, close)
+  row.addEventListener('click', () => {
+    if (collapsedGroups.has(gid)) collapsedGroups.delete(gid)
+    else collapsedGroups.add(gid)
+    renderTabList(el, snap)
+  })
+  row.addEventListener('dblclick', () => {
+    editingGroup = gid
+    renderTabList(el, snap)
+  })
+  row.addEventListener('contextmenu', (e) => {
+    e.preventDefault()
+    window.synapse.groups.showContextMenu(gid)
+  })
+  wireDragItem(row, { kind: 'group', id: gid }, {
+    accepts: (d) => d.kind === 'tab' || (d.kind === 'group' && d.id !== gid),
+    into: (d) => d.kind === 'tab',
+    onDrop: (d, before, into) => {
+      if (into && d.kind === 'tab') {
+        collapsedGroups.delete(gid) // auto-expand so the drop is visible
+        window.synapse.tabs.reorder(d.id, adjustedIndex(snap, d.id, firstIndex), gid)
+        return
+      }
+      // group onto group header: whole-block reorder around this block
+      const anchor = before ? members[0] : members[members.length - 1]
+      if (anchor) moveGroupNextTo(snap, d.id, anchor, before)
+    },
+  })
+  return row
+}
+
+function groupEditor(el: HTMLElement, snap: TabsSnapshot, gid: string): HTMLDivElement {
+  const row = document.createElement('div')
+  row.className = 'panel-item folder group-header'
+  const input = document.createElement('input')
+  input.className = 'folder-input'
+  input.value = snap.groups[gid]!.name
+  renaming = gid
+  let done = false
+  const finish = (commit: boolean): void => {
+    if (done) return
+    done = true
+    renaming = null
+    editingGroup = null
+    if (commit && input.value.trim()) window.synapse.groups.rename(gid, input.value.trim())
+    const next = pendingSnap ?? snap
+    pendingSnap = null
+    renderTabList(el, next)
+  }
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') finish(true)
+    else if (e.key === 'Escape') finish(false)
+    e.stopPropagation()
+  })
+  // clicking away saves (Esc is the cancel gesture)
+  input.addEventListener('blur', () => finish(true))
+  input.addEventListener('click', (e) => e.stopPropagation())
+  input.addEventListener('dblclick', (e) => e.stopPropagation())
+  row.append(input)
+  queueMicrotask(() => {
+    input.focus()
+    input.select() // preselect the old name so typing replaces it
+  })
+  return row
 }
 
 // swap the row's title span for an input in place; Enter/blur commit,
