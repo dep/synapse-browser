@@ -551,6 +551,10 @@ browser-action-list {
 .tab.asleep .favicon {
   opacity: 0.45;
 }
+/* unloaded background tabs (issue #35) read as dormant */
+.tab.asleep .tab-title {
+  color: var(--fg-dim);
+}
 .tab.indent {
   margin-left: 16px;
 }

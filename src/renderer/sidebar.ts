@@ -137,6 +137,7 @@ export function renderTabList(el: HTMLElement, snap: TabsSnapshot): void {
       (gid ? ' grouped' : '') +
       (groupColor ? ` colored gc-${groupColor}` : '') +
       (selectedTabs.has(id) ? ' selected' : '') +
+      (tab.isAsleep ? ' asleep' : '') +
       (id === snap.activeId ? ' active' : '') +
       (tab.profile === 'work' ? ' work' : '') +
       (snap.panes.includes(id) ? ' in-split' : '')

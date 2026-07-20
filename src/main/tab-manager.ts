@@ -28,6 +28,7 @@ import { nextGroupId, nextTabId } from './tab-ids'
 import { CycleList, Direction, TabModel } from './tab-model'
 import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
+import { staleTabs, UNLOAD_SWEEP_MS } from '../shared/tab-unload'
 import { AI_SIDEBAR_WIDTH_DEFAULT, clampAiSidebarWidth } from '../shared/ai'
 
 export const TOPBAR_HEIGHT = 52
@@ -112,6 +113,11 @@ export class TabManager {
   // per-tab listener disposers, so a tab moving to another window (tear-out)
   // leaves none of this window's listeners behind on its WebContents
   private wired = new Map<string, Array<() => void>>()
+  // unloaded background tabs (issue #35): view destroyed to free memory, tab
+  // entry kept; the next activation recreates the view and reloads the page
+  private discarded = new Map<string, { url: string; title: string; favicon: string | null }>()
+  private lastActive = new Map<string, number>()
+  private unloadTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(
     private win: BrowserWindow,
@@ -119,6 +125,45 @@ export class TabManager {
   ) {
     this.paneButtons = new PaneOverlays(win)
     win.on('resize', () => this.layout())
+    this.unloadTimer = setInterval(() => this.unloadStaleTabs(), UNLOAD_SWEEP_MS)
+  }
+
+  // the 5-minute sweep behind background-tab unloading (issue #35)
+  private unloadStaleTabs(): void {
+    const now = Date.now()
+    const stale = staleTabs(
+      this.model.order
+        .filter((id) => this.views.has(id) && !isDeadView(this.views.get(id)!))
+        .map((id) => {
+          const wc = this.views.get(id)!.webContents
+          return {
+            id,
+            lastActiveAt: this.lastActive.get(id) ?? now,
+            isActive: this.model.activeId === id,
+            isVisible: this.attachedAll.has(id),
+            isAudible: wc.isCurrentlyAudible(),
+            isLoading: wc.isLoading(),
+          }
+        }),
+      now,
+    )
+    if (stale.length === 0) return
+    for (const id of stale) this.discardTab(id)
+    this.refresh()
+  }
+
+  // destroy a background tab's view but keep its tab entry; never called on
+  // the active tab, visible panes, or slots (those sleep via sleepSlot)
+  private discardTab(id: string): void {
+    const view = this.views.get(id)
+    if (!view || isDeadView(view) || this.model.isSlot(id)) return
+    const wc = view.webContents
+    this.discarded.set(id, {
+      url: wc.getURL(),
+      title: wc.getTitle() || 'New Tab',
+      favicon: this.favicons.get(id) ?? null,
+    })
+    this.destroyView(id, view, false)
   }
 
   get activeId(): string | null {
@@ -211,6 +256,7 @@ export class TabManager {
     view.setBorderRadius(CANVAS_RADIUS)
     this.views.set(id, view)
     this.favicons.set(id, null)
+    this.lastActive.set(id, Date.now())
     this.wireEvents(id, view.webContents)
     this.opts.onTabCreated?.(view.webContents, profile)
     this.wirePopupRouting(view.webContents, id)
@@ -220,6 +266,26 @@ export class TabManager {
   closeTab(id: string): void {
     if (this.model.isSlot(id)) {
       this.sleepSlot(id)
+      return
+    }
+    // an unloaded tab (issue #35) has no view to tear down — just bookkeeping
+    const unloaded = this.discarded.get(id)
+    if (unloaded) {
+      this.discarded.delete(id)
+      this.lastActive.delete(id)
+      this.closed.push({
+        url: unloaded.url,
+        profile: this.profileOf(id),
+        index: this.model.order.indexOf(id),
+      })
+      this.model.close(id)
+      this.profiles.delete(id)
+      this.customTitles.delete(id)
+      if (!this.model.activeId) {
+        this.handleEmpty()
+        return
+      }
+      this.syncViews()
       return
     }
     const view = this.views.get(id)
@@ -250,6 +316,7 @@ export class TabManager {
     this.destroyView(id, view, wasAttached)
     this.profiles.delete(id)
     this.customTitles.delete(id)
+    this.lastActive.delete(id)
     if (!this.model.activeId) {
       this.handleEmpty()
       return
@@ -293,6 +360,7 @@ export class TabManager {
     this.favicons.delete(id)
     this.profiles.delete(id)
     this.customTitles.delete(id)
+    this.lastActive.delete(id)
     if (!this.model.activeId) {
       this.handleEmpty()
       return { id, view, profile, favicon, customTitle }
@@ -320,6 +388,10 @@ export class TabManager {
   // window teardown: close every view without model bookkeeping; ids are
   // cleared first so the resulting 'destroyed' events find nothing to reconcile
   dispose(): void {
+    if (this.unloadTimer) clearInterval(this.unloadTimer)
+    this.unloadTimer = null
+    this.discarded.clear()
+    this.lastActive.clear()
     for (const id of [...this.wired.keys()]) this.unwire(id)
     const views = [...this.views.values()]
     this.views.clear()
@@ -534,6 +606,13 @@ export class TabManager {
     if (!this.views.has(id)) {
       if (this.model.isPinned(id)) this.wakePin(id)
       else if (this.model.isBookmarkSlot(id)) this.wakeBookmark(id)
+      else if (this.discarded.has(id)) {
+        // clicking an unloaded tab refreshes it (issue #35): syncViews sees
+        // the view-less active tab and recreates it from the saved state
+        this.model.activate(id)
+        this.syncViews()
+        this.attached?.webContents.focus()
+      }
       return
     }
     this.model.activate(id)
@@ -1075,8 +1154,30 @@ export class TabManager {
           anchorUrl: slot.url,
           profile: this.profileOf(id),
         }
+      } else {
+        // an unloaded background tab (issue #35): render from the saved state
+        const saved = this.discarded.get(id)
+        if (saved) {
+          tabs[id] = {
+            id,
+            title: customTitle || saved.title,
+            customTitle,
+            url: saved.url,
+            favicon: saved.favicon,
+            isLoading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isBookmarked: false,
+            isPinned: false,
+            isAsleep: true,
+            anchorUrl: null,
+            profile: this.profileOf(id),
+          }
+        }
       }
     }
+    // the active tab is, by definition, in use right now (issue #35)
+    if (this.model.activeId) this.lastActive.set(this.model.activeId, Date.now())
     const bookmarkTabs: Record<string, string> = {}
     for (const [bid, tid] of this.bmTabId) if (this.views.has(tid)) bookmarkTabs[bid] = tid
     // a group lives exactly as long as its members: reap meta whose last
@@ -1134,6 +1235,20 @@ export class TabManager {
     // `destroyed` still fires later, finds the id already gone, and no-ops.
     for (const [id, view] of [...this.views]) {
       if (isDeadView(view)) this.dropDeadView(id)
+    }
+    // an unloaded tab (issue #35) became active by ANY route — click, MRU
+    // cycle, close-successor: recreate its view here, the one choke point.
+    // The map entry goes first so re-entrant syncViews (createView's host
+    // callbacks) can't double-create.
+    const act = this.model.activeId
+    if (act && !this.views.has(act)) {
+      const saved = this.discarded.get(act)
+      if (saved) {
+        this.discarded.delete(act)
+        const view = this.createView(act)
+        this.favicons.set(act, saved.favicon)
+        if (isHttpUrl(saved.url)) view.webContents.loadURL(saved.url)
+      }
     }
     this.reconcileSplit()
     // One desired set for every visible view: all split leaves, or just the
