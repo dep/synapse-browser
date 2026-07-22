@@ -6,6 +6,25 @@
         <description>Most recent changes to Synapse Browser</description>
         <language>en</language>
         <item>
+            <title>Version 0.11.0</title>
+            <pubDate>Wed, 22 Jul 2026 09:58:14 GMT</pubDate>
+            <sparkle:version>0.11.0</sparkle:version>
+            <sparkle:shortVersionString>0.11.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <h3>Option-Click to Split</h3>
+                <ul>
+                    <li>Hold Option (&#8997;) and click any link to open it in a split pane on the right &#8212; tiled beside the page you're reading, in the same tab group and profile container</li>
+                    <li>Plain clicks, downloads, and right-click &#8594; Save Link As all behave exactly as before</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/dep/synapse-browser/releases/download/0.11.0/Synapse.Browser-0.11.0-universal.dmg"
+                sparkle:edSignature="PZ6rVUH2cHR6ICdFt7rYhbqHHXBSWG3uu/X19wvDoYM5GkLGx+RpOvBZ9DeaftXPvk5B2jSZBlIZbLLGx05nAg=="
+                length="219228534"
+                type="application/octet-stream" />
+        </item>
+        <item>
             <title>Version 0.10.0</title>
             <pubDate>Mon, 20 Jul 2026 17:17:22 GMT</pubDate>
             <sparkle:version>0.10.0</sparkle:version>
