@@ -38,6 +38,24 @@ default 0×0 bounds; an attached one gets the canvas size from main's layout().
 The chrome UI target exposes `window.synapse` (SynapseApi) — `tabs.create(url)`
 etc. Work-profile tab creation is native-menu only, not reachable over CDP.
 
+## Simulated input over CDP
+
+`Input.dispatchMouseEvent` / `dispatchKeyEvent` on a page target work, BUT:
+
+- **An occluded window silently drops mouse events** — macOS backgrounding
+  marks the widgets hidden and dispatch becomes a no-op (calls still return
+  success). Launch with `--disable-backgrounding-occluded-windows
+  --disable-renderer-backgrounding` appended after `--remote-debugging-port`,
+  and `Page.bringToFront` the target before clicking.
+- **The user's real keystrokes land in the dev window** whenever it has OS
+  focus. Any feature reading modifier state (alt-click → split, tab cycling)
+  can be armed/disarmed by the human typing mid-test — a flaky run may be
+  contamination, not a bug. Re-run before digging.
+- `input-event` on a WebContents delivers mouse type/button but NO modifiers;
+  `before-input-event` is keyboard-only. Alt-click on a link surfaces in main
+  as a session `will-download` (Chromium "save link" semantics), not as a
+  window-open or navigation.
+
 ## Observing network behavior
 
 For header-level evidence (UA, client hints), run a local echo server and

@@ -182,9 +182,14 @@ app.whenReady().then(async () => {
   for (const url of pendingUrls.splice(0)) openUrlInExistingWindow(url)
 
   // the downloads shelf list is app-global, so every window's chrome renders it
-  const downloads = new DownloadManager((list) => {
-    for (const b of allBundles()) b.win.webContents.send('downloads:updated', list)
-  })
+  const downloads = new DownloadManager(
+    (list) => {
+      for (const b of allBundles()) b.win.webContents.send('downloads:updated', list)
+    },
+    // alt-click on a page link surfaces as a will-download (issue #39); the
+    // owning window turns it into a split pane instead
+    (item, wc) => bundleOwningTab(wc)?.tabs.maybeOpenAltClickDownload(wc, item.getURL()) ?? false,
+  )
   downloads.attach(session.defaultSession)
   // the Work container: isolated cookies/storage/cache, persisted across runs.
   // No extensions are loaded into it and no webRequest handlers are registered

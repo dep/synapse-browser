@@ -87,6 +87,9 @@ export function allBundles(): WindowBundle[] {
 // hold-and-walk cycle. Returns a disposer for tabs that move windows.
 function attachCycleHooks(wc: WebContents, tabs: TabManager): () => void {
   const handler = (event: Electron.Event, input: Electron.Input): void => {
+    // alt-click → split pane (issue #39): the tracker needs the live Alt
+    // state, which only keyboard events carry
+    tabs.noteKeyInput(input)
     if (input.key === 'Tab' && (input.control || input.alt)) {
       // Swallow every event type of the chord: Blink moves focus on the
       // '\t' char (keypress) event, not the keyDown, so preventing only

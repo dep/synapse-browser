@@ -1,5 +1,5 @@
 import { app, shell } from 'electron'
-import type { Session } from 'electron'
+import type { DownloadItem, Session, WebContents } from 'electron'
 import * as path from 'node:path'
 import type { DownloadInfo } from '../shared/ipc'
 import { uniquePath } from './unique-path'
@@ -9,10 +9,19 @@ export class DownloadManager {
   private paths = new Map<string, string>()
   private counter = 0
 
-  constructor(private onUpdate: (list: DownloadInfo[]) => void) {}
+  // intercept claims a download before it starts (alt-click → split pane,
+  // issue #39): true = cancel it and keep it off the shelf
+  constructor(
+    private onUpdate: (list: DownloadInfo[]) => void,
+    private intercept?: (item: DownloadItem, wc: WebContents) => boolean,
+  ) {}
 
   attach(session: Session): void {
-    session.on('will-download', (_e, item) => {
+    session.on('will-download', (e, item, wc) => {
+      if (wc && this.intercept?.(item, wc)) {
+        e.preventDefault()
+        return
+      }
       const id = `dl-${++this.counter}`
       const savePath = uniquePath(app.getPath('downloads'), item.getFilename())
       item.setSavePath(savePath)

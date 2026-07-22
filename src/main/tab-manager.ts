@@ -31,6 +31,7 @@ import { errorPageDataUrl } from './error-page'
 import { SIDEBAR_WIDTH_DEFAULT, clampSidebarWidth } from '../shared/sidebar-width'
 import { staleTabs, UNLOAD_AFTER_MS, UNLOAD_SWEEP_MS } from '../shared/tab-unload'
 import { AI_SIDEBAR_WIDTH_DEFAULT, clampAiSidebarWidth } from '../shared/ai'
+import { AltClickTracker } from '../shared/alt-click'
 
 export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
@@ -131,6 +132,9 @@ export class TabManager {
   private discarded = new Map<string, { url: string; title: string; favicon: string | null }>()
   private lastActive = new Map<string, number>()
   private unloadTimer: ReturnType<typeof setInterval> | null = null
+  // alt-click → split pane (issue #39): pairs a page's will-download back to
+  // the alt+mousedown that caused it (see shared/alt-click.ts)
+  private altClicks = new AltClickTracker()
 
   constructor(
     private win: BrowserWindow,
@@ -590,6 +594,7 @@ export class TabManager {
 
   private destroyView(id: string, view: WebContentsView, wasAttached: boolean): void {
     this.unwire(id)
+    this.altClicks.forget(view.webContents.id)
     this.views.delete(id)
     this.favicons.delete(id)
     if (this.attachedAll.get(id) === view) {
@@ -1118,6 +1123,47 @@ export class TabManager {
     this.attached?.webContents.focus()
   }
 
+  // every keyboard event from the window's webContents (chrome and page —
+  // the Alt press can land while the urlbar has focus); fed by the same
+  // before-input-event hooks that drive tab cycling
+  noteKeyInput(input: Electron.Input): void {
+    this.altClicks.noteKey(input.type, input.key, input.alt)
+  }
+
+  // Alt-click on a page link (issue #39): the sandboxed page can't tell us
+  // about clicks, but Chromium turns alt-click into "save link", so it
+  // surfaces as a session will-download from the clicked tab. When a recent
+  // alt+mousedown on that tab claims the download, the link opens as a new
+  // pane to the right instead. True = caller must preventDefault the item.
+  maybeOpenAltClickDownload(wc: WebContents, url: string): boolean {
+    const anchor = this.idFor(wc)
+    if (!anchor || !this.altClicks.consume(wc.id, Date.now())) return false
+    if (!isHttpUrl(url)) return false
+    this.openLinkInSplit(anchor, url)
+    return true
+  }
+
+  // open `url` in a fresh tab tiled to the right of the anchor pane; the tab
+  // is a normal sidebar tab (splitActive's shape, with a URL instead of a
+  // blank urlbar-focused pane)
+  openLinkInSplit(anchor: string, url: string): void {
+    if (!this.views.has(anchor)) return
+    const id = nextTabId()
+    // profile routing (issue #33) wins over inheriting the anchor's container
+    this.profiles.set(id, this.opts.routeProfile?.(url) ?? this.profileOf(anchor))
+    const view = this.createView(id)
+    // splitting from a tab outside the old tiling starts a fresh one
+    const root = showsSplit(this.splitRoot, anchor) ? this.splitRoot! : { leaf: anchor }
+    this.splitRoot = splitLeaf(root, anchor, id, 'row')
+    this.model.add(id, true, anchor)
+    // the new pane stays in the anchor's tab group (#36)
+    const gid = this.model.groupOf(anchor)
+    if (gid && this.groupMeta.has(gid)) this.model.setGroup(id, gid)
+    view.webContents.loadURL(url)
+    this.syncViews()
+    this.attached?.webContents.focus()
+  }
+
   // the pane's ✕: untile the pane — the tab itself survives in the sidebar
   // (⌘-clicked tabs existed before the split; closing them would be lossy)
   closePane(id: string): void {
@@ -1433,6 +1479,12 @@ export class TabManager {
       this.layout()
     })
     this.track(id, wc, 'page-title-updated', refresh)
+    // mouse side of alt-click detection — 'input-event' delivers mouseDown
+    // but no modifiers; the tracker pairs it with the keyboard's alt state
+    this.track(id, wc, 'input-event', (_e: Electron.Event, input: Electron.InputEvent) => {
+      const button = (input as Electron.MouseInputEvent).button
+      this.altClicks.noteMouse(wc.id, input.type, button, Date.now())
+    })
     // clicking into a pane hands its webContents native focus; follow it so
     // the focused pane, topbar, and sidebar highlight stay in sync
     this.track(id, wc, 'focus', () => {
