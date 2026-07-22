@@ -1,0 +1,1 @@
+Implement the requested feature(s). Use your best judgment. Run through your workflow steps (design/plan/implement/self-review). /goal all work is complete, tests are passing, manual QA verification steps are presented to the user for feature(s).
