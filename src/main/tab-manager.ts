@@ -1,4 +1,4 @@
-import { BrowserWindow, WebContents, WebContentsView } from 'electron'
+import { BrowserWindow, session, WebContents, WebContentsView } from 'electron'
 import { classifyInput, isHttpUrl } from '../shared/url-classifier'
 import { CANVAS_GAP, CANVAS_RADIUS, computeCanvasBounds } from '../shared/canvas-layout'
 import {
@@ -35,6 +35,14 @@ import { AltClickTracker } from '../shared/alt-click'
 
 export const TOPBAR_HEIGHT = 52
 export const WORK_PARTITION = 'persist:profile-work'
+
+// the Electron session backing a profile: Work has its own persistent partition,
+// Default uses the shared default session. Keep this the single source of the
+// profile→partition rule (createView spreads the same partition into a view's
+// webPreferences).
+export function sessionForProfile(profile: ProfileId): Electron.Session {
+  return profile === 'work' ? session.fromPartition(WORK_PARTITION) : session.defaultSession
+}
 
 // issue #35 timings, env-overridable so a dev run can verify unloading in
 // seconds instead of hours (SYNAPSE_UNLOAD_AFTER_MS / SYNAPSE_UNLOAD_SWEEP_MS)

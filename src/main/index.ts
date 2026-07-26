@@ -28,6 +28,7 @@ import { TabsStore } from './tabs-store'
 import { UiStore } from './ui-store'
 import { Updater } from './updater'
 import { buildMenu } from './menu'
+import { runGoogleSignInFlow } from './google-signin'
 import { toChromeUserAgent } from '../shared/user-agent'
 import {
   allBundles,
@@ -783,6 +784,7 @@ app.whenReady().then(async () => {
         exportBookmarks: () => void exportBookmarks(),
         importBookmarks: () => void importBookmarks(),
         checkForUpdates: () => void updater.check(true),
+        signInToGoogle: (b) => void runGoogleSignInFlow(b.win, b.tabs),
       },
     })
   rebuildMenu()

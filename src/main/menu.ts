@@ -12,6 +12,7 @@ export interface MenuCommands {
   exportBookmarks(): void
   importBookmarks(): void
   checkForUpdates(): void
+  signInToGoogle(b: WindowBundle): void
 }
 
 export interface MenuContext {
@@ -222,6 +223,12 @@ export function buildMenu(ctx: MenuContext): void {
           accelerator: shortcuts['history'],
           click: withBundle((b) => b.win.webContents.send('ui:toggle-history')),
         },
+        { type: 'separator' },
+        {
+          label: 'Sign in to Google…',
+          click: withBundle((b) => commands.signInToGoogle(b)),
+        },
+        { type: 'separator' },
         {
           label: 'Settings…',
           accelerator: shortcuts['settings'],
